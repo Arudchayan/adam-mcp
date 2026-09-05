@@ -1,0 +1,17 @@
+{
+  "name": "adam-provider-html",
+  "version": "0.1.0",
+  "description": "HTML/session fallback provider. Disabled in v1; last-resort after SOAP and browser bridge.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "adam-core": "*"
+  }
+}

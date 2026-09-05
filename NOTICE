@@ -1,0 +1,20 @@
+ADAM MCP
+Copyright (C) 2026 ADAM MCP contributors
+
+This product is licensed under the GNU General Public License v3.0 or later.
+It is not affiliated with the University of Basel, SWITCH, or ILIAS GmbH.
+
+This distribution includes third-party software:
+
+Playwright / playwright-core
+Copyright Microsoft Corporation
+Licensed under the Apache License, Version 2.0
+https://github.com/microsoft/playwright
+
+@modelcontextprotocol/server and related MCP TypeScript packages
+Licensed under the MIT License
+
+Zod
+Licensed under the MIT License
+
+Apache License 2.0 is compatible with GPLv3 in this direction. Do not relicense Playwright.

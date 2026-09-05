@@ -1,0 +1,17 @@
+{
+  "name": "adam-provider-fixture",
+  "version": "0.1.0",
+  "description": "Synthetic ADAM catalog for local tests. No live ADAM requests and no private course data.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "adam-core": "*"
+  }
+}

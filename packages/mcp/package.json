@@ -1,0 +1,60 @@
+{
+  "name": "adam-mcp",
+  "version": "0.1.0",
+  "description": "Local-first read-only MCP server for University of Basel ADAM (ILIAS 10). SWITCH edu-ID stays in Chrome.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arudchayan/adam-mcp.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/Arudchayan/adam-mcp/issues"
+  },
+  "homepage": "https://github.com/Arudchayan/adam-mcp#readme",
+  "type": "module",
+  "bin": {
+    "adam-mcp": "./dist/adam-mcp.mjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "exports": {
+    ".": "./dist/adam-mcp.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mcp",
+    "ilias",
+    "adam",
+    "unibas",
+    "education"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-cli.mjs",
+    "prepublishOnly": "npm run build",
+    "start": "tsx src/index.ts",
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0",
+    "playwright-core": "^1.55.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "adam-core": "*",
+    "adam-provider-browser": "*",
+    "adam-provider-fixture": "*",
+    "adam-provider-html": "*",
+    "adam-provider-soap": "*"
+  }
+}

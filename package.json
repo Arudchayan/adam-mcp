@@ -1,0 +1,39 @@
+{
+  "name": "adam-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Read-only ADAM/ILIAS adapter with an MCP facade. Provider-neutral core; fixture-backed first release.",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Arudchayan/adam-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Arudchayan/adam-mcp/issues"
+  },
+  "homepage": "https://github.com/Arudchayan/adam-mcp#readme",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "npm run start -w adam-mcp",
+    "start:browser": "npm run start -w adam-mcp -- --browser",
+    "login": "npm run login -w adam-provider-browser",
+    "status": "npm run status -w adam-provider-browser",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build -w adam-mcp",
+    "setup": "npm run build && node scripts/print-mcp-config.mjs",
+    "audit": "npm audit --omit=dev --audit-level=high"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "esbuild": "^0.25.9"
+  }
+}

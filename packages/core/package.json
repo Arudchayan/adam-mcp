@@ -1,0 +1,14 @@
+{
+  "name": "adam-core",
+  "version": "0.1.0",
+  "description": "Typed ADAM/ILIAS domain objects, canonical URLs, pagination, provenance, errors, and redaction.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
