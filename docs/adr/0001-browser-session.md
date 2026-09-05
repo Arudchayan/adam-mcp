@@ -29,3 +29,15 @@ Findings accepted:
 - `confirm: true` is a schema gate, not host elicitation (documented as residual risk, not claimed as a human modal).
 
 PDF extract and `get_exercise` are implemented as local text extract + read-only `exc` (ADR 0002). They are still **product-complete** work relative to the original trust-publish P0, not a reason to skip the SECURITY checklist.
+
+## Remediation after the FAIL (same day)
+
+The FAIL findings were implemented in-tree before the public GitHub push:
+
+- Rate limit, download cancel, size caps, and redaction have package tests.
+- CI runs `npm test`, `typecheck`, `build`, and `audit` on Windows/macOS/Linux × Node 20/22.
+- Compiled `packages/mcp/dist/adam-mcp.mjs` is the student CLI after `npm run setup`.
+- Trust-publish vs shipped-MCP vs product-complete bars are in `docs/product-spec.md`.
+- `confirm: true` remains a schema gate; residual confused-deputy risk is documented.
+
+A public **npm tag** stays blocked until `SECURITY.md` is green, including green CI. This ADR is the recorded independent architecture review; it is not a self-issued PASS for registry publish.

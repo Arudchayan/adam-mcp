@@ -8,7 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test": "node ../../scripts/run-tests.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

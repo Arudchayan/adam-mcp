@@ -65,7 +65,7 @@ Success: after `npx adam-mcp login` (SWITCH in Chrome) and one host config paste
 
 **Annotations:** all read tools `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: true`.
 
-**Results:** JSON text **and** `structuredContent`. Page bodies carry an untrusted-data envelope.
+**Results:** JSON text **and** `structuredContent`. Each tool advertises an `outputSchema`. Page bodies carry an untrusted-data envelope.
 
 ### Three bars (do not mix)
 

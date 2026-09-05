@@ -85,10 +85,18 @@ describe("stdio hygiene", () => {
 type JsonRpc = {
   jsonrpc?: string;
   id?: number;
+  error?: { code?: number; message?: string };
   result?: {
-    tools?: Array<{ name: string; annotations?: { readOnlyHint?: boolean } }>;
+    tools?: Array<{
+      name: string;
+      annotations?: { readOnlyHint?: boolean };
+      outputSchema?: { type?: string };
+    }>;
     resources?: Array<{ uri?: string; name?: string }>;
     prompts?: Array<{ name: string }>;
+    content?: Array<{ type?: string; text?: string }>;
+    structuredContent?: Record<string, unknown>;
+    isError?: boolean;
   };
 };
 
@@ -157,15 +165,42 @@ describe("MCP surface over stdio", () => {
         `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
       );
       const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
-      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
-      for (const name of READ_ONLY_TOOLS) {
-        assert.equal(names.includes(name), true, `missing ${name}`);
+      const listedTools = tools.result?.tools ?? [];
+      const names = listedTools.map((tool) => tool.name);
+      for (const expected of READ_ONLY_TOOLS) {
+        assert.equal(names.includes(expected), true, `missing ${expected}`);
       }
       assert.equal(names.some((name) => name.includes("post") || name.includes("submit")), false);
       assert.equal(
-        tools.result?.tools?.every((tool) => READ_ONLY_TOOLS.includes(tool.name as (typeof READ_ONLY_TOOLS)[number]) ? tool.annotations?.readOnlyHint === true : true),
+        listedTools.every((tool) =>
+          READ_ONLY_TOOLS.includes(tool.name as (typeof READ_ONLY_TOOLS)[number])
+            ? tool.annotations?.readOnlyHint === true
+            : true,
+        ),
         true,
       );
+      for (const expected of READ_ONLY_TOOLS) {
+        const declared = listedTools.find((tool) => tool.name === expected);
+        assert.equal(declared?.outputSchema?.type, "object", `${expected} must advertise an object outputSchema`);
+      }
+      const courses = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_list_courses", arguments: {} },
+      });
+      assert.equal(courses.error, undefined, courses.error?.message);
+      assert.equal(courses.result?.isError, undefined);
+      const items = courses.result?.structuredContent?.items;
+      assert.equal(Array.isArray(items), true);
+      assert.equal((items as Array<{ refId?: string }>)[0]?.refId, "100001");
+      const missing = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "adam_get_course", arguments: { refId: "999999" } },
+      });
+      assert.equal(missing.result?.isError, true);
       const resources = await rpc(child, { jsonrpc: "2.0", id: 3, method: "resources/list", params: {} });
       const uris = (resources.result?.resources ?? []).map((resource) => resource.uri ?? resource.name);
       assert.equal(uris.some((uri) => uri?.includes("adam://me/courses") || uri === "adam-courses"), true);
