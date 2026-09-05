@@ -10,7 +10,7 @@
   "scripts": {
     "login": "tsx src/login-cli.ts",
     "status": "tsx src/status-cli.ts",
-    "test": "tsx --test src/*.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

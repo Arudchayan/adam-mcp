@@ -42,7 +42,7 @@
     "build": "node ../../scripts/build-cli.mjs",
     "prepublishOnly": "npm run build",
     "start": "tsx src/index.ts",
-    "test": "tsx --test src/*.test.ts",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
