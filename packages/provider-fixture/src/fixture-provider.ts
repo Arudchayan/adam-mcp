@@ -18,7 +18,7 @@ import {
 import { enrolledCourseIds, fixtureCalendar, fixtureCatalog, fixtureNews } from "./catalog.ts";
 
 const OVERVIEW_PDF_BYTES = syntheticPdfWithText(
-  "Synthetic lecture overview: multimedia retrieval, ranking, and evaluation.",
+  "Synthetic lecture overview: Fourier transforms, multimedia retrieval, ranking, and evaluation.",
 );
 
 function requireRecord(refId: RefId) {

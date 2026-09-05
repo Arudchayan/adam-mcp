@@ -1,6 +1,6 @@
 # ADAM MCP product specification
 
-Locked 5 September 2026 from six independent research reports (design DX, MCP architecture, repo critique, student feature inventory, live ADAM/ILIAS, trust/OSS). This is the constitution for the public project. Code that contradicts it is a bug.
+> Archived snapshot, 5 September 2026. Current docs: [README](../../README.md), [scope](../scope.md).
 
 This is a community connector, not a University of Basel service.
 

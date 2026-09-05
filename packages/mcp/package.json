@@ -1,7 +1,7 @@
 {
   "name": "adam-mcp",
   "version": "0.1.0",
-  "description": "Local-first read-only MCP server for University of Basel ADAM (ILIAS 10). SWITCH edu-ID stays in Chrome.",
+  "description": "MCP server for University of Basel ADAM.",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",

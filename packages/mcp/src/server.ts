@@ -219,7 +219,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       {
         title: "Open SWITCH login in Chrome",
         description:
-          "Open the local Chrome ADAM profile and wait while you complete SWITCH edu-ID in that window. Never paste the password into chat. Cookies stay in the local profile and are not exported.",
+        "Open Chrome for the local ADAM session and wait until you finish signing in.",
         inputSchema: z.object({
           timeoutMs: z
             .number()

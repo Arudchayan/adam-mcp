@@ -1,49 +1,87 @@
 # ADAM MCP
 
-Local-first MCP server so University of Basel students can use **their own** AI (Cursor, Claude Desktop, VS Code Copilot, Windsurf, Claude Code) with ADAM.
+ADAM MCP connects MCP-compatible AI clients to your University of Basel ADAM courses.
 
-This is a community project, not an official University of Basel, SWITCH, or ILIAS service. It cannot bypass ADAM permissions. Do not paste SWITCH edu-ID passwords into a model, a terminal, or this repo.
+It runs on your machine. Cursor, Claude Desktop, VS Code Copilot, Windsurf, and Claude Code can list courses, read pages, find files, and surface deadlines from ADAM.
 
-**ChatGPT cannot run this server.** ChatGPT only speaks remote HTTPS MCP. We will not tunnel your ADAM session to the public internet.
+This is a community project, not a University of Basel service.
 
-Product rules: [`docs/product-spec.md`](docs/product-spec.md). Threat model: [`docs/threat-model.md`](docs/threat-model.md).
+![Demo](docs/demo/demo.gif)
 
-[![CI](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml)
+[Full demo (about a minute)](docs/demo/adam-mcp-demo.mp4)
 
-## Quick start (one path)
+## What you can ask
 
-Need **Node.js 20+** and **Google Chrome**.
+- What changed in my courses this week?
+- What deadlines do I have?
+- Find the exercise sheet about Fourier transforms.
+- Summarize this course page and give me the ADAM link.
+- List the material available for this course.
+
+Answers include canonical ADAM URLs (`https://adam.unibas.ch/go/...`).
+
+## Quick start
+
+You need Node.js 20+ and Google Chrome.
 
 ```bash
 git clone https://github.com/Arudchayan/adam-mcp.git
-cd Adam_MCP
+cd adam-mcp
 npm install
 npm run setup
-npm run login
 ```
 
-`npm run setup` builds the CLI and prints **absolute-path** MCP snippets for this machine (Cursor, Claude Desktop, Windsurf, VS Code, Claude Code). Paste one snippet into the host. Then sign in with SWITCH edu-ID in the Chrome window and **leave that window open**.
+`npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client.
 
-Host details: [`docs/hosts.md`](docs/hosts.md).
+- **Try it now** (synthetic catalog, no ADAM login): use the fixture snippet.
+- **Your real courses:** `npm run login`, sign in to ADAM in Chrome, and use the `--browser` snippet. Leave that Chrome window open.
 
-Fully quit and reopen the host. Ask: `Using the ADAM tools, list my courses. Include the ADAM URL for each. Do not guess.`
+Restart the client, then ask:
 
-Default without `--browser` is a **synthetic fixture** catalog (no live ADAM). The printed snippets pass `--browser`.
+> What courses am I in? Include the ADAM URL for each.
 
-When `adam-mcp` is on npm, the same flow is `npx -y adam-mcp login` plus `"args": ["-y", "adam-mcp", "--browser"]` (Windows: `cmd /c`). Until then, do not guess a registry install.
+Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code): [docs/setup.md](docs/setup.md).
 
-## What it does
+The package is not on npm yet. Clone is the install path.
 
-Read-only study workspace: courses, folders, page text (with confirmation), file **metadata**, local PDF/text extract (with confirmation; never bytes), read-only exercises, search/news/dates from the dashboard and enrolled course pages (not ADAM’s global search or calendar GUI), session login/status. Canonical `/go/{type}/{ref_id}` links. No writes, no mail, no grades, no exam objects, no PDF bytes to the model.
+## How it works
 
-Tools, resources (`adam://me/courses`, `adam://crs/{refId}`, `adam://fold/{refId}`, `adam://file/{refId}`, `adam://exc/{refId}`), and prompts (`prepare_my_week`, `what_changed`, `study_this`) are listed in `docs/product-spec.md`.
+```
+AI client  --stdio MCP-->  adam-mcp  -->  Chrome session  -->  adam.unibas.ch
+```
 
-## Safety
+ADAM MCP uses a local Chrome session for ADAM authentication. Default without `--browser` is a fixture catalog so a clone does not hit production ADAM.
 
-- SWITCH stays in Chrome. Cookies are not exported.
-- Tool results go to **your** configured model provider and may leave Switzerland. You choose the host.
-- Course content is copyrighted and untrusted (prompt injection). Cite ADAM URLs. Do not submit assessed work from the model.
-- Live navigations are rate-limited. `robots.txt` search/calendar crawls are not used.
+[Architecture](docs/architecture.md) · [What is in scope](docs/scope.md)
+
+## Tools
+
+| Tool | Returns |
+| --- | --- |
+| `adam_list_courses` | Enrolled courses and ADAM URLs |
+| `adam_get_course` / `adam_list_children` | Course snapshot and folder contents |
+| `adam_read_page` | Page text (`confirm: true`) |
+| `adam_list_files` / `adam_get_file` | File metadata and URLs, not bytes |
+| `adam_extract_file_text` | Local PDF/text extract (`confirm: true`) |
+| `adam_search` | Title matches in enrolled objects |
+| `adam_list_calendar` / `adam_list_news` | Dates and news from pages you can see |
+| `adam_get_exercise` | Exercise text and deadline; no submit |
+| `adam_login` / `adam_session_status` | Chrome session |
+
+Prompts: `what_changed`, `prepare_my_week`, `study_this`.
+
+## Limitations
+
+- No writes, mail, grades, or exam (`tst`) objects.
+- Search is not ADAM’s global search box. Dates are not the ILIAS calendar GUI.
+- ChatGPT cannot attach a local stdio server.
+- Scanned PDFs are not OCR’d.
+
+## Privacy
+
+Tool results go to the model your client is already using. Course content is copyrighted.
+
+[SECURITY.md](SECURITY.md) · [threat model](docs/threat-model.md)
 
 ## Develop
 
@@ -52,4 +90,6 @@ npm test
 npm run typecheck
 ```
 
-License: GPL-3.0-or-later. See `LICENSE` and `NOTICE`.
+[CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md)
+
+License: GPL-3.0-or-later.

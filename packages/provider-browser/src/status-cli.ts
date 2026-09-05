@@ -1,7 +1,7 @@
 import { createPlaywrightSession } from "./playwright-session.ts";
 import { isLoggedInSnapshot, isLoginSnapshot } from "./extract.ts";
 import { defaultOrigin, defaultProfileDir } from "./config.ts";
-import { isMainModule } from "./is-main.ts";
+import { isNamedCliEntry } from "./is-main.ts";
 
 export async function runStatusCli(): Promise<void> {
   const session = createPlaywrightSession({ headed: true });
@@ -23,7 +23,7 @@ export async function runStatusCli(): Promise<void> {
   }
 }
 
-if (isMainModule(import.meta.url)) {
+if (isNamedCliEntry("status-cli")) {
   void runStatusCli().catch((error: unknown) => {
     const message = error instanceof Error ? error.message : "Status check failed.";
     console.error(message);

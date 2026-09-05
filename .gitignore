@@ -21,3 +21,5 @@ scratch/
 chrome-profile/
 /packages/mcp/LICENSE
 /packages/mcp/NOTICE
+docs/demo/out/
+docs/demo/*.webm

@@ -12,61 +12,49 @@ if (!existsSync(bin)) {
 }
 
 const windows = platform() === "win32";
-const cursor = windows
-  ? {
-      command: "cmd",
-      args: ["/c", "node", bin, "--browser"],
-    }
-  : {
-      command: "node",
-      args: [bin, "--browser"],
-    };
 
-const vscode = {
-  type: "stdio",
-  command: windows ? "cmd" : "node",
-  args: windows ? ["/c", "node", bin, "--browser"] : [bin, "--browser"],
-};
+function snippet(browser) {
+  const args = windows
+    ? ["/c", "node", bin, ...(browser ? ["--browser"] : [])]
+    : [bin, ...(browser ? ["--browser"] : [])];
+  const cursor = windows
+    ? { command: "cmd", args }
+    : { command: "node", args: browser ? [bin, "--browser"] : [bin] };
+  const vscode = {
+    type: "stdio",
+    command: windows ? "cmd" : "node",
+    args: windows ? ["/c", "node", bin, ...(browser ? ["--browser"] : [])] : browser ? [bin, "--browser"] : [bin],
+  };
+  const claude = windows
+    ? `claude mcp add adam -- cmd /c node ${bin}${browser ? " --browser" : ""}`
+    : `claude mcp add adam -- node ${bin}${browser ? " --browser" : ""}`;
+  return { cursor, vscode, claude };
+}
+
+const fixture = snippet(false);
+const live = snippet(true);
 
 console.error(`adam-mcp setup
 Repo: ${root}
 CLI:  ${bin}
 
-1. Keep Google Chrome closed for this profile except the login window.
-2. Run: npm run login   (SWITCH edu-ID in Chrome; leave that window open)
-3. Paste one of the snippets below into your host. Absolute paths; no cwd required.
-ChatGPT cannot run this stdio server. Never paste the SWITCH password into chat.
+Fixture snippet: synthetic catalog, no Chrome login.
+Live snippet: add --browser, then run: npm run login
 `);
 
-console.log("Cursor / Claude Desktop / Windsurf (mcpServers):");
-console.log(
-  JSON.stringify(
-    {
-      mcpServers: {
-        adam: cursor,
-      },
-    },
-    null,
-    2,
-  ),
-);
+console.log("Fixture — Cursor / Claude Desktop / Windsurf:");
+console.log(JSON.stringify({ mcpServers: { adam: fixture.cursor } }, null, 2));
 console.log("");
-console.log("VS Code Copilot (.vscode/mcp.json servers):");
-console.log(
-  JSON.stringify(
-    {
-      servers: {
-        adam: vscode,
-      },
-    },
-    null,
-    2,
-  ),
-);
+console.log("Live ADAM — Cursor / Claude Desktop / Windsurf:");
+console.log(JSON.stringify({ mcpServers: { adam: live.cursor } }, null, 2));
 console.log("");
-console.log("Claude Code:");
-if (windows) {
-  console.log(`claude mcp add adam -- cmd /c node ${bin} --browser`);
-} else {
-  console.log(`claude mcp add adam -- node ${bin} --browser`);
-}
+console.log("Fixture — VS Code Copilot (.vscode/mcp.json):");
+console.log(JSON.stringify({ servers: { adam: fixture.vscode } }, null, 2));
+console.log("");
+console.log("Live ADAM — VS Code Copilot (.vscode/mcp.json):");
+console.log(JSON.stringify({ servers: { adam: live.vscode } }, null, 2));
+console.log("");
+console.log("Claude Code (fixture):");
+console.log(fixture.claude);
+console.log("Claude Code (live ADAM):");
+console.log(live.claude);

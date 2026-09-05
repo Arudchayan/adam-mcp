@@ -2,7 +2,7 @@
   "name": "adam-mcp",
   "private": true,
   "version": "0.1.0",
-  "description": "Read-only ADAM/ILIAS adapter with an MCP facade. Provider-neutral core; fixture-backed first release.",
+  "description": "MCP server for University of Basel ADAM courses.",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -25,6 +25,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build -w adam-mcp",
     "setup": "npm run build && node scripts/print-mcp-config.mjs",
+    "demo": "node docs/demo/serve.mjs",
+    "demo:record": "node docs/demo/record.mjs",
     "audit": "npm audit --omit=dev --audit-level=high"
   },
   "engines": {

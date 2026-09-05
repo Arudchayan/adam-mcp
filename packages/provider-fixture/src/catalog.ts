@@ -146,6 +146,7 @@ const coursePage: PageContent = {
   text: [
     "Synthetic course description for local tests.",
     "Prepare the assigned reading before each session.",
+    "Week 3 reading: Fourier transforms and the DFT (see 00_Overview.pdf).",
     "Written exam: 12 January 2027, 10:00–12:00, Lecture Hall A.",
     "An empty exercises folder must not be read as 'no deadlines'.",
   ].join("\n"),

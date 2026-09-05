@@ -53,7 +53,7 @@ describe("FixtureAdamProvider", () => {
 
   it("searches titles and page text", async () => {
     const found = await provider.search("Fourier");
-    assert.equal(found.items.length, 0);
+    assert.ok(found.items.some((item) => item.refId === "100001"));
     const exam = await provider.search("exam");
     assert.equal(exam.items[0]?.refId, "100001");
   });

@@ -1,7 +1,7 @@
 {
   "name": "adam-provider-browser",
   "version": "0.1.0",
-  "description": "Local browser-session ADAM provider. Uses a dedicated Chrome profile; SWITCH edu-ID stays in the browser.",
+  "description": "Live ADAM provider using a dedicated Chrome profile.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "exports": {

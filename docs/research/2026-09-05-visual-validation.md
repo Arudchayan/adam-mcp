@@ -1,5 +1,7 @@
 # Visual validation — 5 September 2026
 
+> Archived snapshot. Current docs: [README](../../README.md), [providers](../providers.md).
+
 Read-only, unauthenticated checks against production ADAM. No login, no cookie capture, no file downloads, and no private course content stored.
 
 ## Surfaces
@@ -16,7 +18,7 @@ Read-only, unauthenticated checks against production ADAM. No login, no cookie c
 
 ## Object types seen without login
 
-`root`, `cat`, `blog`, `impr`. Course (`crs`), folder (`fold`), and file (`file`) types remain documented from the earlier authenticated research pass in `AGENTS.md` and are modeled only as **synthetic** fixture objects.
+`root`, `cat`, `blog`, `impr`. Course (`crs`), folder (`fold`), and file (`file`) types remain documented from the earlier authenticated research pass in `2026-09-05-access-research.md` and are modeled only as **synthetic** fixture objects.
 
 ## What this does *not* validate
 

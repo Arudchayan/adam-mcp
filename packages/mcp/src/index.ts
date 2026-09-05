@@ -22,37 +22,39 @@ function isMainModule(): boolean {
 }
 
 function commandFromArgv(argv: string[]): "login" | "status" | "help" | "mcp" {
-  if (argv.includes("help") || argv.includes("--help") || argv.includes("-h")) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     return "help";
   }
-  if (argv.includes("login")) {
+  const positional = argv.filter((arg) => !arg.startsWith("-"));
+  const command = positional[0];
+  if (command === "help") {
+    return "help";
+  }
+  if (command === "login") {
     return "login";
   }
-  if (argv.includes("status")) {
+  if (command === "status") {
     return "status";
   }
   return "mcp";
 }
 
 function printHelp(): void {
-  console.error(`adam-mcp — local read-only ADAM MCP server
+  console.error(`adam-mcp — ADAM MCP server (stdio)
 
 Usage:
-  adam-mcp              Start MCP on stdio (fixture unless ADAM_PROVIDER=browser or --browser)
-  adam-mcp --browser    Start MCP using the local Chrome session
-  adam-mcp login        Open Chrome and wait for SWITCH edu-ID
-  adam-mcp status       Check whether the local profile looks signed in
-
-Never paste SWITCH passwords into chat or this process.
-ChatGPT cannot launch this stdio server.`);
+  adam-mcp              Fixture catalog
+  adam-mcp --browser    Local Chrome ADAM session
+  adam-mcp login        Sign in to ADAM in Chrome
+  adam-mcp status       Check the local Chrome session`);
 }
 
 async function runStdio(): Promise<void> {
   const configured = createConfiguredProvider();
   const name = detectProviderName();
-  console.error(`adam-mcp running on stdio (${name} provider, read-only)`);
+  console.error(`adam-mcp running on stdio (${name} provider)`);
   if (name === "browser") {
-    console.error("Use adam_login or `adam-mcp login` and complete SWITCH edu-ID in Chrome. Do not paste the password into chat.");
+    console.error("Live ADAM: adam_login or `adam-mcp login`, then sign in in Chrome.");
   }
   const shutdown = () => {
     void closeConfiguredProvider(configured).finally(() => process.exit(0));

@@ -1,10 +1,9 @@
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename } from "node:path";
 
-export function isMainModule(metaUrl: string): boolean {
+export function isNamedCliEntry(stem: string): boolean {
   const entry = process.argv[1];
   if (!entry) {
     return false;
   }
-  return fileURLToPath(metaUrl).toLowerCase() === resolve(entry).toLowerCase();
+  return new RegExp(`^${stem}\\.(cjs|mjs|js|ts)$`, "i").test(basename(entry));
 }
