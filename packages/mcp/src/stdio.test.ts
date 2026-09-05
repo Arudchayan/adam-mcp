@@ -93,6 +93,7 @@ type JsonRpc = {
       outputSchema?: { type?: string };
     }>;
     resources?: Array<{ uri?: string; name?: string }>;
+    resourceTemplates?: Array<{ uriTemplate?: string; name?: string }>;
     prompts?: Array<{ name: string }>;
     content?: Array<{ type?: string; text?: string }>;
     structuredContent?: Record<string, unknown>;
@@ -204,6 +205,22 @@ describe("MCP surface over stdio", () => {
       const resources = await rpc(child, { jsonrpc: "2.0", id: 3, method: "resources/list", params: {} });
       const uris = (resources.result?.resources ?? []).map((resource) => resource.uri ?? resource.name);
       assert.equal(uris.some((uri) => uri?.includes("adam://me/courses") || uri === "adam-courses"), true);
+      const templates = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "resources/templates/list",
+        params: {},
+      });
+      const templateUris = (templates.result?.resourceTemplates ?? []).map(
+        (template) => template.uriTemplate ?? template.name,
+      );
+      for (const expected of ["adam://crs/{refId}", "adam://fold/{refId}", "adam://file/{refId}", "adam://exc/{refId}"]) {
+        assert.equal(
+          templateUris.some((uri) => uri?.includes(expected) || uri === expected),
+          true,
+          `missing resource template ${expected}; got ${templateUris.join(",")}`,
+        );
+      }
       const prompts = await rpc(child, { jsonrpc: "2.0", id: 4, method: "prompts/list", params: {} });
       const promptNames = (prompts.result?.prompts ?? []).map((prompt) => prompt.name);
       assert.equal(promptNames.includes("prepare_my_week"), true);

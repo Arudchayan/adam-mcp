@@ -8,6 +8,8 @@ This is a community project, not an official University of Basel, SWITCH, or ILI
 
 Product rules: [`docs/product-spec.md`](docs/product-spec.md). Threat model: [`docs/threat-model.md`](docs/threat-model.md).
 
+[![CI](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml)
+
 ## Quick start (one path)
 
 Need **Node.js 20+** and **Google Chrome**.
