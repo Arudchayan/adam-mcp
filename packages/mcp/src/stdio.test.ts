@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { GOLDEN_TST_REF_ID } from "adam-provider-fixture";
+import { CATALOG_ONLY_COURSE_ID, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import { READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 import { extractFileInputSchema, readPageInputSchema } from "./schemas.ts";
 
@@ -1045,3 +1045,134 @@ describe("AT1/AT2 adam_list_calendar cross-course deadlines", () => {
     }
   });
 });
+
+describe("AT3 adam_search enrolled-tree ranking", () => {
+  it("scopes to enrolled trees, ranks title before body, keeps A1/A2/B10", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    const progress: Array<{ progressToken?: string | number; progress?: number; message?: string }> = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    const onData = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as {
+            method?: string;
+            params?: { progressToken?: string | number; progress?: number; message?: string };
+          };
+          if (parsed.method === "notifications/progress") {
+            progress.push(parsed.params ?? {});
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    child.stdout.on("data", onData);
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "at3-search-ranking", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_search"), true);
+      assert.equal(names.some((name) => /adam_search_|adam_find_|adam_get_search/i.test(name)), false);
+
+      const fourier = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_search",
+          arguments: { query: "Fourier" },
+          _meta: { progressToken: "search-at3" },
+        },
+      });
+      assert.equal(fourier.error, undefined, fourier.error?.message);
+      assert.equal(fourier.result?.isError, undefined);
+      assert.ok(progress.some((p) => p.progressToken === "search-at3"));
+
+      const items = fourier.result?.structuredContent?.items as Array<{
+        refId?: string;
+        type?: string;
+        url?: string;
+        resourceUri?: string;
+      }>;
+      assert.ok(Array.isArray(items));
+      assert.ok(items.some((item) => item.refId === "100001"));
+      assert.equal(
+        items.some((item) => item.refId === CATALOG_ONLY_COURSE_ID),
+        false,
+        "catalog-only course must not appear",
+      );
+      assert.equal(items.some((item) => item.type === "tst"), false);
+
+      const exercises = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_search", arguments: { query: "Exercises" } },
+      });
+      assert.equal(exercises.error, undefined, exercises.error?.message);
+      const exerciseItems = exercises.result?.structuredContent?.items as Array<{ refId?: string }>;
+      const ids = exerciseItems.map((item) => item.refId);
+      assert.ok(ids.includes("100020"));
+      assert.ok(ids.includes("100001"));
+      assert.ok((ids.indexOf("100020") as number) < (ids.indexOf("100001") as number));
+
+      const blocked = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_search", arguments: { query: "BLOCKED EXAM CONTENT" } },
+      });
+      assert.equal((blocked.result?.structuredContent?.items as unknown[]).length, 0);
+
+      // Domain lock regressions.
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exercise.result?.structuredContent?.type, "exc");
+
+      assertAdamAndHttps(fourier.result?.structuredContent, fourier.result?.content?.[0]?.text ?? "");
+      const hit = items.find((item) => item.refId === "100001");
+      assert.equal(hit?.url, "https://adam.unibas.ch/go/crs/100001");
+      assert.equal(hit?.resourceUri, "adam://crs/100001");
+      assert.equal(
+        (fourier.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://crs/100001",
+        ),
+        true,
+      );
+    } finally {
+      child.stdout.off("data", onData);
+      child.kill();
+    }
+  });
+});
+

@@ -19,13 +19,14 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | A6 | Read-by-id via resources; existing `adam_get_*` stay thin wrappers; no duplicate get-by-id tools | PR #8 (`e52d947`) |
 | A3 | Docs: `confirm:true` = interim schema gate after student asked to read; real confirms/future writes → MCP elicitation when host supports MRTR; not OS permission; not equated to tool annotations alone | PR #9 (`a5e1fd6`) |
 | A4 | `docs/architecture.md` pins `@modelcontextprotocol/server` 2.x + protocol era (2025-03-26 / 2026-07-28) | PR #9 (`a5e1fd6`) |
+| AT1 | Aggregate deadlines from `exc` + page/calendar SoT across enrolled courses (fixture); keep `100020` empty fold ≠ no deadlines; surface `100021`; **no invented dates** | PR #10 (`533d5c5`) |
+| AT2 | Each item: date (or honest omit), `source` ∈ {exc,page,calendar}, `confidence` ∈ {explicit,inferred}, full provenance + HTTPS cite + `adam://` when resource-backed; progress when `progressToken` set | PR #10 (`533d5c5`) |
 
 ## Open (Phase A-thin)
 
 | ID | PASS | Notes |
 | --- | --- | --- |
-| AT1 | Aggregate deadlines from `exc` + page/calendar SoT across enrolled courses (fixture); keep `100020` empty fold ≠ no deadlines; surface `100021`; **no invented dates** | Extend `adam_list_calendar` only — no new get-by-id (A6 freeze) |
-| AT2 | Each item: date (or honest omit), `source` ∈ {exc,page,calendar}, `confidence` ∈ {explicit,inferred}, full provenance + HTTPS cite + `adam://` when resource-backed; progress when `progressToken` set | Fixture coverage required |
+| AT3 | Enrolled-tree only search; deterministic title-before-body ranking; A1 cites + A2 progress + B10 deny preserved; no new search tool | Extend `adam_search` only — fixture `100201` catalog-only isolation |
 
 ## Keep
 
@@ -39,4 +40,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). **A5** completions deferred (Phase B P1). **Phase A-thin AT1/AT2:** cross-course deadline aggregation + provenance via `adam_list_calendar` (this PR).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). **A5** completions deferred (Phase B P1). **Phase A-thin AT3:** enrolled-tree search ranking via `adam_search` (this PR).

@@ -134,16 +134,8 @@ export class FixtureAdamProvider implements AdamProvider {
     if (!needle) {
       return paginate([], options);
     }
-    const matches = Object.values(fixtureCatalog)
-      .map((record) => record.object)
-      .filter((object) => {
-        if (isDeniedObjectType(object.type)) {
-          return false;
-        }
-        const page = fixtureCatalog[object.refId]?.page?.text ?? "";
-        return `${object.title}\n${page}`.toLowerCase().includes(needle);
-      });
-    return paginate(matches, options);
+    // AT3: enrolled-tree only (not Magazin / whole-catalog). Title hits before page body.
+    return paginate(rankEnrolledSearch(needle), options);
   }
 
   async listCalendar(
@@ -174,6 +166,51 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 }
 
+
+
+/** AT3: walk enrolled courses only; rank title matches ahead of page-body matches. */
+function rankEnrolledSearch(needle: string): AdamObject[] {
+  type Ranked = { object: AdamObject; rank: 0 | 1 };
+  const matches: Ranked[] = [];
+  const seen = new Set<RefId>();
+
+  const visit = (refId: RefId, walked: Set<RefId>) => {
+    if (walked.has(refId)) {
+      return;
+    }
+    walked.add(refId);
+    const record = fixtureCatalog[refId];
+    if (!record || isDeniedObjectType(record.object.type)) {
+      return;
+    }
+
+    const object = record.object;
+    if (!seen.has(object.refId)) {
+      const titleHit = object.title.toLowerCase().includes(needle);
+      const pageHit = (record.page?.text ?? "").toLowerCase().includes(needle);
+      if (titleHit || pageHit) {
+        seen.add(object.refId);
+        matches.push({ object, rank: titleHit ? 0 : 1 });
+      }
+    }
+
+    for (const childId of record.children) {
+      visit(childId, walked);
+    }
+  };
+
+  for (const courseId of enrolledCourseIds) {
+    visit(courseId, new Set());
+  }
+
+  matches.sort((a, b) => {
+    if (a.rank !== b.rank) {
+      return a.rank - b.rank;
+    }
+    return a.object.refId.localeCompare(b.object.refId, "en");
+  });
+  return matches.map((entry) => entry.object);
+}
 
 /** AT1/AT2: cross-course deadlines from calendar SoT + page dates + exc units. */
 function aggregateFixtureDeadlines(): CalendarEvent[] {

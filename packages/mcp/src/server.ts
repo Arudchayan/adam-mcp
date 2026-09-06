@@ -173,7 +173,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Search visible ADAM titles",
       description:
-        "Walks the signed-in dashboard and enrolled course/folder pages (capped) for title matches. Page text only matches the object on that page, not every sibling card. This is not ADAM's global search GUI. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links.",
+        "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Ranks title matches before page-body matches. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links.",
       inputSchema: z.object({
         query: z.string().min(1).describe("Search string"),
         cursor,

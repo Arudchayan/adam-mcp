@@ -17,7 +17,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 | Journey | User need | MCP today | Living checklist |
 | --- | --- | --- | --- |
 | Study week | Courses → folders/pages → new files → readable text | partial–strong | Harden browser scrape; `what_changed` fidelity; empty-folder ≠ no deadlines |
-| Find materials | Title/keyword in enrolled tree; open file/page/link | partial | Ranking/filters; cite `https://adam.unibas.ch/go/...`; never claim global search |
+| Find materials | Title/keyword in enrolled tree; open file/page/link | partial→stronger (AT3) | Title-before-body ranking; enrolled-tree only; cite `https://adam.unibas.ch/go/...`; never claim global search |
 | Deadlines | Exercises + dates across courses | partial | First-class aggregation; provenance + confidence; no invented dates |
 
 ### P1 — expand reads
@@ -72,7 +72,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 1. **Cross-course deadlines** — first-class aggregation of exercise + page dates  
 2. **Exercise awareness** — instructions, due date, own status; deep-link submit (**blocked** until live `exc`)  
 3. **News / what-changed reliability** when News is enabled  
-4. **Enrolled-tree search ranking** (not global search)  
+4. **Enrolled-tree search ranking** (AT3 — this PR; not global search)  
 5. **Forum thread read** before any write (**blocked** until live `frm`)
 
 Principle: deepen P0 reliability before new object types; forum read before any write; deep-link submit until gated write review.

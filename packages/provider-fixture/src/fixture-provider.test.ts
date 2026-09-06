@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
-import { fixtureCatalog, GOLDEN_TST_REF_ID } from "./catalog.ts";
+import { CATALOG_ONLY_COURSE_ID, fixtureCatalog, GOLDEN_TST_REF_ID } from "./catalog.ts";
 import { createFixtureProvider } from "./fixture-provider.ts";
 import { LongWalkStub } from "./long-walk.ts";
 
@@ -63,6 +63,7 @@ describe("FixtureAdamProvider", () => {
   it("searches titles and page text", async () => {
     const found = await provider.search("Fourier");
     assert.ok(found.items.some((item) => item.refId === "100001"));
+    assert.equal(found.items.some((item) => item.refId === CATALOG_ONLY_COURSE_ID), false);
     const exam = await provider.search("exam");
     assert.equal(exam.items[0]?.refId, "100001");
   });
@@ -189,5 +190,46 @@ describe("AT1/AT2 cross-course deadline aggregation", () => {
       assert.equal(typeof item.provenance.fetchedAt, "string");
       assert.equal(item.provenance.provider, "fixture");
     }
+  });
+});
+
+describe("AT3 enrolled-tree search ranking", () => {
+  const provider = createFixtureProvider();
+
+  it("scopes hits to enrolled trees and ranks title before page body", async () => {
+    assert.equal(fixtureCatalog[CATALOG_ONLY_COURSE_ID]?.object.type, "crs");
+    assert.match(fixtureCatalog[CATALOG_ONLY_COURSE_ID]?.object.title ?? "", /Fourier/i);
+    assert.match(fixtureCatalog[CATALOG_ONLY_COURSE_ID]?.page?.text ?? "", /Fourier/i);
+
+    const fourier = await provider.search("Fourier");
+    assert.ok(fourier.items.some((item) => item.refId === "100001"), "enrolled course page hit");
+    assert.equal(
+      fourier.items.some((item) => item.refId === CATALOG_ONLY_COURSE_ID),
+      false,
+      "catalog-only Magazin course must not appear",
+    );
+    assert.equal(
+      fourier.items.some((item) => item.refId === "900001" || item.refId === "900065" || item.refId === "1"),
+      false,
+      "root/Magazin cats must not appear",
+    );
+
+    // Title hit (100020 "04 - Exercises") before page-body hit (100001 page text).
+    const exercises = await provider.search("Exercises");
+    const ids = exercises.items.map((item) => item.refId);
+    assert.ok(ids.includes("100020"), "title match on empty Exercises fold");
+    assert.ok(ids.includes("100001"), "page-body match on enrolled course");
+    assert.ok(ids.indexOf("100020") < ids.indexOf("100001"), "title rank before body rank");
+
+    // Deterministic: same query same order.
+    const again = await provider.search("Exercises");
+    assert.deepEqual(
+      again.items.map((item) => item.refId),
+      ids,
+    );
+
+    // B10 regression: tst still denied from search.
+    const blocked = await provider.search("BLOCKED EXAM CONTENT");
+    assert.equal(blocked.items.length, 0);
   });
 });

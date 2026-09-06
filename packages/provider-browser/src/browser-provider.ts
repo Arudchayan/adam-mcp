@@ -182,7 +182,8 @@ export class BrowserAdamProvider implements AdamProvider {
   async search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>> {
     const needle = query.trim().toLowerCase();
     const pages = await this.collectLivePages();
-    const matches: AdamObject[] = [];
+    const titleMatches: AdamObject[] = [];
+    const bodyMatches: AdamObject[] = [];
     for (const { catalog } of pages) {
       if (
         catalog.current &&
@@ -190,18 +191,20 @@ export class BrowserAdamProvider implements AdamProvider {
         catalog.current.type !== "root" &&
         catalog.text.toLowerCase().includes(needle)
       ) {
-        matches.push(catalog.current);
+        const titleHit = catalog.current.title.toLowerCase().includes(needle);
+        (titleHit ? titleMatches : bodyMatches).push(catalog.current);
       }
       for (const item of catalog.objects) {
         if (isDeniedObjectType(item.type)) {
           continue;
         }
         if (item.title.toLowerCase().includes(needle)) {
-          matches.push(item);
+          titleMatches.push(item);
         }
       }
     }
-    return paginate(uniqueByRef(matches), options);
+    // AT3: title matches before page-body matches; enrolled walk only (collectLivePages).
+    return paginate(uniqueByRef([...titleMatches, ...bodyMatches]), options);
   }
 
   async listCalendar(
