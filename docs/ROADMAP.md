@@ -38,8 +38,8 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 
 | Item | Confidence | Notes |
 | --- | --- | --- |
-| Cross-course deadline aggregation (AT1/AT2) | Live-unverified | Extend `adam_list_calendar`; page/`exc`/calendar SoT + provenance; no new get-by-id |
-| Search ranking / filters | Known (partial) | Enrolled-tree only |
+| Cross-course deadline aggregation (AT1/AT2) | Live-unverified | Done (PR #10 / `533d5c5`) — extend `adam_list_calendar`; provenance |
+| Search ranking / filters (AT3) | Known (partial) | Enrolled-tree only; title before body (this PR) |
 | News reliability | Known + live (thin) | On/off News courses |
 | `adam_get_exercise` browser path | Live-unverified | Tool ships; need live `exc` or labeled synthetic |
 | Calendar vs page-inferred dates | Known (partial) | Do not invent dates |

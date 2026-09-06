@@ -264,6 +264,38 @@ const course2Page: PageContent = {
   ],
 };
 
+
+/** Catalog-only course — present in Magazin tree but not enrolled (AT3 isolation). */
+export const CATALOG_ONLY_COURSE_ID: RefId = "100201";
+
+const catalogOnlyBreadcrumb = [
+  crumb("root", "1", "ADAM"),
+  crumb("cat", "900001", "Public courses (synthetic)"),
+  crumb("cat", "900065", "Synthetic Faculty of Science"),
+  crumb("cat", "900165", "Synthetic Department of Computing"),
+];
+
+const catalogOnlyCourse = obj(
+  "crs",
+  CATALOG_ONLY_COURSE_ID,
+  "99999 – Catalog-only Fourier Elective",
+  catalogOnlyBreadcrumb,
+  {
+    accessClass: "Public",
+    updatedAt: "2026-09-03T08:00:00.000Z",
+  },
+);
+
+const catalogOnlyPage: PageContent = {
+  ...catalogOnlyCourse,
+  text: [
+    "Not enrolled. Catalog Magazin listing only.",
+    "Contains Fourier transforms markers for AT3 enrolled-tree isolation.",
+    "Global catalog scan must not surface this course via adam_search.",
+  ].join("\n"),
+  inferredDates: [],
+};
+
 export const fixtureNews: NewsItem[] = [
   {
     title: "New file in Course & Notes",
@@ -300,7 +332,7 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "1": { object: root, children: ["900001"] },
   "900001": { object: publicCat, children: ["900065"] },
   "900065": { object: faculty, children: ["900165"] },
-  "900165": { object: department, children: ["100001", "100101"] },
+  "900165": { object: department, children: ["100001", "100101", "100201"] },
   "100001": {
     object: course,
     children: ["100010", "100020", "100021"],
@@ -317,6 +349,11 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
     page: course2Page,
   },
   "100121": { object: course2Exercise, children: [], page: undefined },
+  "100201": {
+    object: catalogOnlyCourse,
+    children: [],
+    page: catalogOnlyPage,
+  },
 };
 
 export const enrolledCourseIds: RefId[] = ["100001", "100101"];
