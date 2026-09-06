@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -88,6 +89,9 @@ type JsonRpc = {
   id?: number;
   error?: { code?: number; message?: string };
   result?: {
+    protocolVersion?: string;
+    capabilities?: Record<string, unknown>;
+    serverInfo?: { name?: string; version?: string };
     tools?: Array<{
       name: string;
       annotations?: { readOnlyHint?: boolean };
@@ -150,6 +154,50 @@ async function rpc(
   });
   child.stdin.write(`${JSON.stringify(message)}\n`);
   return reply;
+}
+
+
+function processHasListeningTcp(pid: number | undefined): boolean {
+  if (pid === undefined) {
+    return false;
+  }
+  const listeningInodes = new Set<string>();
+  for (const table of ["/proc/net/tcp", "/proc/net/tcp6"] as const) {
+    let body = "";
+    try {
+      body = readFileSync(table, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of body.split("\n").slice(1)) {
+      const parts = line.trim().split(/\s+/);
+      // Linux TCP state 0A = LISTEN
+      if (parts.length >= 10 && parts[3] === "0A") {
+        listeningInodes.add(parts[9]!);
+      }
+    }
+  }
+  if (listeningInodes.size === 0) {
+    return false;
+  }
+  let fds: string[] = [];
+  try {
+    fds = readdirSync(`/proc/${pid}/fd`);
+  } catch {
+    return false;
+  }
+  for (const fd of fds) {
+    try {
+      const target = readlinkSync(`/proc/${pid}/fd/${fd}`);
+      const match = /^socket:\[(\d+)\]$/.exec(target);
+      if (match && listeningInodes.has(match[1]!)) {
+        return true;
+      }
+    } catch {
+      // ignore raced fds
+    }
+  }
+  return false;
 }
 
 describe("MCP surface over stdio", () => {
@@ -495,6 +543,109 @@ describe("B10 tst deny fail-closed", () => {
       const searchItems = search.result?.structuredContent?.items;
       assert.equal(Array.isArray(searchItems), true);
       assert.equal((searchItems as unknown[]).length, 0);
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+describe("B11 no deprecated MCP primitives", () => {
+  it("initialize capabilities omit Sampling, Roots, and Logging; no HTTP listener", async () => {
+    const child = spawnFixtureServer();
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    try {
+      const init = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "b11-deprecated-primitives", version: "0.0.1" },
+        },
+      });
+      assert.equal(init.error, undefined, init.error?.message);
+      const capabilities = init.result?.capabilities ?? {};
+      assert.equal("sampling" in capabilities, false, "must not advertise sampling");
+      assert.equal("roots" in capabilities, false, "must not advertise roots");
+      assert.equal("logging" in capabilities, false, "must not advertise MCP logging");
+      assert.equal("tools" in capabilities, true);
+      assert.equal("resources" in capabilities, true);
+      assert.equal("prompts" in capabilities, true);
+
+      assert.equal(
+        processHasListeningTcp(child.pid),
+        false,
+        "stdio MCP must not open an HTTP/SSE / Streamable HTTP listener",
+      );
+      assert.match(stderr, /adam-mcp running on stdio/);
+      assert.doesNotMatch(stderr, /listen|http\+|streamable|sse/i);
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+describe("B12 no MCP OAuth on stdio", () => {
+  it("tools/list and fixture wiring expose no oauth/authorize endpoints", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "b12-no-oauth", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(
+        names.some((name) => /oauth|authorize/i.test(name)),
+        false,
+        `unexpected oauth/authorize tools: ${names.join(",")}`,
+      );
+      assert.equal(names.includes("adam_login"), false, "fixture must not expose login/oauth tools");
+
+      // Keep Domain lock: empty Exercises fold ≠ no deadlines.
+      const children = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100001" } },
+      });
+      const items = children.result?.structuredContent?.items as Array<{ refId?: string }> | undefined;
+      assert.deepEqual(
+        (items ?? []).map((item) => item.refId),
+        ["100010", "100020", "100021"],
+      );
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.equal(emptyFold.result?.isError, undefined);
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exercise.error, undefined, exercise.error?.message);
+      assert.equal(exercise.result?.isError, undefined);
+      assert.equal(exercise.result?.structuredContent?.refId, "100021");
     } finally {
       child.kill();
     }

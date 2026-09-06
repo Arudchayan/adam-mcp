@@ -11,22 +11,19 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | --- | --- | --- |
 | B6 | `adam_read_page` / `adam_extract_file_text` return `untrusted: true` + notice string | PR #2 (`1a0d103`) |
 | B10 | Synthetic `tst` deny / fail-closed; never return exam body | PR #5 (`8af49c0`) |
-| B4 | RPC reject omit/`false` on `adam_read_page` / `adam_extract_file_text`; success only with `confirm: true` | this PR (pending merge) |
+| B4 | RPC reject omit/`false` on `adam_read_page` / `adam_extract_file_text`; success only with `confirm: true` | PR #6 (`5982bdd`) |
+| B11 | No Sampling / Roots / MCP Logging client APIs; logs stderr/OTel only; no HTTP+SSE listener without ADR | this PR (stdio/server negative asserts) |
+| B12 | No MCP OAuth on stdio; auth = Chrome session / env only (fixture: no oauth/authorize tools) | this PR (`ADAM_PROVIDER=fixture` tools/list + wiring) |
 
-## Next — B11 / B12
+## Keep
 
 | | |
 | --- | --- |
-| **B11 PASS** | No Sampling / Roots / MCP Logging client APIs; logs stderr/OTel only |
-| **B11 FAIL** | Deprecated primitives or HTTP+SSE adopted |
-| **B12 PASS** | No MCP OAuth on stdio; auth = Chrome session / env |
-| **B12 FAIL** | OAuth bolted onto local stdio |
-| **Keep** | `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines. |
-| **Harness** | `ADAM_PROVIDER=fixture`; extend existing suites. |
+| **Fixture lock** | `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines. |
 
-## Queued (after B11/B12)
+## Queued (baseline B-series)
 
-None for baseline B-series after B11/B12.
+None — B1–B12 baseline gaps closed once this PR merges.
 
 ## Backlog (after baseline)
 

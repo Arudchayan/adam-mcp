@@ -54,10 +54,10 @@
 | B8 | Resource URI != live ADAM URL | Cite https://adam.unibas.ch/go/...; handles adam://... | Host told to fetch adam:// in browser | Partial | Assert citation shape + handle form |
 | B9 | Session tools only with browser provider | Fixture: no login tools; --browser: login + status | Login on fixture / cookies in results | Partial | Fixture asserts no session/login tools |
 | B10 | tst denied | Test objects fail closed | Exam/test content returned | Covered — fixture catalog + stdio/server/provider asserts | Add golden tst object; assert deny/fail-closed |
-| B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Gap | Negative asserts: capabilities omit deprecated |
-| B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Gap | Assert no OAuth/auth routes on stdio server |
+| B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Covered — stdio initialize caps + server.getCapabilities + no HTTP listener in spawn | Keep negative asserts |
+| B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Covered — tools/list + wiring source asserts under fixture | Keep no-oauth asserts |
 
-**Known coverage gaps (must close for main gate):** B11, B12.
+**Known coverage gaps (must close for main gate):** none for baseline once B11/B12 land.
 
 ## Phase A backlog (A1-A4 + A6)
 
@@ -98,8 +98,8 @@ Still **fixture only** — no live ADAM in these PRs.
 
 1. **B6** — untrusted notice on page/extract (untrusted: true + notice) — closed by fixture asserts on tool paths
 2. **B10** — tst deny / fail-closed golden — closed by fixture golden 100030 + deny asserts
-3. **B4** — RPC confirm: true reject + success paths (closed by this PR once merged)
-4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio
+3. **B4** — RPC confirm: true reject + success paths (closed PR #6 / `5982bdd`)
+4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio (this PR)
 5. Then backlog: **A1 / A2 / A6**, then **A3 / A4** (docs + resource-link / progress / read-by-id design)
 
 Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are highest user-safety / compliance risk; B11/B12 lock protocol surface; A-series rides feature PRs.
@@ -111,7 +111,7 @@ Track until green on main under fixture:
 - [x] **B6** — untrusted notice on page/extract
 - [x] **B10** — tst denied / fail-closed
 - [x] **B4** — sensitive reads RPC require confirm: true
-- [ ] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
-- [ ] **B12** — no MCP OAuth on stdio
+- [x] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
+- [x] **B12** — no MCP OAuth on stdio
 
 When all five are checked and remaining B1-B12 / landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT.
