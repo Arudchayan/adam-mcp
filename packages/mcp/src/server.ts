@@ -1,7 +1,13 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { type AdamProvider } from "adam-core";
 import * as z from "zod/v4";
-import { ConfirmGate, READ_ONLY_ANNOTATIONS, UntrustedContent, runProvider } from "./results.ts";
+import {
+  ConfirmGate,
+  READ_ONLY_ANNOTATIONS,
+  UntrustedContent,
+  WalkProgress,
+  runProvider,
+} from "./results.ts";
 import {
   adamObjectOutputSchema,
   cursorSchema,
@@ -136,10 +142,15 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: untrustedExtractOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, confirm, maxPages }) => {
+    async ({ refId: id, confirm, maxPages }, ctx) => {
       ConfirmGate.requireTrue(confirm, "adam_extract_file_text");
       return runProvider(async () =>
-        UntrustedContent.wrap(await provider.extractFileText(id, { maxPages })),
+        UntrustedContent.wrap(
+          await provider.extractFileText(id, {
+            maxPages,
+            onProgress: WalkProgress.fromContext(ctx),
+          }),
+        ),
       );
     },
   );
@@ -171,8 +182,14 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ query, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(() => provider.search(query, { cursor: pageCursor, limit: pageLimit })),
+    async ({ query, cursor: pageCursor, limit: pageLimit }, ctx) =>
+      runProvider(() =>
+        provider.search(query, {
+          cursor: pageCursor,
+          limit: pageLimit,
+          onProgress: WalkProgress.fromContext(ctx),
+        }),
+      ),
   );
 
   server.registerTool(
@@ -190,7 +207,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: paginatedCalendarOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async (args) => runProvider(() => provider.listCalendar(args)),
+    async (args, ctx) =>
+      runProvider(() =>
+        provider.listCalendar({
+          ...args,
+          onProgress: WalkProgress.fromContext(ctx),
+        }),
+      ),
   );
 
   server.registerTool(

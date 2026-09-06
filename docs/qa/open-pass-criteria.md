@@ -12,8 +12,11 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | B6 | `adam_read_page` / `adam_extract_file_text` return `untrusted: true` + notice string | PR #2 (`1a0d103`) |
 | B10 | Synthetic `tst` deny / fail-closed; never return exam body | PR #5 (`8af49c0`) |
 | B4 | RPC reject omit/`false` on `adam_read_page` / `adam_extract_file_text`; success only with `confirm: true` | PR #6 (`5982bdd`) |
-| B11 | No Sampling / Roots / MCP Logging client APIs; logs stderr/OTel only; no HTTP+SSE listener without ADR | this PR (stdio/server negative asserts) |
-| B12 | No MCP OAuth on stdio; auth = Chrome session / env only (fixture: no oauth/authorize tools) | this PR (`ADAM_PROVIDER=fixture` tools/list + wiring) |
+| B11 | No Sampling / Roots / MCP Logging client APIs; logs stderr/OTel only; no HTTP+SSE listener without ADR | PR #7 (`21728f3`) |
+| B12 | No MCP OAuth on stdio; auth = Chrome session / env only (fixture: no oauth/authorize tools) | PR #7 (`21728f3`) |
+| A1 | Tool results include `adam://…` handles **and** canonical HTTPS citations | this PR |
+| A2 | Progress notifications on search / calendar / extract (fixture long-walk stub + observer) | this PR |
+| A6 | Read-by-id via resources; existing `adam_get_*` stay thin wrappers; no duplicate get-by-id tools | this PR |
 
 ## Keep
 
@@ -23,8 +26,8 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 
 ## Queued (baseline B-series)
 
-None — B1–B12 baseline gaps closed once this PR merges.
+None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
-## Backlog (after baseline)
+## Next
 
-A1 resource links · A2 progress · A6 resources-for-read-by-id · A3 confirm≠elicitation docs · A4 SDK pin. **A5** completions deferred (Phase B P1).
+**A3** confirm ≠ elicitation docs · **A4** SDK/protocol pin. **A5** completions deferred (Phase B P1).

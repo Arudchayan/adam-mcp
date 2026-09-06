@@ -47,7 +47,7 @@ Fixture-first. SoT:
 
 Golden fixture IDs: `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines.
 
-Close baseline gaps in order when possible: B6 (done) → B10 → B4 → B11/B12, then A1/A2/A6, A3/A4.
+Close baseline gaps in order when possible: B6 (done) → B10 → B4 → B11/B12 (done), then A1/A2/A6 (this PR), A3/A4.
 
 ## Review / merge
 

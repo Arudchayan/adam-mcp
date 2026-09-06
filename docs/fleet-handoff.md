@@ -22,9 +22,9 @@
 
 ## Status (2026-09-06)
 
-- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`).
-- **In flight:** **B11/B12** (this PR — fixture-first; see `docs/qa/`).
-- **Next after merge:** A1/A2/A6 → A3/A4.
+- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`).
+- **In flight:** **A1/A2/A6** (this PR — resource links, progress, read-by-id; fixture-first; see `docs/qa/`).
+- **Next after merge:** A3/A4.
 - Lean review: QA Lead → MCP Architect → Domain only if semantics change → Lingxi/Leonidas merge.
 
 ## Eng group
@@ -48,5 +48,5 @@ Retired (do not recreate): Researchy, Security, OSS/DX, Projects Manager.
 
 Eng group 2a035929-3c85-4322-a610-8ee697252c53 max 6 — rebuild without dead members.
 
-Status 2026-09-06: PR1 docs + PR2 B6 + PR #5 B10 + PR #6 B4 (`5982bdd`) merged; B11/B12 in flight. Next after merge: A1/A2/A6. Read AGENTS.md + docs/qa/ before acting.
+Status 2026-09-06: through PR #7 B11/B12 (`21728f3`) merged; A1/A2/A6 in flight. Next after merge: A3/A4. Read AGENTS.md + docs/qa/ before acting.
 ```

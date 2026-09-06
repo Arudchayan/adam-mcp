@@ -124,9 +124,19 @@ export type Paginated<T> = {
   totalHint?: number;
 };
 
+export type ProgressUpdate = {
+  progress: number;
+  total?: number;
+  message?: string;
+};
+
+export type ProgressReporter = (update: ProgressUpdate) => void | Promise<void>;
+
 export type ListOptions = {
   cursor?: string;
   limit?: number;
+  /** Optional long-walk progress (search / calendar / extract). */
+  onProgress?: ProgressReporter;
 };
 
 export const ADAM_ERROR_CODES = [

@@ -5,7 +5,7 @@ import { resolveAdamOrigin } from "./origin.ts";
 import { paginate } from "./pagination.ts";
 import { assertReadableObjectType } from "./policy.ts";
 import { redactText, redactUrl } from "./redaction.ts";
-import { canonicalUrl, objectTypeLabel, parseAdamRef } from "./urls.ts";
+import { canonicalUrl, objectTypeLabel, parseAdamRef, resourceUri } from "./urls.ts";
 
 describe("canonicalUrl and parseAdamRef", () => {
   it("round-trips /go/{type}/{ref_id} URLs observed on ADAM", () => {
@@ -87,5 +87,16 @@ describe("object policy", () => {
       return true;
     });
     assert.doesNotThrow(() => assertReadableObjectType("crs", "1"));
+  });
+});
+
+describe("resourceUri", () => {
+  it("returns adam:// handles only for resource-backed types", () => {
+    assert.equal(resourceUri("crs", "100001"), "adam://crs/100001");
+    assert.equal(resourceUri("fold", "100020"), "adam://fold/100020");
+    assert.equal(resourceUri("file", "100011"), "adam://file/100011");
+    assert.equal(resourceUri("exc", "100021"), "adam://exc/100021");
+    assert.equal(resourceUri("tst", "100030"), undefined);
+    assert.equal(resourceUri("cat", "1"), undefined);
   });
 });

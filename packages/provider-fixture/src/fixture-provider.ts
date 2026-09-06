@@ -15,9 +15,11 @@ import {
   type NewsItem,
   type PageContent,
   type Paginated,
+  type ProgressReporter,
   type RefId,
 } from "adam-core";
 import { enrolledCourseIds, fixtureCalendar, fixtureCatalog, fixtureNews } from "./catalog.ts";
+import { LongWalkStub } from "./long-walk.ts";
 
 const OVERVIEW_PDF_BYTES = syntheticPdfWithText(
   "Synthetic lecture overview: Fourier transforms, multimedia retrieval, ranking, and evaluation.",
@@ -91,7 +93,11 @@ export class FixtureAdamProvider implements AdamProvider {
     return record.file;
   }
 
-  async extractFileText(refId: RefId, options?: { maxPages?: number }): Promise<FileExtract> {
+  async extractFileText(
+    refId: RefId,
+    options?: { maxPages?: number; onProgress?: ProgressReporter },
+  ): Promise<FileExtract> {
+    await LongWalkStub.emit("extract", options?.onProgress);
     const file = await this.getFile(refId);
     if (file.refId !== "100011") {
       throw new AdamError("unsupported_type", `Fixture extract is only defined for 00_Overview.pdf, not ${refId}.`);
@@ -123,6 +129,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>> {
+    await LongWalkStub.emit("search", options?.onProgress);
     const needle = query.trim().toLowerCase();
     if (!needle) {
       return paginate([], options);
@@ -142,6 +149,7 @@ export class FixtureAdamProvider implements AdamProvider {
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<Paginated<CalendarEvent>> {
+    await LongWalkStub.emit("calendar", options?.onProgress);
     const from = options?.from ? Date.parse(options.from) : Number.NEGATIVE_INFINITY;
     const to = options?.to ? Date.parse(options.to) : Number.POSITIVE_INFINITY;
     const items = fixtureCalendar.filter((event) => {

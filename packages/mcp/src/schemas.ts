@@ -44,6 +44,7 @@ const breadcrumbSchema = z
     refId: z.string(),
     title: z.string(),
     url: z.string(),
+    resourceUri: z.string().optional(),
   })
   .passthrough();
 
@@ -53,6 +54,7 @@ export const adamObjectOutputSchema = z
     refId: z.string(),
     title: z.string(),
     url: z.string(),
+    resourceUri: z.string().optional().describe("MCP handle adam://{type}/{refId}; not a browser URL"),
     breadcrumb: z.array(breadcrumbSchema),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -107,6 +109,7 @@ export const untrustedExtractOutputSchema = z
     refId: z.string(),
     title: z.string(),
     url: z.string(),
+    resourceUri: z.string().optional(),
     mimeType: z.string().optional(),
     pageCount: z.number().optional(),
     pages: z.array(
@@ -173,6 +176,7 @@ export const paginatedCalendarOutputSchema = z
           confidence: z.enum(["explicit", "inferred"]),
           objectRefId: z.string().optional(),
           url: z.string().optional(),
+          resourceUri: z.string().optional(),
           provenance: provenanceSchema,
         })
         .passthrough(),

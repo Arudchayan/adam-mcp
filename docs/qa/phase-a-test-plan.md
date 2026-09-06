@@ -57,17 +57,17 @@
 | B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Covered — stdio initialize caps + server.getCapabilities + no HTTP listener in spawn | Keep negative asserts |
 | B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Covered — tools/list + wiring source asserts under fixture | Keep no-oauth asserts |
 
-**Known coverage gaps (must close for main gate):** none for baseline once B11/B12 land.
+**Known coverage gaps (must close for main gate):** none for baseline (B11/B12 closed PR #7 / `21728f3`). A1/A2/A6 covered in this PR.
 
 ## Phase A backlog (A1-A4 + A6)
 
 | ID | Case | PASS | FAIL | Notes / first test action |
 | --- | --- | --- | --- | --- |
-| A1 | Resource links in tool results | Results include adam://... + canonical HTTPS | Only HTTPS or bare refIds | Extend tool-result shape asserts after A1 lands |
-| A2 | Progress on long walks | Progress notifications on search / calendar / extract | Silent multi-second hangs | Fixture long-walk stub + progress observer |
+| A1 | Resource links in tool results | Results include adam://... + canonical HTTPS | Only HTTPS or bare refIds | Covered — tool-result shape asserts (resourceUri + HTTPS + resource_link) |
+| A2 | Progress on long walks | Progress notifications on search / calendar / extract | Silent multi-second hangs | Covered — LongWalkStub + stdio progress observer |
 | A3 | Docs: confirm vs elicitation | Docs state confirm = interim schema gate; real confirms / future writes -> elicitation when host supports MRTR | Docs imply OS permission or equate confirm/annotations to elicitation | Doc/lint or snapshot check in docs PR |
 | A4 | Pin SDK/protocol | docs/architecture.md pins MCP server 2.x + protocol era | Undocumented / mismatched | Assert pin present in docs; optional package version smoke |
-| A6 | Resources for read-by-id | New read-by-id -> resources; tools = list/search/session/confirm-gated extracts | Duplicate get-by-id tools without resource path | Resource read-by-id cases tied to A1 |
+| A6 | Resources for read-by-id | New read-by-id -> resources; tools = list/search/session/confirm-gated extracts | Duplicate get-by-id tools without resource path | Covered — resources/read + frozen adam_get_* surface (tied to A1) |
 
 ### Deferred
 
@@ -99,8 +99,9 @@ Still **fixture only** — no live ADAM in these PRs.
 1. **B6** — untrusted notice on page/extract (untrusted: true + notice) — closed by fixture asserts on tool paths
 2. **B10** — tst deny / fail-closed golden — closed by fixture golden 100030 + deny asserts
 3. **B4** — RPC confirm: true reject + success paths (closed PR #6 / `5982bdd`)
-4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio (this PR)
-5. Then backlog: **A1 / A2 / A6**, then **A3 / A4** (docs + resource-link / progress / read-by-id design)
+4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio (PR #7 / `21728f3`)
+5. **A1 / A2 / A6** — resource links, progress, read-by-id (this PR)
+6. Then **A3 / A4** (confirm≠elicitation docs + SDK pin)
 
 Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are highest user-safety / compliance risk; B11/B12 lock protocol surface; A-series rides feature PRs.
 
@@ -113,5 +114,8 @@ Track until green on main under fixture:
 - [x] **B4** — sensitive reads RPC require confirm: true
 - [x] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
 - [x] **B12** — no MCP OAuth on stdio
+- [x] **A1** — resource links in tool results (`adam://` + HTTPS)
+- [x] **A2** — progress on long walks (search / calendar / extract)
+- [x] **A6** — resources for read-by-id (no duplicate get-by-id tools)
 
-When all five are checked and remaining B1-B12 / landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT.
+When baseline B1-B12 and landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT. **Next:** A3 / A4.

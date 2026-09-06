@@ -8,6 +8,7 @@ import type {
   NewsItem,
   PageContent,
   Paginated,
+  ProgressReporter,
   ProviderId,
   RefId,
 } from "./types.ts";
@@ -20,7 +21,7 @@ export type AdamProvider = {
   readPage(refId: RefId): Promise<PageContent>;
   listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>>;
   getFile(refId: RefId): Promise<FileObject>;
-  extractFileText(refId: RefId, options?: { maxPages?: number }): Promise<FileExtract>;
+  extractFileText(refId: RefId, options?: { maxPages?: number; onProgress?: ProgressReporter }): Promise<FileExtract>;
   getExercise(refId: RefId): Promise<ExerciseObject>;
   search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>>;
   listCalendar(options?: { from?: string; to?: string } & ListOptions): Promise<Paginated<CalendarEvent>>;

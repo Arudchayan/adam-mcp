@@ -104,7 +104,7 @@ type JsonRpc = {
     resources?: Array<{ uri?: string; name?: string }>;
     resourceTemplates?: Array<{ uriTemplate?: string; name?: string }>;
     prompts?: Array<{ name: string }>;
-    content?: Array<{ type?: string; text?: string }>;
+    content?: Array<{ type?: string; text?: string; uri?: string; name?: string }>;
     structuredContent?: Record<string, unknown>;
     isError?: boolean;
   };
@@ -646,6 +646,265 @@ describe("B12 no MCP OAuth on stdio", () => {
       assert.equal(exercise.error, undefined, exercise.error?.message);
       assert.equal(exercise.result?.isError, undefined);
       assert.equal(exercise.result?.structuredContent?.refId, "100021");
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+function assertAdamAndHttps(structured: Record<string, unknown> | undefined, text: string) {
+  assert.ok(structured, "missing structuredContent");
+  const blob = `${JSON.stringify(structured)}\n${text}`;
+  assert.match(blob, /adam:\/\/(crs|fold|file|exc)\/\d+/);
+  assert.match(blob, /https:\/\/adam\.unibas\.ch\/go\/(crs|fold|file|exc)\/\d+/);
+}
+
+describe("A1 resource links in tool results", () => {
+  it("tool results include adam:// handles and canonical HTTPS citations", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "a1-resource-links", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const courses = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "adam_list_courses", arguments: {} },
+      });
+      assert.equal(courses.error, undefined, courses.error?.message);
+      assert.equal(courses.result?.isError, undefined);
+      const items = courses.result?.structuredContent?.items as Array<{
+        resourceUri?: string;
+        url?: string;
+        refId?: string;
+      }>;
+      assert.equal(items[0]?.resourceUri, "adam://crs/100001");
+      assert.equal(items[0]?.url, "https://adam.unibas.ch/go/crs/100001");
+      assertAdamAndHttps(courses.result?.structuredContent, courses.result?.content?.[0]?.text ?? "");
+      assert.equal(
+        (courses.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://crs/100001",
+        ),
+        true,
+      );
+
+      const course = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "adam_get_course", arguments: { refId: "100001" } },
+      });
+      assert.equal(course.result?.structuredContent?.resourceUri, "adam://crs/100001");
+      assert.equal(course.result?.structuredContent?.url, "https://adam.unibas.ch/go/crs/100001");
+
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exercise.result?.structuredContent?.resourceUri, "adam://exc/100021");
+      assert.equal(exercise.result?.structuredContent?.url, "https://adam.unibas.ch/go/exc/100021");
+
+      const file = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_get_file", arguments: { refId: "100011" } },
+      });
+      assert.equal(file.result?.structuredContent?.resourceUri, "adam://file/100011");
+      assert.equal(file.result?.structuredContent?.url, "https://adam.unibas.ch/go/file/100011");
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+describe("A2 progress on long walks", () => {
+  it("emits progress notifications for search / calendar / extract when progressToken is set", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    const progress: Array<{ progressToken?: string | number; progress?: number; message?: string }> = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    const onData = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as {
+            method?: string;
+            params?: { progressToken?: string | number; progress?: number; message?: string };
+          };
+          if (parsed.method === "notifications/progress") {
+            progress.push(parsed.params ?? {});
+          }
+        } catch {
+          // ignore partial JSON races
+        }
+      }
+    };
+    child.stdout.on("data", onData);
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "a2-progress", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const search = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "adam_search",
+          arguments: { query: "Fourier" },
+          _meta: { progressToken: "search-walk" },
+        },
+      });
+      assert.equal(search.error, undefined, search.error?.message);
+      assert.equal(search.result?.isError, undefined);
+      assert.ok(progress.some((p) => p.progressToken === "search-walk" && (p.progress ?? 0) >= 1));
+      assert.ok(progress.some((p) => /search/i.test(String(p.message ?? ""))));
+
+      const beforeCal = progress.length;
+      const calendar = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_list_calendar",
+          arguments: {},
+          _meta: { progressToken: "calendar-walk" },
+        },
+      });
+      assert.equal(calendar.error, undefined, calendar.error?.message);
+      assert.ok(progress.slice(beforeCal).some((p) => p.progressToken === "calendar-walk"));
+
+      const beforeExtract = progress.length;
+      const extract = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "adam_extract_file_text",
+          arguments: { refId: "100011", confirm: true },
+          _meta: { progressToken: "extract-walk" },
+        },
+      });
+      assert.equal(extract.error, undefined, extract.error?.message);
+      assert.equal(extract.result?.isError, undefined);
+      assert.ok(progress.slice(beforeExtract).some((p) => p.progressToken === "extract-walk"));
+      assert.ok(progress.length >= 3);
+    } finally {
+      child.stdout.off("data", onData);
+      child.kill();
+    }
+  });
+});
+
+describe("A6 resources for read-by-id", () => {
+  it("reads crs/fold/file/exc by adam:// resource URI and keeps get tools non-duplicative", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "a6-resources-read", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name).sort();
+      assert.deepEqual(
+        names.filter((name) => name.startsWith("adam_get_")),
+        ["adam_get_course", "adam_get_exercise", "adam_get_file"],
+      );
+
+      const course = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/read",
+        params: { uri: "adam://crs/100001" },
+      });
+      assert.equal(course.error, undefined, course.error?.message);
+      const courseText = (course.result as { contents?: Array<{ text?: string; uri?: string }> } | undefined)
+        ?.contents?.[0]?.text ?? "";
+      assert.match(courseText, /"refId": "100001"/);
+      assert.match(courseText, /https:\/\/adam\.unibas\.ch\/go\/crs\/100001/);
+
+      const folder = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "resources/read",
+        params: { uri: "adam://fold/100020" },
+      });
+      assert.equal(folder.error, undefined, folder.error?.message);
+      const folderText = (folder.result as { contents?: Array<{ text?: string }> } | undefined)
+        ?.contents?.[0]?.text ?? "";
+      assert.match(folderText, /"items"/);
+
+      const file = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "resources/read",
+        params: { uri: "adam://file/100011" },
+      });
+      assert.equal(file.error, undefined, file.error?.message);
+      const fileText = (file.result as { contents?: Array<{ text?: string }> } | undefined)
+        ?.contents?.[0]?.text ?? "";
+      assert.match(fileText, /"refId": "100011"/);
+
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "resources/read",
+        params: { uri: "adam://exc/100021" },
+      });
+      assert.equal(exercise.error, undefined, exercise.error?.message);
+      const exerciseText = (exercise.result as { contents?: Array<{ text?: string }> } | undefined)
+        ?.contents?.[0]?.text ?? "";
+      assert.match(exerciseText, /"refId": "100021"/);
+
+      // A1 tie-in: get-course tool result cites the same resource handle.
+      const viaTool = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: { name: "adam_get_course", arguments: { refId: "100001" } },
+      });
+      assert.equal(viaTool.result?.structuredContent?.resourceUri, "adam://crs/100001");
     } finally {
       child.kill();
     }

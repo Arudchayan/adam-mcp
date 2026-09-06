@@ -121,3 +121,22 @@ export function objectUrl(
   }
   return canonicalUrl(type, refId, origin);
 }
+
+/** Object types that have registered MCP resource templates (A6/A1). */
+export const RESOURCE_HANDLE_TYPES = ["crs", "fold", "file", "exc"] as const;
+export type ResourceHandleType = (typeof RESOURCE_HANDLE_TYPES)[number];
+
+export function isResourceHandleType(value: string): value is ResourceHandleType {
+  return (RESOURCE_HANDLE_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * MCP resource handle for hosts (not a browser URL).
+ * Live citation remains {@link canonicalUrl}.
+ */
+export function resourceUri(type: AdamObjectType | string, refId: RefId): string | undefined {
+  if (!isResourceHandleType(type)) {
+    return undefined;
+  }
+  return `adam://${type}/${refId}`;
+}

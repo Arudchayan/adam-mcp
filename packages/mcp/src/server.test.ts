@@ -10,7 +10,9 @@ import {
   fail,
   ok,
   READ_ONLY_TOOLS,
+  ResourceLinks,
   SESSION_TOOLS,
+  toolText,
   UntrustedContent,
   UNTRUSTED_PAGE_NOTICE,
 } from "./results.ts";
@@ -47,13 +49,13 @@ describe("read-only MCP facade", () => {
   it("marks AdamError results as tool errors", () => {
     const result = fail(new AdamError("not_found", "missing"));
     assert.equal(result.isError, true);
-    assert.match(result.content[0]?.text ?? "", /^not_found:/);
+    assert.match(toolText(result), /^not_found:/);
   });
 
   it("returns JSON text and structuredContent for successful payloads", () => {
     const result = ok({ refId: "100001" });
     assert.equal(result.isError, undefined);
-    assert.match(result.content[0]?.text ?? "", /"refId": "100001"/);
+    assert.match(toolText(result), /"refId": "100001"/);
     assert.equal(result.structuredContent?.refId, "100001");
   });
 
@@ -61,11 +63,11 @@ describe("read-only MCP facade", () => {
     const provider = createFixtureProvider();
     const extracted = await provider.extractFileText("100011");
     const result = ok(UntrustedContent.wrap(extracted));
-    assert.match(result.content[0]?.text ?? "", /multimedia retrieval/i);
+    assert.match(toolText(result), /multimedia retrieval/i);
     assert.equal(result.structuredContent?.untrusted, true);
     assert.equal(result.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
     assert.equal("bytes" in (result.structuredContent ?? {}), false);
-    assert.doesNotMatch(result.content[0]?.text ?? "", /%PDF-/);
+    assert.doesNotMatch(toolText(result), /%PDF-/);
   });
 
   it("B4: ConfirmGate rejects omit/false; accepts literal true", () => {
@@ -97,8 +99,8 @@ describe("read-only MCP facade", () => {
       ),
     );
     assert.equal(denied.isError, true);
-    assert.match(denied.content[0]?.text ?? "", /^confirmation_required:/);
-    assert.match(denied.content[0]?.text ?? "", /confirm: true/);
+    assert.match(toolText(denied), /^confirmation_required:/);
+    assert.match(toolText(denied), /confirm: true/);
   });
 
   it("B6: page and extract payloads require untrusted: true and a notice string", async () => {
@@ -148,9 +150,9 @@ describe("read-only MCP facade", () => {
       ),
     );
     assert.equal(denied.isError, true);
-    assert.match(denied.content[0]?.text ?? "", /^unsupported_type:/);
-    assert.match(denied.content[0]?.text ?? "", /tst/);
-    assert.doesNotMatch(denied.content[0]?.text ?? "", /DFT|Answer key|BLOCKED EXAM/i);
+    assert.match(toolText(denied), /^unsupported_type:/);
+    assert.match(toolText(denied), /tst/);
+    assert.doesNotMatch(toolText(denied), /DFT|Answer key|BLOCKED EXAM/i);
 
     const children = await provider.listChildren("100001");
     assert.deepEqual(
@@ -196,5 +198,46 @@ describe("read-only MCP facade", () => {
     assert.match(indexSource, /serveStdio/);
     assert.doesNotMatch(indexSource, /\boauth\b|\bauthorize\b|StreamableHTTP|SSEServerTransport|serveHttp/i);
     assert.match(indexSource, /ADAM_PROVIDER|detectProviderName|createConfiguredProvider/);
+  });
+});
+
+describe("A1 resource links in tool results", () => {
+  it("ok() enriches adam:// handles and keeps canonical HTTPS citations", async () => {
+    const provider = createFixtureProvider();
+    const course = await provider.getCourse("100001");
+    const result = ok(course);
+    assert.equal(result.structuredContent?.url, "https://adam.unibas.ch/go/crs/100001");
+    assert.equal(result.structuredContent?.resourceUri, "adam://crs/100001");
+    assert.match(toolText(result), /adam:\/\/crs\/100001/);
+    assert.match(toolText(result), /https:\/\/adam\.unibas\.ch\/go\/crs\/100001/);
+    const link = result.content.find((block) => block.type === "resource_link");
+    assert.equal(link?.type, "resource_link");
+    if (link && link.type === "resource_link") {
+      assert.equal(link.uri, "adam://crs/100001");
+    }
+
+    const listed = ok(await provider.listCourses());
+    const items = listed.structuredContent?.items as Array<{ resourceUri?: string; url?: string }>;
+    assert.equal(items[0]?.resourceUri, "adam://crs/100001");
+    assert.equal(items[0]?.url, "https://adam.unibas.ch/go/crs/100001");
+
+    // FAIL shape: bare refId / HTTPS-only must not be the only citation form.
+    assert.notEqual(ResourceLinks.forRecord({ refId: "100001" }), "adam://crs/100001");
+    assert.equal(ResourceLinks.forRecord({ type: "crs", refId: "100001" }), "adam://crs/100001");
+  });
+});
+
+describe("A6 resources for read-by-id", () => {
+  it("keeps existing get tools as thin wrappers; does not add duplicate get-by-id tools", () => {
+    const server = createAdamMcpServer({ provider: createFixtureProvider() });
+    const toolNames = Object.keys(server["_registeredTools"] as Record<string, unknown>);
+    const getById = toolNames.filter((name) => /^adam_get_/.test(name));
+    assert.deepEqual(getById.sort(), ["adam_get_course", "adam_get_exercise", "adam_get_file"]);
+    assert.equal(toolNames.some((name) => /adam_get_folder|adam_get_page|adam_get_by_id/.test(name)), false);
+
+    const resources = Object.keys(server["_registeredResources"] as Record<string, unknown>);
+    assert.equal(resources.includes("adam://me/courses"), true);
+    const templates = Object.keys(server["_registeredResourceTemplates"] as Record<string, unknown>).sort();
+    assert.deepEqual(templates, ["adam-course", "adam-exercise", "adam-file", "adam-folder"]);
   });
 });
