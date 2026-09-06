@@ -91,6 +91,10 @@ type JsonRpc = {
     tools?: Array<{
       name: string;
       annotations?: { readOnlyHint?: boolean };
+      inputSchema?: {
+        required?: string[];
+        properties?: Record<string, { const?: unknown; type?: string }>;
+      };
       outputSchema?: { type?: string };
     }>;
     resources?: Array<{ uri?: string; name?: string }>;
@@ -231,6 +235,101 @@ describe("MCP surface over stdio", () => {
         SESSION_TOOLS.filter((name) => names.includes(name)),
         [],
       );
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+describe("B4 confirm RPC", () => {
+  it("rejects omit/false and succeeds only with confirm: true for page and extract", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "b4-confirm-rpc-test", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      for (const name of ["adam_read_page", "adam_extract_file_text"] as const) {
+        const tool = (tools.result?.tools ?? []).find((entry) => entry.name === name);
+        assert.ok(tool, `missing ${name}`);
+        assert.equal(tool.inputSchema?.required?.includes("confirm"), true, `${name} must require confirm`);
+        assert.equal(tool.inputSchema?.properties?.confirm?.const, true, `${name} confirm const must be true`);
+      }
+
+      const pageOmit = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "adam_read_page", arguments: { refId: "100001" } },
+      });
+      assert.equal(pageOmit.result?.isError, true);
+      assert.match(pageOmit.result?.content?.[0]?.text ?? "", /confirm/i);
+      assert.equal(pageOmit.result?.structuredContent, undefined);
+
+      const pageFalse = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_read_page", arguments: { refId: "100001", confirm: false } },
+      });
+      assert.equal(pageFalse.result?.isError, true);
+      assert.match(pageFalse.result?.content?.[0]?.text ?? "", /confirm/i);
+      assert.equal(pageFalse.result?.structuredContent, undefined);
+
+      const pageOk = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_read_page", arguments: { refId: "100001", confirm: true } },
+      });
+      assert.equal(pageOk.error, undefined, pageOk.error?.message);
+      assert.equal(pageOk.result?.isError, undefined);
+      assert.equal(pageOk.result?.structuredContent?.untrusted, true);
+      assert.equal(typeof pageOk.result?.structuredContent?.text, "string");
+
+      const extractOmit = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "adam_extract_file_text", arguments: { refId: "100011" } },
+      });
+      assert.equal(extractOmit.result?.isError, true);
+      assert.match(extractOmit.result?.content?.[0]?.text ?? "", /confirm/i);
+      assert.equal(extractOmit.result?.structuredContent, undefined);
+
+      const extractFalse = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: { name: "adam_extract_file_text", arguments: { refId: "100011", confirm: false } },
+      });
+      assert.equal(extractFalse.result?.isError, true);
+      assert.match(extractFalse.result?.content?.[0]?.text ?? "", /confirm/i);
+      assert.equal(extractFalse.result?.structuredContent, undefined);
+
+      const extractOk = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 8,
+        method: "tools/call",
+        params: { name: "adam_extract_file_text", arguments: { refId: "100011", confirm: true } },
+      });
+      assert.equal(extractOk.error, undefined, extractOk.error?.message);
+      assert.equal(extractOk.result?.isError, undefined);
+      assert.equal(extractOk.result?.structuredContent?.untrusted, true);
+      assert.equal("bytes" in (extractOk.result?.structuredContent ?? {}), false);
+      assert.equal(typeof extractOk.result?.structuredContent?.sha256, "string");
     } finally {
       child.kill();
     }

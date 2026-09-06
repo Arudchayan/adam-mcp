@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
 import { createFixtureProvider, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import {
+  ConfirmGate,
   fail,
   ok,
   READ_ONLY_TOOLS,
@@ -60,6 +61,39 @@ describe("read-only MCP facade", () => {
     assert.equal(result.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
     assert.equal("bytes" in (result.structuredContent ?? {}), false);
     assert.doesNotMatch(result.content[0]?.text ?? "", /%PDF-/);
+  });
+
+  it("B4: ConfirmGate rejects omit/false; accepts literal true", () => {
+    assert.throws(
+      () => ConfirmGate.requireTrue(undefined, "adam_read_page"),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "confirmation_required");
+        assert.match(error.message, /confirm: true/i);
+        assert.match(error.message, /not an OS permission/i);
+        return true;
+      },
+    );
+    assert.throws(
+      () => ConfirmGate.requireTrue(false, "adam_extract_file_text"),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "confirmation_required");
+        return true;
+      },
+    );
+    assert.throws(() => ConfirmGate.requireTrue("true", "adam_read_page"), AdamError);
+    assert.doesNotThrow(() => ConfirmGate.requireTrue(true, "adam_read_page"));
+
+    const denied = fail(
+      new AdamError(
+        "confirmation_required",
+        "adam_read_page requires confirm: true (schema gate after the student asked to read). Not an OS permission dialog.",
+      ),
+    );
+    assert.equal(denied.isError, true);
+    assert.match(denied.content[0]?.text ?? "", /^confirmation_required:/);
+    assert.match(denied.content[0]?.text ?? "", /confirm: true/);
   });
 
   it("B6: page and extract payloads require untrusted: true and a notice string", async () => {

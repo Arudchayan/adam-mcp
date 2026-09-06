@@ -39,6 +39,18 @@ export class UntrustedContent {
 
 export const UNTRUSTED_PAGE_NOTICE = UntrustedContent.NOTICE;
 
+/** B4: confirm is a required schema gate (not OS permission / elicitation). */
+export class ConfirmGate {
+  static requireTrue(confirm: unknown, toolName: string): asserts confirm is true {
+    if (confirm !== true) {
+      throw new AdamError(
+        "confirmation_required",
+        `${toolName} requires confirm: true (schema gate after the student asked to read). Not an OS permission dialog.`,
+      );
+    }
+  }
+}
+
 export type ToolResponse = {
   content: Array<{ type: "text"; text: string }>;
   structuredContent?: Record<string, unknown>;
