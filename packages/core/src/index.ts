@@ -1,3 +1,9 @@
+export {
+  CALENDAR_SOURCE_RANK,
+  calendarEventDay,
+  calendarEventDedupeKey,
+  preferCalendarEvents,
+} from "./calendar.ts";
 export { AdamError, isAdamError } from "./errors.ts";
 export {
   DEFAULT_EXTRACT_PAGES,

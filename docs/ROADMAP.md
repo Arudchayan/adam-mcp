@@ -41,8 +41,8 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Cross-course deadline aggregation (AT1/AT2) | Live-unverified | Done (PR #10 / `533d5c5`) — extend `adam_list_calendar`; provenance |
 | Search ranking / filters (AT3) | Known (partial) | Done (PR #11 / `01069ef`) — enrolled-tree only; title before body |
 | News reliability (AT4) | Known + live (thin) | Done (PR #12 / `b3bb0c0`) — extend `adam_list_news`; news-on/off |
-| `adam_get_exercise` browser path (AT5) | Live-unverified | Harden browser path; labeled synthetic `100021` (this PR) |
-| Calendar vs page-inferred dates | Known (partial) | Do not invent dates |
+| `adam_get_exercise` browser path (AT5) | Live-unverified | Done (PR #13 / `ed40c2c`) — labeled synthetic `100021` |
+| Calendar vs page-inferred dates (AT6) | Known (partial) | Extend `adam_list_calendar`; unlabeled→page; dedup exc>calendar>page (this PR) |
 
 ## Phase B — valuable unread surfaces (reads only)
 

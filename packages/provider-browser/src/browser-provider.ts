@@ -6,6 +6,7 @@ import {
   looksLikeHtml,
   objectUrl,
   paginate,
+  preferCalendarEvents,
   parseAdamRef,
   type AdamObject,
   type AdamObjectType,
@@ -214,25 +215,46 @@ export class BrowserAdamProvider implements AdamProvider {
     const pages = await this.collectLivePages();
     const events: CalendarEvent[] = [];
     for (const { snapshot, catalog } of pages) {
+      const provenance = catalog.current?.provenance ?? {
+        sourceUrl: snapshot.url,
+        fetchedAt: now(),
+        provider: "browser" as const,
+        freshness: "live-browser-session",
+      };
+      const objectRefId = catalog.current?.refId;
+      const url = catalog.current?.url ?? snapshot.url;
+
+      // AT6: unlabeled / page-inferred dates stay source:page — never promote all dates on exc pages to exc.
       for (const date of catalog.inferredDates) {
-        const source = catalog.current?.type === "exc" ? "exc" : "page";
         events.push({
           title: date.raw,
           ...(date.iso ? { startsAt: date.iso } : {}),
-          source,
+          source: "page",
           confidence: date.confidence,
-          objectRefId: catalog.current?.refId,
-          url: catalog.current?.url ?? snapshot.url,
-          provenance: catalog.current?.provenance ?? {
-            sourceUrl: snapshot.url,
-            fetchedAt: now(),
-            provider: "browser",
-            freshness: "live-browser-session",
-          },
+          objectRefId,
+          url,
+          provenance,
         });
       }
+
+      // Labeled exercise deadline only (AT5 labeling) → source:exc.
+      if (catalog.current?.type === "exc") {
+        const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
+        if (deadline) {
+          events.push({
+            title: `${catalog.current.title} deadline`,
+            startsAt: deadline,
+            source: "exc",
+            confidence: "explicit",
+            objectRefId: catalog.current.refId,
+            url: catalog.current.url,
+            provenance: catalog.current.provenance,
+          });
+        }
+      }
     }
-    return paginate(uniqueEvents(filterRange(events, options?.from, options?.to)), options);
+    // AT6: same event prefers exc > calendar > page.
+    return paginate(preferCalendarEvents(filterRange(events, options?.from, options?.to)), options);
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
@@ -355,19 +377,6 @@ function uniqueUrls(urls: string[]): string[] {
   return [...new Set(urls)];
 }
 
-function uniqueEvents(events: CalendarEvent[]): CalendarEvent[] {
-  const seen = new Set<string>();
-  const unique: CalendarEvent[] = [];
-  for (const event of events) {
-    const key = `${event.startsAt ?? ""}:${event.title}:${event.objectRefId ?? event.url ?? ""}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    unique.push(event);
-  }
-  return unique;
-}
 
 function uniqueNews(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();

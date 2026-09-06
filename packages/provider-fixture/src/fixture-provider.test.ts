@@ -332,3 +332,60 @@ describe("AT5 adam_get_exercise labeled synthetic", () => {
     });
   });
 });
+
+describe("AT6 calendar vs page-inferred dates", () => {
+  const provider = createFixtureProvider();
+
+  it("keeps unlabeled exc-page dates as page; labeled deadline as exc; dedup prefers exc", async () => {
+    const calendar = await provider.listCalendar();
+    const items = calendar.items;
+
+    // Unlabeled published date on exc 100021 stays source:page (not promoted to exc).
+    const published = items.find(
+      (item) => item.objectRefId === "100021" && item.source === "page" && item.startsAt === "2026-09-01T00:00:00.000Z",
+    );
+    assert.ok(published, "unlabeled page date on exc must stay source:page");
+    assert.equal(published?.confidence, "inferred");
+
+    // Labeled deadline surfaces as exc (explicit SoT).
+    const deadline = items.find((item) => item.objectRefId === "100021" && item.source === "exc");
+    assert.ok(deadline);
+    assert.equal(deadline?.startsAt, "2026-09-22T21:59:00.000Z");
+    assert.equal(deadline?.confidence, "explicit");
+
+    // Same object+day: page duplicate of the deadline must not remain after dedup.
+    assert.equal(
+      items.filter((item) => item.objectRefId === "100021" && item.startsAt?.startsWith("2026-09-22")).length,
+      1,
+      "dedup same object+day prefers exc over page",
+    );
+
+    // Calendar SoT stays explicit; page dates remain page.
+    const calSot = items.find((item) => item.source === "calendar");
+    assert.ok(calSot);
+    assert.equal(calSot?.confidence, "explicit");
+
+    // Domain locks.
+    assert.equal(items.some((item) => item.objectRefId === "100020"), false);
+    const emptyFold = await provider.listChildren("100020");
+    assert.deepEqual(emptyFold.items, []);
+    const exercise = await provider.getExercise("100021");
+    assert.equal(exercise.type, "exc");
+
+    // startsAt only when ISO present (honest omit).
+    const undated = items.find(
+      (item) => item.objectRefId === "100101" && item.source === "page" && !item.startsAt,
+    );
+    assert.ok(undated);
+
+    for (const item of items) {
+      if (item.source === "exc" || item.source === "calendar") {
+        assert.equal(item.confidence, "explicit");
+      }
+      if (item.startsAt) {
+        assert.equal(Number.isFinite(Date.parse(item.startsAt)), true);
+      }
+    }
+  });
+});
+
