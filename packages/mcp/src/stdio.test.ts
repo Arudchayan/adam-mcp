@@ -1322,3 +1322,100 @@ describe("AT4 adam_list_news reliability", () => {
     }
   });
 });
+
+describe("AT5 adam_get_exercise harden", () => {
+  it("surfaces labeled synthetic 100021 with A1 cites; keeps 100020 empty; no new tool", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "at5-get-exercise", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_get_exercise"), true);
+      assert.equal(
+        names.some((name) => /adam_get_exercise_by|adam_list_exercise|adam_get_exc\b/i.test(name)),
+        false,
+        "no new exercise get-by-id / list tool",
+      );
+
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exercise.error, undefined, exercise.error?.message);
+      assert.equal(exercise.result?.isError, undefined);
+      const structured = exercise.result?.structuredContent as {
+        type?: string;
+        refId?: string;
+        url?: string;
+        resourceUri?: string;
+        units?: Array<{ deadline?: string; ownStatus?: string }>;
+        provenance?: {
+          provider?: string;
+          freshness?: string;
+          sourceUrl?: string;
+          fetchedAt?: string;
+        };
+      };
+      assert.equal(structured?.type, "exc");
+      assert.equal(structured?.refId, "100021");
+      assert.equal(structured?.url, "https://adam.unibas.ch/go/exc/100021");
+      assert.equal(structured?.resourceUri, "adam://exc/100021");
+      assert.equal(structured?.units?.[0]?.deadline, "2026-09-22T21:59:00.000Z");
+      assert.equal(structured?.provenance?.provider, "fixture");
+      assert.equal(structured?.provenance?.freshness, "synthetic");
+      assert.ok(structured?.provenance?.sourceUrl);
+      assert.ok(structured?.provenance?.fetchedAt);
+      assertAdamAndHttps(exercise.result?.structuredContent, exercise.result?.content?.[0]?.text ?? "");
+      assert.equal(
+        (exercise.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://exc/100021",
+        ),
+        true,
+      );
+
+      // Fail-closed: fold is not an exercise.
+      const fold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100020" } },
+      });
+      assert.equal(fold.result?.isError, true);
+      assert.match(fold.result?.content?.[0]?.text ?? "", /unsupported_type|fold/i);
+
+      // Domain lock + B10 regressions.
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+      const denied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "adam_read_page", arguments: { refId: GOLDEN_TST_REF_ID, confirm: true } },
+      });
+      assert.equal(denied.result?.isError, true);
+    } finally {
+      child.kill();
+    }
+  });
+});

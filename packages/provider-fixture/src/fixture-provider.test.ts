@@ -297,3 +297,38 @@ describe("AT4 adam_list_news reliability", () => {
     assert.equal(exercise.type, "exc");
   });
 });
+
+describe("AT5 adam_get_exercise labeled synthetic", () => {
+  const provider = createFixtureProvider();
+
+  it("keeps 100021 as labeled synthetic exc+deadline with provenance (not live)", async () => {
+    const exercise = await provider.getExercise("100021");
+    assert.equal(exercise.type, "exc");
+    assert.equal(exercise.refId, "100021");
+    assert.equal(exercise.units[0]?.deadline, "2026-09-22T21:59:00.000Z");
+    assert.equal(exercise.provenance.provider, "fixture");
+    assert.equal(exercise.provenance.freshness, "synthetic");
+    assert.match(exercise.provenance.sourceUrl, /^https:\/\/adam\.unibas\.ch\/go\/exc\/100021$/);
+    assert.equal(exercise.url, "https://adam.unibas.ch/go/exc/100021");
+    assert.equal("submit" in exercise, false);
+
+    // Domain lock: empty Exercises fold ≠ no deadlines / ≠ missing exc.
+    const emptyFold = await provider.listChildren("100020");
+    assert.deepEqual(emptyFold.items, []);
+    assert.equal(fixtureCatalog["100020"]?.object.type, "fold");
+    assert.equal(fixtureCatalog["100021"]?.object.type, "exc");
+
+    // Fail-closed: do not coerce non-exc types.
+    await assert.rejects(() => provider.getExercise("100020"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /fold/i);
+      return true;
+    });
+    await assert.rejects(() => provider.getExercise("100001"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      return true;
+    });
+  });
+});

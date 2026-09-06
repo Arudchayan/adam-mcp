@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { AdamError, syntheticPdfWithText } from "adam-core";
 import { hostnameAllowed, urlAllowed } from "./allowlist.ts";
 import { createBrowserProvider } from "./browser-provider.ts";
-import { extractCatalog, inferDates, isLoginSnapshot } from "./extract.ts";
+import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot } from "./extract.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
 const dashboardHtml = `
@@ -261,6 +261,9 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(exercise.type, "exc");
     assert.match(exercise.units[0]?.instructionText ?? "", /retrieval summary/i);
     assert.equal(exercise.units[0]?.ownStatus, "unknown");
+    assert.equal(exercise.units[0]?.deadline, "2026-09-22T00:00:00.000Z");
+    assert.equal(exercise.provenance.provider, "browser");
+    assert.match(exercise.url, /\/go\/exc\/100021$/);
   });
 
   it("treats the ADAM login page as unauthorized", async () => {
@@ -311,5 +314,79 @@ describe("login snapshot detection", () => {
       "Bei ADAM anmelden Login mit Switch edu-ID",
     );
     assert.equal(isLoginSnapshot(snapshot), true);
+  });
+});
+
+describe("AT5 getExercise browser harden", () => {
+  it("extracts deadline only when labeled; omits unlabeled page dates", () => {
+    const labeled = exerciseDeadlineFromPage("Deadline: 22 September 2026, 23:59.\nWrite a summary.");
+    assert.equal(labeled, "2026-09-22T00:00:00.000Z");
+    const unlabeled = exerciseDeadlineFromPage(
+      "Published: 1 September 2026\nWritten exam: 12 January 2027\nWrite a summary.",
+    );
+    assert.equal(unlabeled, undefined);
+  });
+
+  it("fail-closes unknown types instead of coercing to exc", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/exc/100099": snapshotFromHtml(
+          "https://adam.unibas.ch/ilias.php?ref_id=100099",
+          "Mystery object",
+          "<main><h1>Mystery object</h1><p>Deadline: 22 September 2026</p><a href=\"/logout.php\">Abmelden</a></main>",
+          "Mystery object Deadline: 22 September 2026 Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => hardened.getExercise("100099"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /unknown/i);
+      return true;
+    });
+  });
+
+  it("does not invent a deadline from unlabeled dates on a real exc page", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/exc/100022": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100022",
+          "Exercise without labeled deadline",
+          `<main>
+  <h1>Exercise without labeled deadline</h1>
+  <p>Published: 1 September 2026</p>
+  <p>Write something before the exam on 12 January 2027.</p>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Exercise without labeled deadline Published: 1 September 2026 exam 12 January 2027 Abmelden",
+        ),
+      }),
+    });
+    const exercise = await hardened.getExercise("100022");
+    assert.equal(exercise.type, "exc");
+    assert.equal(exercise.units[0]?.deadline, undefined);
+    assert.equal("deadline" in (exercise.units[0] ?? {}), false);
+  });
+
+  it("rejects fold pages opened via getExercise (no type coercion)", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/exc/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => hardened.getExercise("100020"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /fold/i);
+      return true;
+    });
   });
 });

@@ -195,6 +195,33 @@ export function inferDates(text: string): InferredDate[] {
   return found.slice(0, 20);
 }
 
+/**
+ * AT5: only surface a unit deadline when the page labels one (Deadline/Abgabe/Due).
+ * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
+ */
+export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
+  const labeled = [...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*:\s*([^\n.;]{3,80})/gi)];
+  if (labeled.length === 0) {
+    return undefined;
+  }
+  for (const match of labeled) {
+    const raw = match[1].trim();
+    const fromLabel = inferDates(raw).find((date) => date.iso)?.iso;
+    if (fromLabel) {
+      return fromLabel;
+    }
+    const lowered = raw.toLowerCase();
+    const hit = inferredDates.find(
+      (date) => date.iso && (lowered.includes(date.raw.toLowerCase()) || date.raw.toLowerCase().includes(lowered.slice(0, 12))),
+    );
+    if (hit?.iso) {
+      return hit.iso;
+    }
+  }
+  // Labeled but unparseable — honest omit (do not invent).
+  return undefined;
+}
+
 export function collectLinksFromHtml(html: string): SnapshotLink[] {
   const chromeHrefs = new Set(hrefsIn(html, /<nav[^>]*aria-label=["']Hauptnavigationsleiste["'][^>]*>[\s\S]*?<\/nav>/i));
   const breadcrumbHrefs = new Set(

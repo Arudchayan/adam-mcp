@@ -101,6 +101,7 @@ const exercises = obj("fold", "100020", "04 - Exercises", [
   crumb("crs", "100001", course.title),
 ]);
 
+/** AT5 golden: labeled synthetic exc + deadline (not live ADAM; freshness=synthetic). */
 const exercise: ExerciseObject = {
   ...obj(
     "exc",
