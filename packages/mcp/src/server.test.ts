@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
-import { createFixtureProvider } from "adam-provider-fixture";
+import { createFixtureProvider, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import {
   fail,
   ok,
@@ -86,5 +86,40 @@ describe("read-only MCP facade", () => {
     assert.equal(untrustedPageOutputSchema.safeParse(pageWithoutNotice).success, false);
     const { notice: _extractNotice, ...extractWithoutNotice } = extractWrapped;
     assert.equal(untrustedExtractOutputSchema.safeParse(extractWithoutNotice).success, false);
+  });
+
+  it("B10: golden tst fail-closed on read/get; omitted from happy-path lists", async () => {
+    const provider = createFixtureProvider();
+    const deny = (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /tst/i);
+      assert.match(error.message, /not sent to the model/i);
+      assert.doesNotMatch(error.message, /DFT|Answer key|BLOCKED EXAM/i);
+      return true;
+    };
+    await assert.rejects(() => provider.readPage(GOLDEN_TST_REF_ID), deny);
+    await assert.rejects(() => provider.getCourse(GOLDEN_TST_REF_ID), deny);
+    await assert.rejects(() => provider.getExercise(GOLDEN_TST_REF_ID), deny);
+
+    const denied = fail(
+      new AdamError(
+        "unsupported_type",
+        `ADAM object type "tst" (${GOLDEN_TST_REF_ID}) is blocked. Tests and exams are not sent to the model.`,
+      ),
+    );
+    assert.equal(denied.isError, true);
+    assert.match(denied.content[0]?.text ?? "", /^unsupported_type:/);
+    assert.match(denied.content[0]?.text ?? "", /tst/);
+    assert.doesNotMatch(denied.content[0]?.text ?? "", /DFT|Answer key|BLOCKED EXAM/i);
+
+    const children = await provider.listChildren("100001");
+    assert.deepEqual(
+      children.items.map((item) => item.refId),
+      ["100010", "100020", "100021"],
+    );
+    assert.equal(children.items.some((item) => item.type === "tst"), false);
+    const search = await provider.search("BLOCKED EXAM CONTENT");
+    assert.equal(search.items.length, 0);
   });
 });
