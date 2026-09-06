@@ -1,7 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { type AdamProvider } from "adam-core";
 import * as z from "zod/v4";
-import { READ_ONLY_ANNOTATIONS, UntrustedContent, runProvider } from "./results.ts";
+import { ConfirmGate, READ_ONLY_ANNOTATIONS, UntrustedContent, runProvider } from "./results.ts";
 import {
   adamObjectOutputSchema,
   cursorSchema,
@@ -93,8 +93,10 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: untrustedPageOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id }) =>
-      runProvider(async () => UntrustedContent.wrap(await provider.readPage(id))),
+    async ({ refId: id, confirm }) => {
+      ConfirmGate.requireTrue(confirm, "adam_read_page");
+      return runProvider(async () => UntrustedContent.wrap(await provider.readPage(id)));
+    },
   );
 
   server.registerTool(
@@ -134,10 +136,12 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: untrustedExtractOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, maxPages }) =>
-      runProvider(async () =>
+    async ({ refId: id, confirm, maxPages }) => {
+      ConfirmGate.requireTrue(confirm, "adam_extract_file_text");
+      return runProvider(async () =>
         UntrustedContent.wrap(await provider.extractFileText(id, { maxPages })),
-      ),
+      );
+    },
   );
 
   server.registerTool(

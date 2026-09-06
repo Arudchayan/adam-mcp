@@ -47,7 +47,7 @@
 | B1 | Stdio only; no Streamable HTTP listener | serveStdio works; no hosted HTTP | HTTP MCP without ADR | Covered in stdio/server suites | Assert no HTTP listener in spawn tests |
 | B2 | Tools + resources + prompts advertised | tools/list, resources (+ templates), prompts/list non-empty | Missing primitive class | Partial — extend list assertions | Add full three-primitive list smoke |
 | B3 | Tool I/O schemas + annotations | Zod in/out; readOnlyHint on reads | Missing schema / wrong hints | Partial | Assert annotations on read tools |
-| B4 | Sensitive reads need confirm: true | adam_read_page / adam_extract_file_text reject without literal true | Succeeds without confirm | Gap (B4-RPC) — schema may exist; RPC reject path incomplete | Add explicit RPC reject + success-with-confirm cases |
+| B4 | Sensitive reads need confirm: true | adam_read_page / adam_extract_file_text reject without literal true | Succeeds without confirm | Covered — stdio RPC reject omit/false + success with confirm:true; ConfirmGate in handlers | Keep RPC + schema regression |
 | B5 | No file bytes to model | Text + sha256 only | Bytes/base64 in result | Covered | Keep regression on extract result shape |
 | B6 | Untrusted notice on page/extract | untrusted: true + notice string | Missing notice | Covered — stdio + server fixture asserts | Assert untrusted + notice on page/extract tools |
 | B7 | Stdout hygiene | stdout = JSON-RPC only; logs on stderr | Log noise on stdout | Covered in stdio tests | Keep spawn hygiene asserts |
@@ -57,7 +57,7 @@
 | B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Gap | Negative asserts: capabilities omit deprecated |
 | B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Gap | Assert no OAuth/auth routes on stdio server |
 
-**Known coverage gaps (must close for main gate):** B4-RPC, B11, B12.
+**Known coverage gaps (must close for main gate):** B11, B12.
 
 ## Phase A backlog (A1-A4 + A6)
 
@@ -98,7 +98,7 @@ Still **fixture only** — no live ADAM in these PRs.
 
 1. **B6** — untrusted notice on page/extract (untrusted: true + notice) — closed by fixture asserts on tool paths
 2. **B10** — tst deny / fail-closed golden — closed by fixture golden 100030 + deny asserts
-3. **B4** — RPC confirm: true reject + success paths (B4-RPC gap)
+3. **B4** — RPC confirm: true reject + success paths (closed by this PR once merged)
 4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio
 5. Then backlog: **A1 / A2 / A6**, then **A3 / A4** (docs + resource-link / progress / read-by-id design)
 
@@ -110,7 +110,7 @@ Track until green on main under fixture:
 
 - [x] **B6** — untrusted notice on page/extract
 - [x] **B10** — tst denied / fail-closed
-- [ ] **B4** — sensitive reads RPC require confirm: true
+- [x] **B4** — sensitive reads RPC require confirm: true
 - [ ] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
 - [ ] **B12** — no MCP OAuth on stdio
 

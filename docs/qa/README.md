@@ -13,7 +13,7 @@ Lean source of truth for fixture gates and light security skims. Do not reconstr
 
 ## Current Phase A order
 
-B6 (done) → **B10** → B4 → B11/B12 → A1/A2/A6 → A3/A4.
+B6 (done) → B10 (done, PR #5) → B4 (this PR) → **B11/B12** → A1/A2/A6 → A3/A4.
 
 ## Fixture goldens (locked)
 
