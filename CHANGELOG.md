@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase A-thin AT4: `adam_list_news` reliability (enrolled news-on/off; provenance; since; progress)
 - Phase A-thin AT3: enrolled-tree `adam_search` ranking (title before body; catalog-only isolation)
 - Phase A-thin AT1/AT2: cross-course deadline aggregation via `adam_list_calendar` (source/confidence/provenance)
 - CI status badge on the README

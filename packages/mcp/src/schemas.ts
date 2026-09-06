@@ -154,6 +154,7 @@ export const paginatedNewsOutputSchema = z
           updatedAt: z.string().optional(),
           accessClass: z.string().optional(),
           author: z.string().optional(),
+          resourceUri: z.string().optional(),
           provenance: provenanceSchema,
         })
         .passthrough(),

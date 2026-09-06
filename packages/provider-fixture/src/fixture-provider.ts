@@ -18,7 +18,13 @@ import {
   type ProgressReporter,
   type RefId,
 } from "adam-core";
-import { enrolledCourseIds, fixtureCalendar, fixtureCatalog, fixtureNews } from "./catalog.ts";
+import {
+  enrolledCourseIds,
+  fixtureCalendar,
+  fixtureCatalog,
+  fixtureNews,
+  newsEnabledCourseIds,
+} from "./catalog.ts";
 import { LongWalkStub } from "./long-walk.ts";
 
 const OVERVIEW_PDF_BYTES = syntheticPdfWithText(
@@ -157,8 +163,15 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
+    await LongWalkStub.emit("news", options?.onProgress);
+    // AT4: enrolled + News-enabled courses only. Never invent activity for news-off / Magazin.
+    const enrolled = new Set(enrolledCourseIds);
+    const newsOn = new Set(newsEnabledCourseIds);
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     const items = fixtureNews.filter((item) => {
+      if (!item.courseRefId || !enrolled.has(item.courseRefId) || !newsOn.has(item.courseRefId)) {
+        return false;
+      }
       const stamp = Date.parse(item.updatedAt ?? item.createdAt ?? "");
       return Number.isFinite(stamp) ? stamp >= since : true;
     });

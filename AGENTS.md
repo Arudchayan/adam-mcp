@@ -47,7 +47,7 @@ Fixture-first. SoT:
 
 Golden fixture IDs: `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines.
 
-Close baseline gaps in order when possible: B6–B12 done; A1/A2/A6 done (PR #8 / `e52d947`); A3/A4 done (PR #9 / `a5e1fd6`); AT1/AT2 done (PR #10 / `533d5c5`). A5 deferred Phase B P1; Phase A-thin AT3 next.
+Close baseline gaps in order when possible: B6–B12 done; A1/A2/A6 done (PR #8 / `e52d947`); A3/A4 done (PR #9 / `a5e1fd6`); AT1/AT2 done (PR #10 / `533d5c5`); AT3 done (PR #11 / `01069ef`). A5 deferred Phase B P1; Phase A-thin AT4 next.
 
 ## Review / merge
 

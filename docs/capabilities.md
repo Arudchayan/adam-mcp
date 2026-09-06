@@ -25,7 +25,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 | Journey | User need | MCP today | Notes |
 | --- | --- | --- | --- |
 | Exercise awareness | Instructions, due date, own hand-in status | tool partial (`adam_get_exercise`); **live-unverified** | Phase B blocked until a course with real `exc`; deep-link browser for submit |
-| News / what changed | New files & activity when lecturers enable News | partial; **live-seen** on one course | Student QSG: News only if enabled |
+| News / what changed | New files & activity when lecturers enable News | partial→stronger (AT4); **live-seen** on one course | Student QSG: News only if enabled; honest empty when off |
 | Session / timetable blocks | Class dates in course (`sess`) | uncertain | Live-verify when `sess` appears |
 
 ### P2 — later reads
@@ -71,8 +71,8 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 
 1. **Cross-course deadlines** — first-class aggregation of exercise + page dates  
 2. **Exercise awareness** — instructions, due date, own status; deep-link submit (**blocked** until live `exc`)  
-3. **News / what-changed reliability** when News is enabled  
-4. **Enrolled-tree search ranking** (AT3 — this PR; not global search)  
+3. **News / what-changed reliability** when News is enabled (AT4 — this PR)  
+4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
 5. **Forum thread read** before any write (**blocked** until live `frm`)
 
 Principle: deepen P0 reliability before new object types; forum read before any write; deep-link submit until gated write review.

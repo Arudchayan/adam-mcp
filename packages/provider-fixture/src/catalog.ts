@@ -296,6 +296,12 @@ const catalogOnlyPage: PageContent = {
   inferredDates: [],
 };
 
+/** Enrolled courses with News sideblock enabled (AT4). */
+export const newsEnabledCourseIds: RefId[] = ["100001"];
+
+/** Enrolled course with News disabled — listNews must stay honestly empty (AT4). */
+export const NEWS_OFF_COURSE_ID: RefId = "100101";
+
 export const fixtureNews: NewsItem[] = [
   {
     title: "New file in Course & Notes",
@@ -308,6 +314,30 @@ export const fixtureNews: NewsItem[] = [
     accessClass: "Authenticated Users",
     author: "Fixture Author",
     provenance: provenance({ type: "file", refId: "100011" }),
+  },
+  {
+    // Older news-on item for `since` filter coverage.
+    title: "Seminar kickoff note",
+    summary: "Welcome note posted before the overview PDF.",
+    url: canonicalUrl("crs", "100001"),
+    courseRefId: "100001",
+    createdAt: "2026-08-20T10:00:00.000Z",
+    updatedAt: "2026-08-20T10:00:00.000Z",
+    accessClass: "Authenticated Users",
+    author: "Fixture Author",
+    provenance: provenance({ type: "crs", refId: "100001" }),
+  },
+  {
+    // Magazin / catalog-only — must never surface via adam_list_news (AT4).
+    title: "Catalog-only Magazin announcement",
+    summary: "Not enrolled. Must not appear in adam_list_news.",
+    url: canonicalUrl("crs", CATALOG_ONLY_COURSE_ID),
+    courseRefId: CATALOG_ONLY_COURSE_ID,
+    createdAt: "2026-09-04T12:00:00.000Z",
+    updatedAt: "2026-09-04T12:00:00.000Z",
+    accessClass: "Public",
+    author: "Magazin Bot",
+    provenance: provenance({ type: "crs", refId: CATALOG_ONLY_COURSE_ID }),
   },
 ];
 

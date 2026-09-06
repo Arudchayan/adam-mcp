@@ -221,7 +221,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM news",
       description:
-        "News/announcements from dashboard HTML articles when present, otherwise file/blog links on walked pages. Fixture catalog in tests. Not a guaranteed ILIAS news API. Includes timestamps, access class, and author when present.",
+        "News/announcements from enrolled courses where News is enabled. Honest empty when News is off — does not invent activity. Not Magazin/global scope. Includes provenance, timestamps, access class, and author when present. Not a guaranteed ILIAS news API.",
       inputSchema: z.object({
         since: z.string().optional().describe("Only items updated at or after this ISO timestamp"),
         cursor,
@@ -230,7 +230,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: paginatedNewsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async (args) => runProvider(() => provider.listNews(args)),
+    async (args, ctx) =>
+      runProvider(() =>
+        provider.listNews({
+          ...args,
+          onProgress: WalkProgress.fromContext(ctx),
+        }),
+      ),
   );
 
   if (options.session) {

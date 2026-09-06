@@ -4,7 +4,11 @@ import { readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { CATALOG_ONLY_COURSE_ID, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
+import {
+  CATALOG_ONLY_COURSE_ID,
+  GOLDEN_TST_REF_ID,
+  NEWS_OFF_COURSE_ID,
+} from "adam-provider-fixture";
 import { READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 import { extractFileInputSchema, readPageInputSchema } from "./schemas.ts";
 
@@ -1176,3 +1180,145 @@ describe("AT3 adam_search enrolled-tree ranking", () => {
   });
 });
 
+describe("AT4 adam_list_news reliability", () => {
+  it("scopes to news-on enrolled courses with A1 cites, since, and A2 progress", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    const progress: Array<{ progressToken?: string | number; progress?: number; message?: string }> = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    const onData = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as {
+            method?: string;
+            params?: { progressToken?: string | number; progress?: number; message?: string };
+          };
+          if (parsed.method === "notifications/progress") {
+            progress.push(parsed.params ?? {});
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    child.stdout.on("data", onData);
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "at4-news-reliability", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_list_news"), true);
+      assert.equal(
+        names.some((name) => /adam_get_news|adam_list_announcement|adam_news_/i.test(name)),
+        false,
+        "no new news get-by-id / list tool",
+      );
+
+      const news = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_list_news",
+          arguments: {},
+          _meta: { progressToken: "news-at4" },
+        },
+      });
+      assert.equal(news.error, undefined, news.error?.message);
+      assert.equal(news.result?.isError, undefined);
+      assert.ok(progress.some((p) => p.progressToken === "news-at4"));
+
+      const items = news.result?.structuredContent?.items as Array<{
+        title?: string;
+        url?: string;
+        courseRefId?: string;
+        resourceUri?: string;
+        provenance?: {
+          provider?: string;
+          sourceUrl?: string;
+          fetchedAt?: string;
+          iliasVersion?: string;
+          freshness?: string;
+        };
+      }>;
+      assert.ok(Array.isArray(items));
+      assert.ok(items.length >= 1);
+      assert.ok(items.every((item) => item.courseRefId === "100001"));
+      assert.equal(items.some((item) => item.courseRefId === NEWS_OFF_COURSE_ID), false);
+      assert.equal(items.some((item) => item.courseRefId === CATALOG_ONLY_COURSE_ID), false);
+
+      const fileNews = items.find((item) => item.url?.includes("/go/file/100011"));
+      assert.ok(fileNews, "news-on resource-backed item");
+      assert.equal(fileNews?.url, "https://adam.unibas.ch/go/file/100011");
+      assert.equal(fileNews?.resourceUri, "adam://file/100011");
+      assert.equal(fileNews?.provenance?.provider, "fixture");
+      assert.ok(fileNews?.provenance?.sourceUrl);
+      assert.ok(fileNews?.provenance?.fetchedAt);
+      assert.ok(fileNews?.provenance?.iliasVersion || fileNews?.provenance?.freshness);
+
+      assertAdamAndHttps(news.result?.structuredContent, news.result?.content?.[0]?.text ?? "");
+      assert.equal(
+        (news.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://file/100011",
+        ),
+        true,
+      );
+
+      const recent = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "adam_list_news",
+          arguments: { since: "2026-09-01T00:00:00.000Z" },
+        },
+      });
+      const recentItems = recent.result?.structuredContent?.items as Array<{ title?: string; url?: string }>;
+      assert.ok(recentItems.some((item) => item.url?.includes("/go/file/100011")));
+      assert.equal(recentItems.some((item) => /kickoff/i.test(item.title ?? "")), false);
+
+      // Domain lock regressions.
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exercise.result?.structuredContent?.type, "exc");
+      const denied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: { name: "adam_read_page", arguments: { refId: GOLDEN_TST_REF_ID, confirm: true } },
+      });
+      assert.equal(denied.result?.isError, true);
+    } finally {
+      child.stdout.off("data", onData);
+      child.kill();
+    }
+  });
+});

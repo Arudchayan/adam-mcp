@@ -21,12 +21,13 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | A4 | `docs/architecture.md` pins `@modelcontextprotocol/server` 2.x + protocol era (2025-03-26 / 2026-07-28) | PR #9 (`a5e1fd6`) |
 | AT1 | Aggregate deadlines from `exc` + page/calendar SoT across enrolled courses (fixture); keep `100020` empty fold ≠ no deadlines; surface `100021`; **no invented dates** | PR #10 (`533d5c5`) |
 | AT2 | Each item: date (or honest omit), `source` ∈ {exc,page,calendar}, `confidence` ∈ {explicit,inferred}, full provenance + HTTPS cite + `adam://` when resource-backed; progress when `progressToken` set | PR #10 (`533d5c5`) |
+| AT3 | Enrolled-tree only search; deterministic title-before-body ranking; A1 cites + A2 progress + B10 deny preserved; no new search tool | PR #11 (`01069ef`) |
 
 ## Open (Phase A-thin)
 
 | ID | PASS | Notes |
 | --- | --- | --- |
-| AT3 | Enrolled-tree only search; deterministic title-before-body ranking; A1 cites + A2 progress + B10 deny preserved; no new search tool | Extend `adam_search` only — fixture `100201` catalog-only isolation |
+| AT4 | Enrolled-only `adam_list_news`; news-on: provenance + HTTPS + `adam://` when resource-backed; news-off: honest empty (no invented activity); `since` filter; A2 progress; no new news tool / Magazin | Extend `adam_list_news` only — fixture news-on `100001` / news-off `100101` / catalog-only `100201` isolation |
 
 ## Keep
 
@@ -40,4 +41,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). **A5** completions deferred (Phase B P1). **Phase A-thin AT3:** enrolled-tree search ranking via `adam_search` (this PR).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). **A5** completions deferred (Phase B P1). **Phase A-thin AT4:** news reliability via `adam_list_news` (this PR).

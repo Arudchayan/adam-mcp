@@ -22,8 +22,8 @@
 
 ## Status (2026-09-06)
 
-- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`), PR #8 **A1/A2/A6** (`e52d947`), PR #9 **A3/A4** (`a5e1fd6`), PR #10 **AT1/AT2** (`533d5c5`).
-- **In flight:** **Phase A-thin AT3** (enrolled-tree search ranking via `adam_search`). **Next:** remaining A-thin; A5 deferred.
+- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`), PR #8 **A1/A2/A6** (`e52d947`), PR #9 **A3/A4** (`a5e1fd6`), PR #10 **AT1/AT2** (`533d5c5`), PR #11 **AT3** (`01069ef`).
+- **In flight:** **Phase A-thin AT4** (news reliability via `adam_list_news`). **Next:** remaining A-thin; A5 deferred.
 - Lean review: QA Lead → MCP Architect → Domain only if semantics change → Lingxi/Leonidas merge.
 
 ## Eng group
@@ -47,5 +47,5 @@ Retired (do not recreate): Researchy, Security, OSS/DX, Projects Manager.
 
 Eng group 2a035929-3c85-4322-a610-8ee697252c53 max 6 — rebuild without dead members.
 
-Status 2026-09-06: through PR #10 AT1/AT2 (`533d5c5`) merged; Phase A-thin AT3 in flight. A5 deferred. Read AGENTS.md + docs/qa/ before acting.
+Status 2026-09-06: through PR #11 AT3 (`01069ef`) merged; Phase A-thin AT4 in flight. A5 deferred. Read AGENTS.md + docs/qa/ before acting.
 ```

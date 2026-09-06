@@ -103,7 +103,8 @@ Still **fixture only** — no live ADAM in these PRs.
 5. **A1 / A2 / A6** — resource links, progress, read-by-id (PR #8 / `e52d947`)
 6. **A3 / A4** — confirm≠elicitation docs + SDK pin (PR #9 / `a5e1fd6`)
 7. **AT1 / AT2** — cross-course deadlines via `adam_list_calendar` + provenance (PR #10 / `533d5c5`)
-8. **AT3** — enrolled-tree `adam_search` ranking (this PR)
+8. **AT3** — enrolled-tree `adam_search` ranking (PR #11 / `01069ef`)
+9. **AT4** — news reliability via `adam_list_news` (this PR)
 
 Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are highest user-safety / compliance risk; B11/B12 lock protocol surface; A-series rides feature PRs.
 
@@ -122,4 +123,4 @@ Track until green on main under fixture:
 - [x] **A3** — confirm ≠ elicitation docs
 - [x] **A4** — SDK/protocol pin in architecture.md
 
-When baseline B1-B12 and landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT. AT1/AT2 closed PR #10 / `533d5c5`. **Next:** Phase A-thin AT3 / **A5** deferred (Phase B P1).
+When baseline B1-B12 and landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT. AT1/AT2 closed PR #10 / `533d5c5`. AT3 closed PR #11 / `01069ef`. **Next:** Phase A-thin AT4 / **A5** deferred (Phase B P1).
