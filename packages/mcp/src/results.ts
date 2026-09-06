@@ -84,6 +84,13 @@ export class ResourceLinks {
         return resourceUri(parsed.type, parsed.refId);
       }
     }
+    // News / cite-only rows: resource-backed HTTPS /go/{type}/{id} without refId fields (AT4/A1).
+    if (typeof record.url === "string") {
+      const parsed = parseAdamRef(record.url);
+      if (parsed && isResourceHandleType(parsed.type)) {
+        return resourceUri(parsed.type, parsed.refId);
+      }
+    }
     return undefined;
   }
 

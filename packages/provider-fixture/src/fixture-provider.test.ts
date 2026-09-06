@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
-import { CATALOG_ONLY_COURSE_ID, fixtureCatalog, GOLDEN_TST_REF_ID } from "./catalog.ts";
+import {
+  CATALOG_ONLY_COURSE_ID,
+  fixtureCatalog,
+  GOLDEN_TST_REF_ID,
+  NEWS_OFF_COURSE_ID,
+  newsEnabledCourseIds,
+} from "./catalog.ts";
 import { createFixtureProvider } from "./fixture-provider.ts";
 import { LongWalkStub } from "./long-walk.ts";
 
@@ -128,6 +134,10 @@ describe("A2 LongWalkStub progress", () => {
     seen.length = 0;
     await provider.extractFileText("100011", { onProgress });
     assert.ok(seen.length >= 3);
+
+    seen.length = 0;
+    await provider.listNews({ onProgress });
+    assert.ok(seen.length >= 3);
   });
 
   it("stays silent when onProgress is omitted", async () => {
@@ -135,6 +145,7 @@ describe("A2 LongWalkStub progress", () => {
     await provider.search("Fourier");
     await provider.listCalendar();
     await provider.extractFileText("100011");
+    await provider.listNews();
   });
 });
 
@@ -231,5 +242,58 @@ describe("AT3 enrolled-tree search ranking", () => {
     // B10 regression: tst still denied from search.
     const blocked = await provider.search("BLOCKED EXAM CONTENT");
     assert.equal(blocked.items.length, 0);
+  });
+});
+
+describe("AT4 adam_list_news reliability", () => {
+  const provider = createFixtureProvider();
+
+  it("returns news-on items with provenance; news-off and Magazin stay empty", async () => {
+    assert.deepEqual(newsEnabledCourseIds, ["100001"]);
+    assert.equal(NEWS_OFF_COURSE_ID, "100101");
+
+    const news = await provider.listNews();
+    assert.ok(news.items.length >= 1);
+    assert.ok(news.items.every((item) => item.courseRefId === "100001"));
+    assert.equal(news.items.some((item) => item.courseRefId === NEWS_OFF_COURSE_ID), false);
+    assert.equal(
+      news.items.some((item) => item.courseRefId === CATALOG_ONLY_COURSE_ID),
+      false,
+      "Magazin / catalog-only news must not appear",
+    );
+
+    for (const item of news.items) {
+      assert.match(item.url, /^https:\/\/adam\.unibas\.ch\//);
+      assert.equal(item.provenance.provider, "fixture");
+      assert.match(item.provenance.sourceUrl, /^https:\/\/adam\.unibas\.ch\//);
+      assert.equal(typeof item.provenance.fetchedAt, "string");
+      assert.ok(item.provenance.iliasVersion || item.provenance.freshness);
+    }
+
+    // News-off course has enrolled content (exc) but News disabled — no invented activity.
+    const courses = await provider.listCourses();
+    assert.ok(courses.items.some((c) => c.refId === NEWS_OFF_COURSE_ID));
+    const offChildren = await provider.listChildren(NEWS_OFF_COURSE_ID);
+    assert.ok(offChildren.items.length > 0);
+    assert.equal(news.items.some((item) => item.title.includes("Lab sheet") || item.courseRefId === "100101"), false);
+
+    // since filter
+    const recent = await provider.listNews({ since: "2026-09-01T00:00:00.000Z" });
+    assert.ok(recent.items.some((item) => item.url.includes("/go/file/100011")));
+    assert.equal(
+      recent.items.some((item) => /kickoff/i.test(item.title)),
+      false,
+      "older news-on item must be excluded by since",
+    );
+
+    const all = await provider.listNews({ since: "2026-08-01T00:00:00.000Z" });
+    assert.ok(all.items.some((item) => /kickoff/i.test(item.title)));
+    assert.equal(all.items.some((item) => item.courseRefId === CATALOG_ONLY_COURSE_ID), false);
+
+    // Domain lock regressions.
+    const emptyFold = await provider.listChildren("100020");
+    assert.deepEqual(emptyFold.items, []);
+    const exercise = await provider.getExercise("100021");
+    assert.equal(exercise.type, "exc");
   });
 });
