@@ -1,7 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
 import { type AdamProvider } from "adam-core";
 import * as z from "zod/v4";
-import { READ_ONLY_ANNOTATIONS, UNTRUSTED_PAGE_NOTICE, runProvider } from "./results.ts";
+import { READ_ONLY_ANNOTATIONS, UntrustedContent, runProvider } from "./results.ts";
 import {
   adamObjectOutputSchema,
   cursorSchema,
@@ -94,11 +94,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id }) =>
-      runProvider(async () => ({
-        untrusted: true,
-        notice: UNTRUSTED_PAGE_NOTICE,
-        ...(await provider.readPage(id)),
-      })),
+      runProvider(async () => UntrustedContent.wrap(await provider.readPage(id))),
   );
 
   server.registerTool(
@@ -139,11 +135,9 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, maxPages }) =>
-      runProvider(async () => ({
-        untrusted: true,
-        notice: UNTRUSTED_PAGE_NOTICE,
-        ...(await provider.extractFileText(id, { maxPages })),
-      })),
+      runProvider(async () =>
+        UntrustedContent.wrap(await provider.extractFileText(id, { maxPages })),
+      ),
   );
 
   server.registerTool(
