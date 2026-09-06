@@ -111,7 +111,7 @@ export type CalendarEvent = {
   startsAt?: string;
   endsAt?: string;
   location?: string;
-  source: "calendar" | "page" | "news";
+  source: "exc" | "page" | "calendar";
   confidence: "explicit" | "inferred";
   objectRefId?: RefId;
   url?: string;

@@ -910,3 +910,138 @@ describe("A6 resources for read-by-id", () => {
     }
   });
 });
+
+
+describe("AT1/AT2 adam_list_calendar cross-course deadlines", () => {
+  it("aggregates deadlines with provenance, adam:// cites, and progress", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    const progress: Array<{ progressToken?: string | number; progress?: number }> = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    const onData = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as {
+            method?: string;
+            params?: { progressToken?: string | number; progress?: number };
+          };
+          if (parsed.method === "notifications/progress") {
+            progress.push(parsed.params ?? {});
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    child.stdout.on("data", onData);
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "at1-at2-deadlines", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      // Domain lock: empty Exercises fold ≠ no deadlines.
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+
+      const calendar = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_list_calendar",
+          arguments: {},
+          _meta: { progressToken: "deadline-walk" },
+        },
+      });
+      assert.equal(calendar.error, undefined, calendar.error?.message);
+      assert.equal(calendar.result?.isError, undefined);
+      assert.ok(progress.some((p) => p.progressToken === "deadline-walk"));
+
+      const items = calendar.result?.structuredContent?.items as Array<{
+        title?: string;
+        startsAt?: string;
+        source?: string;
+        confidence?: string;
+        objectRefId?: string;
+        url?: string;
+        resourceUri?: string;
+        provenance?: {
+          sourceUrl?: string;
+          fetchedAt?: string;
+          provider?: string;
+          freshness?: string;
+          iliasVersion?: string;
+        };
+      }>;
+      assert.ok(items && items.length >= 4);
+
+      const sources = new Set(items.map((item) => item.source));
+      assert.equal(sources.has("exc"), true);
+      assert.equal(sources.has("page"), true);
+      assert.equal(sources.has("calendar"), true);
+
+      const exc = items.find((item) => item.objectRefId === "100021" && item.source === "exc");
+      assert.ok(exc);
+      assert.equal(exc?.startsAt, "2026-09-22T21:59:00.000Z");
+      assert.equal(exc?.confidence, "explicit");
+      assert.equal(exc?.url, "https://adam.unibas.ch/go/exc/100021");
+      assert.equal(exc?.resourceUri, "adam://exc/100021");
+      assert.equal(exc?.provenance?.provider, "fixture");
+      assert.ok(exc?.provenance?.sourceUrl);
+      assert.ok(exc?.provenance?.fetchedAt);
+      assert.ok(exc?.provenance?.iliasVersion || exc?.provenance?.freshness);
+
+      const crossCourse = items.find((item) => item.objectRefId === "100121" && item.source === "exc");
+      assert.ok(crossCourse, "second enrolled course deadline must surface");
+      assert.equal(crossCourse?.resourceUri, "adam://exc/100121");
+      assert.equal(crossCourse?.url, "https://adam.unibas.ch/go/exc/100121");
+
+      const undated = items.find(
+        (item) => item.objectRefId === "100101" && item.source === "page" && item.startsAt === undefined,
+      );
+      assert.ok(undated, "honest omit when page date has no iso");
+
+      assert.equal(items.some((item) => item.objectRefId === "100020"), false);
+
+      // A6 freeze: no new get-by-id deadline tool.
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 4, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_list_calendar"), true);
+      assert.equal(
+        names.some((name) => /adam_get_deadline|adam_list_deadline/i.test(name)),
+        false,
+      );
+
+      assertAdamAndHttps(calendar.result?.structuredContent, calendar.result?.content?.[0]?.text ?? "");
+      assert.equal(
+        (calendar.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://exc/100021",
+        ),
+        true,
+      );
+    } finally {
+      child.stdout.off("data", onData);
+      child.kill();
+    }
+  });
+});

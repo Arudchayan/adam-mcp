@@ -172,7 +172,7 @@ export const paginatedCalendarOutputSchema = z
           startsAt: z.string().optional(),
           endsAt: z.string().optional(),
           location: z.string().optional(),
-          source: z.enum(["calendar", "page", "news"]),
+          source: z.enum(["exc", "page", "calendar"]),
           confidence: z.enum(["explicit", "inferred"]),
           objectRefId: z.string().optional(),
           url: z.string().optional(),

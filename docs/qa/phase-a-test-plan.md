@@ -57,7 +57,7 @@
 | B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Covered — stdio initialize caps + server.getCapabilities + no HTTP listener in spawn | Keep negative asserts |
 | B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Covered — tools/list + wiring source asserts under fixture | Keep no-oauth asserts |
 
-**Known coverage gaps (must close for main gate):** none for baseline (B11/B12 closed PR #7 / `21728f3`). A1/A2/A6 closed PR #8 / `e52d947`. A3/A4 covered in this PR.
+**Known coverage gaps (must close for main gate):** none for baseline (B11/B12 closed PR #7 / `21728f3`). A1/A2/A6 closed PR #8 / `e52d947`. A3/A4 closed PR #9 / `a5e1fd6`.
 
 ## Phase A backlog (A1-A4 + A6)
 
@@ -101,7 +101,8 @@ Still **fixture only** — no live ADAM in these PRs.
 3. **B4** — RPC confirm: true reject + success paths (closed PR #6 / `5982bdd`)
 4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio (PR #7 / `21728f3`)
 5. **A1 / A2 / A6** — resource links, progress, read-by-id (PR #8 / `e52d947`)
-6. **A3 / A4** — confirm≠elicitation docs + SDK pin (this PR)
+6. **A3 / A4** — confirm≠elicitation docs + SDK pin (PR #9 / `a5e1fd6`)
+7. **AT1 / AT2** — cross-course deadlines via `adam_list_calendar` + provenance (this PR)
 
 Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are highest user-safety / compliance risk; B11/B12 lock protocol surface; A-series rides feature PRs.
 

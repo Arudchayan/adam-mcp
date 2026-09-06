@@ -31,14 +31,14 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Empty Exercises fold ≠ no deadlines (`100020` fold / `100021` exc) | Known (fixture SoT) | Locked |
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
-| A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (this PR) |
+| A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
 | Release tag / npm | Known | Held on SECURITY.md checklist |
 
 ## Phase A-thin — must-ship reads still incomplete
 
 | Item | Confidence | Notes |
 | --- | --- | --- |
-| Cross-course deadline aggregation | Live-unverified | Page dates + `exc`; provenance required |
+| Cross-course deadline aggregation (AT1/AT2) | Live-unverified | Extend `adam_list_calendar`; page/`exc`/calendar SoT + provenance; no new get-by-id |
 | Search ranking / filters | Known (partial) | Enrolled-tree only |
 | News reliability | Known + live (thin) | On/off News courses |
 | `adam_get_exercise` browser path | Live-unverified | Tool ships; need live `exc` or labeled synthetic |

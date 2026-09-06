@@ -150,10 +150,15 @@ export class FixtureAdamProvider implements AdamProvider {
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<Paginated<CalendarEvent>> {
     await LongWalkStub.emit("calendar", options?.onProgress);
+    const events = aggregateFixtureDeadlines();
     const from = options?.from ? Date.parse(options.from) : Number.NEGATIVE_INFINITY;
     const to = options?.to ? Date.parse(options.to) : Number.POSITIVE_INFINITY;
-    const items = fixtureCalendar.filter((event) => {
-      const start = event.startsAt ? Date.parse(event.startsAt) : 0;
+    const items = events.filter((event) => {
+      // Honest omit: undated items (no startsAt) always pass range filters.
+      if (!event.startsAt) {
+        return true;
+      }
+      const start = Date.parse(event.startsAt);
       return start >= from && start <= to;
     });
     return paginate(items, options);
@@ -167,6 +172,84 @@ export class FixtureAdamProvider implements AdamProvider {
     });
     return paginate(items, options);
   }
+}
+
+
+/** AT1/AT2: cross-course deadlines from calendar SoT + page dates + exc units. */
+function aggregateFixtureDeadlines(): CalendarEvent[] {
+  const events: CalendarEvent[] = [...fixtureCalendar];
+  const seen = new Set(events.map(eventKey));
+
+  const visit = (refId: RefId, walked: Set<RefId>) => {
+    if (walked.has(refId)) {
+      return;
+    }
+    walked.add(refId);
+    const record = fixtureCatalog[refId];
+    if (!record || isDeniedObjectType(record.object.type)) {
+      return;
+    }
+
+    if (record.page) {
+      for (const date of record.page.inferredDates) {
+        const event: CalendarEvent = {
+          title: date.raw,
+          ...(date.iso ? { startsAt: date.iso } : {}),
+          source: "page",
+          confidence: date.confidence,
+          objectRefId: record.object.refId,
+          url: record.object.url,
+          provenance: record.object.provenance,
+        };
+        const key = eventKey(event);
+        if (!seen.has(key)) {
+          seen.add(key);
+          events.push(event);
+        }
+      }
+    }
+
+    if (record.object.type === "exc") {
+      const exercise = record.object as ExerciseObject;
+      for (const unit of exercise.units ?? []) {
+        if (!unit.deadline) {
+          continue;
+        }
+        const event: CalendarEvent = {
+          title: `${exercise.title} deadline`,
+          startsAt: unit.deadline,
+          source: "exc",
+          confidence: "explicit",
+          objectRefId: exercise.refId,
+          url: exercise.url,
+          provenance: exercise.provenance,
+        };
+        const key = eventKey(event);
+        if (!seen.has(key)) {
+          seen.add(key);
+          events.push(event);
+        }
+      }
+    }
+
+    for (const childId of record.children) {
+      visit(childId, walked);
+    }
+  };
+
+  for (const courseId of enrolledCourseIds) {
+    visit(courseId, new Set());
+  }
+  return events;
+}
+
+function eventKey(event: CalendarEvent): string {
+  return [
+    event.source,
+    event.objectRefId ?? "",
+    event.startsAt ?? "",
+    event.title,
+  ].join("|");
 }
 
 export function createFixtureProvider(): FixtureAdamProvider {

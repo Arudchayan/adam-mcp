@@ -211,10 +211,11 @@ export class BrowserAdamProvider implements AdamProvider {
     const events: CalendarEvent[] = [];
     for (const { snapshot, catalog } of pages) {
       for (const date of catalog.inferredDates) {
+        const source = catalog.current?.type === "exc" ? "exc" : "page";
         events.push({
           title: date.raw,
-          startsAt: date.iso,
-          source: "page",
+          ...(date.iso ? { startsAt: date.iso } : {}),
+          source,
           confidence: date.confidence,
           objectRefId: catalog.current?.refId,
           url: catalog.current?.url ?? snapshot.url,
