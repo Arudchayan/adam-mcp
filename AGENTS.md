@@ -67,5 +67,6 @@ Publish / git tags: only after [SECURITY.md](SECURITY.md) checklist is green.
 | `docs/ROADMAP.md` | Phased plan |
 | `docs/providers.md` | Fixture vs browser |
 | `docs/qa/` | Phase A test plan + MCP checklist |
+| `docs/fleet-handoff.md` | Lean Grok Bot fleet continuity (optional) |
 | `SECURITY.md` | Reports and publish checklist |
-| `docs/research/` | Dated 2026-09-05 notes, **not** current rules |
+| `docs/research/` | Dated notes, **not** current product law |
