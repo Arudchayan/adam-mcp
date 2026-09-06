@@ -11,7 +11,7 @@ export {
 } from "./local-extract.ts";
 export { PRODUCTION_ADAM_ORIGIN, resolveAdamOrigin } from "./origin.ts";
 export { decodeCursor, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, normalizeLimit, paginate } from "./pagination.ts";
-export { assertReadableObjectType, DENIED_OBJECT_TYPES, isDeniedObjectType } from "./policy.ts";
+export { assertReadableObjectType, DENIED_OBJECT_TYPES, isDeniedObjectType, ObjectReadPolicy } from "./policy.ts";
 export type { DeniedObjectType } from "./policy.ts";
 export type { AdamProvider } from "./provider.ts";
 export { redactText, redactUrl } from "./redaction.ts";
