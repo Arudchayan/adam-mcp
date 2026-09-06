@@ -35,9 +35,9 @@
   | ID | Role |
   | --- | --- |
   | 100001 | Primary course / happy-path tree |
-  | 100011 | Page / readable content |
-  | 100021 | Folder with children (non-empty) |
-  | 100020 | Empty folder — keep for Phase B (empty-folder != no deadlines); Phase A may assert list-empty only |
+  | 100011 | File PDF (extract without bytes) |
+  | 100021 | Exercise (exc) with deadline — not a folder |
+  | 100020 | Empty Exercises fold — keep; empty folder != no deadlines |
   | tst object | Add for **B10** deny path (test/exam object must fail closed) |
 
 ## Baseline B1-B12
@@ -86,11 +86,11 @@
 ## Fixture strategy
 
 - **Provider:** ADAM_PROVIDER=fixture only for Phase A gates.
-- **Golden IDs:** 100001 (course), 100011 (page), 100021 (non-empty folder), 100020 (empty folder — retain for Phase B deadline/empty semantics), plus a tst object for B10.
-- **100020 vs 100021 (ADAM Domain note):** 100021 is a folder with children for happy-path listing; 100020 is an empty folder kept so Phase B can prove empty folder != no deadlines and avoid conflating no-children with no-calendar/exercise dates. Phase A may only assert empty listing for 100020; do not delete the ID.
+- **Golden IDs:** 100001 (course), 100011 (file/PDF), 100021 (exc with deadline), 100020 (empty Exercises fold), plus a tst object for B10.
+- **100020 vs 100021 (ADAM Domain note):** Fixture SoT: 100020 = empty Exercises fold; 100021 = exercise (exc) with deadline (also on calendar). Never treat empty 100020 as no-deadlines. Phase A: assert list-empty for 100020 and getExercise for 100021; do not delete either ID.
 - **Deny objects:** exam/test (tst) must be present and fail closed (B10).
-- **Extend** existing fixture-provider and MCP server tests rather than standing up a parallel harness.
 - **No cookies / no login tools** under fixture (B9).
+- **Extend** existing fixture-provider and MCP server tests rather than standing up a parallel harness.
 
 ## First code PRs (after architecture audit)
 
