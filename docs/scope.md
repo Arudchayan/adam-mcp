@@ -12,7 +12,9 @@ Community connector for a student’s own MCP host against ADAM (ILIAS 10 at `ht
 
 Live search/calendar/news walk enrolled objects. They are not ADAM’s global search or calendar GUI (`robots.txt`).
 
-`confirm: true` is a required tool argument so the host can show it. It is not a separate OS permission dialog.
+### Confirm vs elicitation
+
+`confirm: true` is an **interim schema gate** after the student asked to read: a required tool argument so the host can show it. It is **not** an OS permission dialog, **not** MCP elicitation, and **not** equated to tool annotations alone. Real confirms and future writes → MCP **elicitation** when the host supports MRTR. See [architecture.md](architecture.md#confirm-vs-elicitation-a3).
 
 ## Does not ship
 

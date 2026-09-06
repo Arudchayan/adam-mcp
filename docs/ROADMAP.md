@@ -30,8 +30,8 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | B11 / B12 no deprecated MCP / no OAuth on stdio | Known | Done (PR #7, `21728f3`) |
 | Empty Exercises fold ≠ no deadlines (`100020` fold / `100021` exc) | Known (fixture SoT) | Locked |
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
-| A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (this PR) |
-| A3 / A4 elicitation docs + SDK pin | Known | Next |
+| A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
+| A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (this PR) |
 | Release tag / npm | Known | Held on SECURITY.md checklist |
 
 ## Phase A-thin — must-ship reads still incomplete
