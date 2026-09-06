@@ -13,4 +13,4 @@ Students want PDF text and exercise instructions. Sending file bytes to a model,
 
 ## Consequences
 
-Scanned PDFs fail with `unsupported_type` (no OCR). `confirm: true` is a schema requirement, not a host modal. Extracted text is wrapped as untrusted data.
+Scanned PDFs fail with `unsupported_type` (no OCR). `confirm: true` is an interim schema gate — not a host elicitation modal, not an OS permission, and not equated to tool annotations alone. Real confirms / future writes → elicitation when the host supports MRTR. Extracted text is wrapped as untrusted data.

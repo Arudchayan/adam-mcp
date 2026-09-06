@@ -31,7 +31,7 @@ Default provider is `fixture`. Live ADAM is `--browser` / `ADAM_PROVIDER=browser
 
 - Do not put SWITCH passwords in tools, env, logs, issues, or git.
 - No write tools. Object type `tst` is denied.
-- `adam_read_page` and `adam_extract_file_text` require `confirm: true`. Return text, never file bytes.
+- `adam_read_page` and `adam_extract_file_text` require `confirm: true` (interim schema gate after the student asked to read — not OS permission, not elicitation, not equated to tool annotations alone). Return text, never file bytes. Real confirms / future writes → MCP elicitation when host supports MRTR; see docs/architecture.md.
 - stdout is JSON-RPC only. Logs go to stderr.
 - Pin origin to `https://adam.unibas.ch`. No generic URL fetch.
 - Do not commit cookies, Chrome profiles, live course files, or private screenshots.
@@ -47,7 +47,7 @@ Fixture-first. SoT:
 
 Golden fixture IDs: `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines.
 
-Close baseline gaps in order when possible: B6 (done) → B10 → B4 → B11/B12 (done), then A1/A2/A6 (this PR), A3/A4.
+Close baseline gaps in order when possible: B6–B12 done; A1/A2/A6 done (PR #8 / `e52d947`); A3/A4 (this PR). A5 deferred Phase B P1.
 
 ## Review / merge
 
