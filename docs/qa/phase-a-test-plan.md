@@ -38,7 +38,7 @@
   | 100011 | File PDF (extract without bytes) |
   | 100021 | Exercise (exc) with deadline — not a folder |
   | 100020 | Empty Exercises fold — keep; empty folder != no deadlines |
-  | tst object | Add for **B10** deny path (test/exam object must fail closed) |
+  | 100030 | Golden **tst** (B10) — deny/fail-closed; never returned to model |
 
 ## Baseline B1-B12
 
@@ -53,11 +53,11 @@
 | B7 | Stdout hygiene | stdout = JSON-RPC only; logs on stderr | Log noise on stdout | Covered in stdio tests | Keep spawn hygiene asserts |
 | B8 | Resource URI != live ADAM URL | Cite https://adam.unibas.ch/go/...; handles adam://... | Host told to fetch adam:// in browser | Partial | Assert citation shape + handle form |
 | B9 | Session tools only with browser provider | Fixture: no login tools; --browser: login + status | Login on fixture / cookies in results | Partial | Fixture asserts no session/login tools |
-| B10 | tst denied | Test objects fail closed | Exam/test content returned | Gap | Add golden tst object; assert deny/fail-closed |
+| B10 | tst denied | Test objects fail closed | Exam/test content returned | Covered — fixture catalog + stdio/server/provider asserts | Add golden tst object; assert deny/fail-closed |
 | B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Gap | Negative asserts: capabilities omit deprecated |
 | B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Gap | Assert no OAuth/auth routes on stdio server |
 
-**Known coverage gaps (must close for main gate):** B10, B4-RPC, B11, B12.
+**Known coverage gaps (must close for main gate):** B4-RPC, B11, B12.
 
 ## Phase A backlog (A1-A4 + A6)
 
@@ -86,7 +86,7 @@
 ## Fixture strategy
 
 - **Provider:** ADAM_PROVIDER=fixture only for Phase A gates.
-- **Golden IDs:** 100001 (course), 100011 (file/PDF), 100021 (exc with deadline), 100020 (empty Exercises fold), plus a tst object for B10.
+- **Golden IDs:** 100001 (course), 100011 (file/PDF), 100021 (exc with deadline), 100020 (empty Exercises fold), 100030 (tst deny / B10).
 - **100020 vs 100021 (ADAM Domain note):** Fixture SoT: 100020 = empty Exercises fold; 100021 = exercise (exc) with deadline (also on calendar). Never treat empty 100020 as no-deadlines. Phase A: assert list-empty for 100020 and getExercise for 100021; do not delete either ID.
 - **Deny objects:** exam/test (tst) must be present and fail closed (B10).
 - **No cookies / no login tools** under fixture (B9).
@@ -97,7 +97,7 @@
 Still **fixture only** — no live ADAM in these PRs.
 
 1. **B6** — untrusted notice on page/extract (untrusted: true + notice) — closed by fixture asserts on tool paths
-2. **B10** — tst deny / fail-closed golden
+2. **B10** — tst deny / fail-closed golden — closed by fixture golden 100030 + deny asserts
 3. **B4** — RPC confirm: true reject + success paths (B4-RPC gap)
 4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio
 5. Then backlog: **A1 / A2 / A6**, then **A3 / A4** (docs + resource-link / progress / read-by-id design)
@@ -109,7 +109,7 @@ Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are hig
 Track until green on main under fixture:
 
 - [x] **B6** — untrusted notice on page/extract
-- [ ] **B10** — tst denied / fail-closed
+- [x] **B10** — tst denied / fail-closed
 - [ ] **B4** — sensitive reads RPC require confirm: true
 - [ ] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
 - [ ] **B12** — no MCP OAuth on stdio

@@ -1,6 +1,8 @@
 import {
   AdamError,
+  assertReadableObjectType,
   extractLocalFileText,
+  isDeniedObjectType,
   paginate,
   syntheticPdfWithText,
   type AdamObject,
@@ -31,7 +33,9 @@ function requireRecord(refId: RefId) {
 
 function resolveChildren(refId: RefId): AdamObject[] {
   const record = requireRecord(refId);
-  return record.children.map((childId) => requireRecord(childId).object);
+  return record.children
+    .map((childId) => requireRecord(childId).object)
+    .filter((child) => !isDeniedObjectType(child.type));
 }
 
 export class FixtureAdamProvider implements AdamProvider {
@@ -44,6 +48,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getCourse(refId: RefId): Promise<AdamObject> {
     const record = requireRecord(refId);
+    assertReadableObjectType(record.object.type, refId);
     if (record.object.type !== "crs") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a course.`);
     }
@@ -56,6 +61,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async readPage(refId: RefId): Promise<PageContent> {
     const record = requireRecord(refId);
+    assertReadableObjectType(record.object.type, refId);
     if (!record.page) {
       throw new AdamError(
         "unsupported_type",
@@ -95,6 +101,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId): Promise<ExerciseObject> {
     const record = requireRecord(refId);
+    assertReadableObjectType(record.object.type, refId);
     if (record.object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not an exercise.`);
     }
@@ -123,6 +130,9 @@ export class FixtureAdamProvider implements AdamProvider {
     const matches = Object.values(fixtureCatalog)
       .map((record) => record.object)
       .filter((object) => {
+        if (isDeniedObjectType(object.type)) {
+          return false;
+        }
         const page = fixtureCatalog[object.refId]?.page?.text ?? "";
         return `${object.title}\n${page}`.toLowerCase().includes(needle);
       });

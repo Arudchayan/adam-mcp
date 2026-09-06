@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
+import { fixtureCatalog, GOLDEN_TST_REF_ID } from "./catalog.ts";
 import { createFixtureProvider } from "./fixture-provider.ts";
 
 describe("FixtureAdamProvider", () => {
@@ -56,5 +57,39 @@ describe("FixtureAdamProvider", () => {
     assert.ok(found.items.some((item) => item.refId === "100001"));
     const exam = await provider.search("exam");
     assert.equal(exam.items[0]?.refId, "100001");
+  });
+
+  it("B10: golden tst is not in happy-path lists and fail-closed on read/get/search", async () => {
+    // Synthetic tst exists but is not linked under enrolled happy-path children.
+    assert.equal(fixtureCatalog[GOLDEN_TST_REF_ID]?.object.type, "tst");
+    const courseChildren = await provider.listChildren("100001");
+    assert.deepEqual(
+      courseChildren.items.map((item) => item.refId),
+      ["100010", "100020", "100021"],
+    );
+    assert.equal(courseChildren.items.some((item) => item.type === "tst"), false);
+
+    // Empty Exercises fold + exc+deadline unchanged.
+    const emptyFold = await provider.listChildren("100020");
+    assert.deepEqual(emptyFold.items, []);
+    const exercise = await provider.getExercise("100021");
+    assert.equal(exercise.type, "exc");
+    assert.equal(exercise.units[0]?.deadline, "2026-09-22T21:59:00.000Z");
+
+    const found = await provider.search("BLOCKED EXAM CONTENT");
+    assert.equal(found.items.length, 0);
+    assert.equal(found.items.some((item) => item.type === "tst"), false);
+
+    const deny = (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /tst/i);
+      assert.match(error.message, /not sent to the model/i);
+      assert.doesNotMatch(error.message, /DFT|Answer key|BLOCKED EXAM/i);
+      return true;
+    };
+    await assert.rejects(() => provider.readPage(GOLDEN_TST_REF_ID), deny);
+    await assert.rejects(() => provider.getCourse(GOLDEN_TST_REF_ID), deny);
+    await assert.rejects(() => provider.getExercise(GOLDEN_TST_REF_ID), deny);
   });
 });

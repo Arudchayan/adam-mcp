@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import { READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 import { extractFileInputSchema, readPageInputSchema } from "./schemas.ts";
 
@@ -291,6 +292,110 @@ describe("B6 untrusted notice on page/extract", () => {
       assert.match(extract.result?.content?.[0]?.text ?? "", /"untrusted": true/);
       assert.match(extract.result?.content?.[0]?.text ?? "", /untrusted data/i);
       assert.equal("bytes" in (extract.result?.structuredContent ?? {}), false);
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+describe("B10 tst deny fail-closed", () => {
+  it("denies read/get for golden tst and keeps happy-path lists clean", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "b10-tst-deny-test", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const denied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "adam_read_page",
+          arguments: { refId: GOLDEN_TST_REF_ID, confirm: true },
+        },
+      });
+      assert.equal(denied.error, undefined, denied.error?.message);
+      assert.equal(denied.result?.isError, true);
+      const deniedText = denied.result?.content?.[0]?.text ?? "";
+      assert.match(deniedText, /^unsupported_type:/);
+      assert.match(deniedText, /tst/i);
+      assert.match(deniedText, /not sent to the model/i);
+      assert.doesNotMatch(deniedText, /DFT|Answer key|BLOCKED EXAM/i);
+      assert.equal(denied.result?.structuredContent, undefined);
+
+      const courseDenied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_get_course",
+          arguments: { refId: GOLDEN_TST_REF_ID },
+        },
+      });
+      assert.equal(courseDenied.result?.isError, true);
+      assert.match(courseDenied.result?.content?.[0]?.text ?? "", /unsupported_type/);
+      assert.match(courseDenied.result?.content?.[0]?.text ?? "", /tst/i);
+      assert.doesNotMatch(courseDenied.result?.content?.[0]?.text ?? "", /DFT|Answer key|BLOCKED EXAM/i);
+
+      const exerciseDenied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "adam_get_exercise",
+          arguments: { refId: GOLDEN_TST_REF_ID },
+        },
+      });
+      assert.equal(exerciseDenied.result?.isError, true);
+      assert.match(exerciseDenied.result?.content?.[0]?.text ?? "", /unsupported_type|tst|blocked/i);
+      assert.doesNotMatch(exerciseDenied.result?.content?.[0]?.text ?? "", /DFT|Answer key/i);
+
+      const children = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: "adam_list_children",
+          arguments: { refId: "100001" },
+        },
+      });
+      assert.equal(children.error, undefined, children.error?.message);
+      assert.equal(children.result?.isError, undefined);
+      const items = children.result?.structuredContent?.items;
+      assert.equal(Array.isArray(items), true);
+      const listed = items as Array<{ refId?: string; type?: string; title?: string }>;
+      assert.deepEqual(
+        listed.map((item) => item.refId),
+        ["100010", "100020", "100021"],
+      );
+      assert.equal(listed.some((item) => item.type === "tst"), false);
+
+      const search = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: {
+          name: "adam_search",
+          arguments: { query: "BLOCKED EXAM CONTENT" },
+        },
+      });
+      assert.equal(search.error, undefined, search.error?.message);
+      assert.equal(search.result?.isError, undefined);
+      const searchItems = search.result?.structuredContent?.items;
+      assert.equal(Array.isArray(searchItems), true);
+      assert.equal((searchItems as unknown[]).length, 0);
     } finally {
       child.kill();
     }

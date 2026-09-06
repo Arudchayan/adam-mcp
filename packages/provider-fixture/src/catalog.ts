@@ -176,6 +176,32 @@ const exercisePage: PageContent = {
   ],
 };
 
+
+/** Golden B10 deny object — exam/test content must never reach the model. */
+export const GOLDEN_TST_REF_ID: RefId = "100030";
+
+const quiz = obj(
+  "tst",
+  GOLDEN_TST_REF_ID,
+  "Quiz 1 – Exam questions (blocked)",
+  [...courseBreadcrumb, crumb("crs", "100001", course.title)],
+  {
+    accessClass: "Authenticated Users",
+    updatedAt: "2026-09-01T10:00:00.000Z",
+  },
+);
+
+const quizPage: PageContent = {
+  ...quiz,
+  text: [
+    "BLOCKED EXAM CONTENT — must never be returned by the MCP.",
+    "Question 1: What is the DFT of a constant signal?",
+    "Question 2: Derive the ranking metric used in Week 3.",
+    "Answer key: do not disclose.",
+  ].join("\n"),
+  inferredDates: [],
+};
+
 export const fixtureNews: NewsItem[] = [
   {
     title: "New file in Course & Notes",
@@ -230,6 +256,7 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "100020": { object: exercises, children: [] },
   "100021": { object: exercise, children: [], page: exercisePage },
   "100011": { object: overviewFile, children: [], file: overviewFile },
+  "100030": { object: quiz, children: [], page: quizPage },
 };
 
 export const enrolledCourseIds: RefId[] = ["100001"];
