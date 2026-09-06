@@ -22,12 +22,13 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | AT1 | Aggregate deadlines from `exc` + page/calendar SoT across enrolled courses (fixture); keep `100020` empty fold ≠ no deadlines; surface `100021`; **no invented dates** | PR #10 (`533d5c5`) |
 | AT2 | Each item: date (or honest omit), `source` ∈ {exc,page,calendar}, `confidence` ∈ {explicit,inferred}, full provenance + HTTPS cite + `adam://` when resource-backed; progress when `progressToken` set | PR #10 (`533d5c5`) |
 | AT3 | Enrolled-tree only search; deterministic title-before-body ranking; A1 cites + A2 progress + B10 deny preserved; no new search tool | PR #11 (`01069ef`) |
+| AT4 | Enrolled-only `adam_list_news`; news-on: provenance + HTTPS + `adam://` when resource-backed; news-off: honest empty (no invented activity); `since` filter; A2 progress; no new news tool / Magazin | PR #12 (`b3bb0c0`) |
 
 ## Open (Phase A-thin)
 
 | ID | PASS | Notes |
 | --- | --- | --- |
-| AT4 | Enrolled-only `adam_list_news`; news-on: provenance + HTTPS + `adam://` when resource-backed; news-off: honest empty (no invented activity); `since` filter; A2 progress; no new news tool / Magazin | Extend `adam_list_news` only — fixture news-on `100001` / news-off `100101` / catalog-only `100201` isolation |
+| AT5 | Fixture `100021` labeled synthetic exc+deadline; `type===exc` fail-closed (no unknown coerce); no invented deadlines; `100020` empty fold ≠ no deadlines; A1 cites + provenance; A2 when long walk; no new exercise tool | Harden `adam_get_exercise` browser path — keep golden `100021` |
 
 ## Keep
 
@@ -41,4 +42,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). **A5** completions deferred (Phase B P1). **Phase A-thin AT4:** news reliability via `adam_list_news` (this PR).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). **A5** completions deferred (Phase B P1). **Phase A-thin AT5:** harden `adam_get_exercise` (this PR).

@@ -51,7 +51,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | blocked — not observed |
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **done** metadata (2026-09-06) |
-| `exc` | Instructions, deadline, status | tool partial | blocked — not observed |
+| `exc` | Instructions, deadline, status | tool partial | labeled synthetic `100021` (AT5); live still unverified |
 | `sess` | Class meetings | uncertain | blocked — not observed |
 | `webr` | External links | uncertain | blocked — not observed |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
@@ -69,9 +69,9 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 
 ## 4. Phase B read expansions (priority)
 
-1. **Cross-course deadlines** — first-class aggregation of exercise + page dates  
-2. **Exercise awareness** — instructions, due date, own status; deep-link submit (**blocked** until live `exc`)  
-3. **News / what-changed reliability** when News is enabled (AT4 — this PR)  
+1. **Cross-course deadlines** — first-class aggregation of exercise + page dates (AT1/AT2 — PR #10 / `533d5c5`)  
+2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — this PR; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
+3. **News / what-changed reliability** when News is enabled (AT4 — PR #12 / `b3bb0c0`)  
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
 5. **Forum thread read** before any write (**blocked** until live `frm`)
 

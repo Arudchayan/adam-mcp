@@ -21,7 +21,7 @@ import {
   type RefId,
 } from "adam-core";
 import { defaultOrigin } from "./config.ts";
-import { extractCatalog, isLoggedInSnapshot, isLoginSnapshot, type ExtractedCatalog } from "./extract.ts";
+import { extractCatalog, exerciseDeadlineFromPage, isLoggedInSnapshot, isLoginSnapshot, type ExtractedCatalog } from "./extract.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
@@ -161,17 +161,18 @@ export class BrowserAdamProvider implements AdamProvider {
       throw new AdamError("not_found", `No exercise could be read for ref_id ${refId}.`);
     }
     assertReadableObjectType(object.type, object.refId);
-    if (object.type !== "exc" && object.type !== "unknown") {
+    // AT5: type===exc fail-closed — never coerce unknown/other types into exercises.
+    if (object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${object.type}, not an exercise.`);
     }
-    const deadline = catalog.inferredDates.find((date) => date.iso)?.iso;
+    const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
     return {
       ...object,
       type: "exc",
       units: [
         {
           title: object.title,
-          deadline,
+          ...(deadline ? { deadline } : {}),
           instructionText: catalog.text,
           ownStatus: "unknown",
         },
