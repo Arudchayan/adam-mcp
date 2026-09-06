@@ -106,7 +106,7 @@ Still **fixture only** — no live ADAM in these PRs.
 8. **AT3** — enrolled-tree `adam_search` ranking (PR #11 / `01069ef`)
 9. **AT4** — news reliability via `adam_list_news` (PR #12 / `b3bb0c0`)
 10. **AT5** — harden `adam_get_exercise` browser path (PR #13 / `ed40c2c`)
-11. **AT6** — calendar vs page-inferred dates via `adam_list_calendar` (this PR)
+11. **AT6** — calendar vs page-inferred dates via `adam_list_calendar` (PR #14 / `16f08c8`)
 
 Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are highest user-safety / compliance risk; B11/B12 lock protocol surface; A-series rides feature PRs.
 
@@ -125,4 +125,4 @@ Track until green on main under fixture:
 - [x] **A3** — confirm ≠ elicitation docs
 - [x] **A4** — SDK/protocol pin in architecture.md
 
-When baseline B1-B12 and landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT. AT1/AT2 closed PR #10 / `533d5c5`. AT3 closed PR #11 / `01069ef`. AT4 closed PR #12 / `b3bb0c0`. AT5 closed PR #13 / `ed40c2c`. **Next:** Phase A-thin AT6 / **A5** deferred (Phase B P1).
+When baseline B1-B12 and landed A1-A4+A6 cases are green, Phase A fixture gate is satisfied per checklist SoT. AT1/AT2 closed PR #10 / `533d5c5`. AT3 closed PR #11 / `01069ef`. AT4 closed PR #12 / `b3bb0c0`. AT5 closed PR #13 / `ed40c2c`. AT6 closed PR #14 / `16f08c8`. **Next:** **A5** deferred (Phase B P1). Phase A-thin complete.

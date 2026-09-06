@@ -24,12 +24,11 @@ Lean notes for gates **not yet closed on main**. Fixture-only. No live ADAM.
 | AT3 | Enrolled-tree only search; deterministic title-before-body ranking; A1 cites + A2 progress + B10 deny preserved; no new search tool | PR #11 (`01069ef`) |
 | AT4 | Enrolled-only `adam_list_news`; news-on: provenance + HTTPS + `adam://` when resource-backed; news-off: honest empty (no invented activity); `since` filter; A2 progress; no new news tool / Magazin | PR #12 (`b3bb0c0`) |
 | AT5 | Fixture `100021` labeled synthetic exc+deadline; `type===exc` fail-closed (no unknown coerce); no invented deadlines; `100020` empty fold ≠ no deadlines; A1 cites + provenance; A2 when long walk; no new exercise tool | PR #13 (`ed40c2c`) |
+| AT6 | Extend `adam_list_calendar` only; calendar/exc = explicit SoT; page = page-inferred only (never unlabeled→exc/calendar); `startsAt` only on ISO else omit; dedup same object+day: exc > calendar > page; enrolled-only; A1/A2; keep `100020`/`100021`; browser same rules (FAIL-to-fix: no coerce all exc-page dates to `source:exc`) | PR #14 (`16f08c8`) |
 
 ## Open (Phase A-thin)
 
-| ID | PASS | Notes |
-| --- | --- | --- |
-| AT6 | Extend `adam_list_calendar` only; calendar/exc = explicit SoT; page = page-inferred only (never unlabeled→exc/calendar); `startsAt` only on ISO else omit; dedup same object+day: exc > calendar > page; enrolled-only; A1/A2; keep `100020`/`100021`; browser same rules (FAIL-to-fix: no coerce all exc-page dates to `source:exc`) | Harden calendar vs page-inferred dates |
+None — Phase A-thin AT1–AT6 closed via PR #14 / `16f08c8`.
 
 ## Keep
 
@@ -43,4 +42,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). **A5** completions deferred (Phase B P1). **Phase A-thin AT6:** calendar vs page-inferred dates (this PR).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). AT6 closed (PR #14 / `16f08c8`). **A5** completions deferred (Phase B P1). Phase A-thin complete.
