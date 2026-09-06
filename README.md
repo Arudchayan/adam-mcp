@@ -1,5 +1,7 @@
 # ADAM MCP
 
+[![ci](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Arudchayan/adam-mcp/actions/workflows/ci.yml)
+
 ADAM MCP connects MCP-compatible AI clients to your University of Basel ADAM courses.
 
 It runs on your machine. Cursor, Claude Desktop, VS Code Copilot, Windsurf, and Claude Code can list courses, read pages, find files, and surface deadlines from ADAM.
@@ -52,7 +54,7 @@ AI client  --stdio MCP-->  adam-mcp  -->  Chrome session  -->  adam.unibas.ch
 
 ADAM MCP uses a local Chrome session for ADAM authentication. Default without `--browser` is a fixture catalog so a clone does not hit production ADAM.
 
-[Architecture](docs/architecture.md) · [What is in scope](docs/scope.md)
+[Architecture](docs/architecture.md) · [What is in scope](docs/scope.md) · [Capabilities](docs/capabilities.md)
 
 ## Tools
 
