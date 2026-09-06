@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-09-05
 
+GitHub Release / `v0.1.0` tag pending Security + Leonidas (not cut yet).
+
 ### Added
 
 - Local stdio MCP server for University of Basel ADAM (community project)
@@ -29,6 +31,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Read-only tool surface; object type `tst` denied
 - No PDF bytes sent to the model; download cancel covered in tests
 - HTTPS host allowlist pinned to `https://adam.unibas.ch`
-
-[Unreleased]: https://github.com/Arudchayan/adam-mcp/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/Arudchayan/adam-mcp/releases/tag/v0.1.0

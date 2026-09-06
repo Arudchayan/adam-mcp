@@ -6,9 +6,11 @@ Thanks for helping improve ADAM MCP. Please follow the [Code of Conduct](CODE_OF
 
 Before you open a PR:
 
-    npm install
-    npm test
-    npm run typecheck
+```bash
+npm install
+npm test
+npm run typecheck
+```
 
 **Fixture-first:** PRs must pass on the fixture catalog. Do not require production ADAM (or a live Chrome session) in CI.
 
@@ -23,8 +25,8 @@ Before you open a PR:
 
 | Intent | Where |
 | --- | --- |
-| Something is broken | [Bug report](.github/ISSUE_TEMPLATE/bug.md) |
-| New Uni Basel ADAM workflow / capability | [Feature request](.github/ISSUE_TEMPLATE/feature.md) |
+| Something is broken | [Bug report](https://github.com/Arudchayan/adam-mcp/issues/new?template=bug.md) |
+| New Uni Basel ADAM workflow / capability | [Feature request](https://github.com/Arudchayan/adam-mcp/issues/new?template=feature.md) |
 | Security concern | [SECURITY.md](SECURITY.md) (advisory preferred) |
 
 Do **not** attach SWITCH passwords, cookies, Chrome profiles, live course PDFs, or private screenshots.
