@@ -2,8 +2,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
 import { createFixtureProvider } from "adam-provider-fixture";
-import { fail, ok, READ_ONLY_TOOLS, SESSION_TOOLS } from "./results.ts";
+import {
+  fail,
+  ok,
+  READ_ONLY_TOOLS,
+  SESSION_TOOLS,
+  UntrustedContent,
+  UNTRUSTED_PAGE_NOTICE,
+} from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
+import { untrustedExtractOutputSchema, untrustedPageOutputSchema } from "./schemas.ts";
 
 describe("read-only MCP facade", () => {
   it("exposes the student-focused v1 tools and no write tools", () => {
@@ -46,9 +54,37 @@ describe("read-only MCP facade", () => {
   it("extracts fixture file text without bytes in the MCP payload", async () => {
     const provider = createFixtureProvider();
     const extracted = await provider.extractFileText("100011");
-    const result = ok({ untrusted: true, ...extracted });
+    const result = ok(UntrustedContent.wrap(extracted));
     assert.match(result.content[0]?.text ?? "", /multimedia retrieval/i);
+    assert.equal(result.structuredContent?.untrusted, true);
+    assert.equal(result.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
     assert.equal("bytes" in (result.structuredContent ?? {}), false);
     assert.doesNotMatch(result.content[0]?.text ?? "", /%PDF-/);
+  });
+
+  it("B6: page and extract payloads require untrusted: true and a notice string", async () => {
+    const provider = createFixtureProvider();
+
+    const pageWrapped = UntrustedContent.wrap(await provider.readPage("100001"));
+    assert.equal(pageWrapped.untrusted, true);
+    assert.equal(typeof pageWrapped.notice, "string");
+    assert.ok(pageWrapped.notice.length > 0);
+    assert.equal(pageWrapped.notice, UntrustedContent.NOTICE);
+    assert.match(pageWrapped.notice, /untrusted/i);
+    assert.equal(untrustedPageOutputSchema.safeParse(pageWrapped).success, true);
+
+    const extractWrapped = UntrustedContent.wrap(await provider.extractFileText("100011"));
+    assert.equal(extractWrapped.untrusted, true);
+    assert.equal(typeof extractWrapped.notice, "string");
+    assert.ok(extractWrapped.notice.length > 0);
+    assert.equal(extractWrapped.notice, UntrustedContent.NOTICE);
+    assert.match(extractWrapped.notice, /untrusted/i);
+    assert.equal(untrustedExtractOutputSchema.safeParse(extractWrapped).success, true);
+
+    // Fail-closed shape: omitting notice must not satisfy the advertised schemas.
+    const { notice: _pageNotice, ...pageWithoutNotice } = pageWrapped;
+    assert.equal(untrustedPageOutputSchema.safeParse(pageWithoutNotice).success, false);
+    const { notice: _extractNotice, ...extractWithoutNotice } = extractWrapped;
+    assert.equal(untrustedExtractOutputSchema.safeParse(extractWithoutNotice).success, false);
   });
 });

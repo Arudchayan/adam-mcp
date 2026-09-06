@@ -3,7 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { READ_ONLY_TOOLS, SESSION_TOOLS } from "./results.ts";
+import { READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 import { extractFileInputSchema, readPageInputSchema } from "./schemas.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -236,3 +236,63 @@ describe("MCP surface over stdio", () => {
   });
 });
 
+describe("B6 untrusted notice on page/extract", () => {
+  it("returns untrusted: true and a notice string for adam_read_page and adam_extract_file_text", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "b6-untrusted-test", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const page = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "adam_read_page",
+          arguments: { refId: "100001", confirm: true },
+        },
+      });
+      assert.equal(page.error, undefined, page.error?.message);
+      assert.equal(page.result?.isError, undefined);
+      assert.equal(page.result?.structuredContent?.untrusted, true);
+      assert.equal(typeof page.result?.structuredContent?.notice, "string");
+      assert.ok(String(page.result?.structuredContent?.notice ?? "").length > 0);
+      assert.equal(page.result?.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
+      assert.match(page.result?.content?.[0]?.text ?? "", /"untrusted": true/);
+      assert.match(page.result?.content?.[0]?.text ?? "", /untrusted data/i);
+
+      const extract = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_extract_file_text",
+          arguments: { refId: "100011", confirm: true },
+        },
+      });
+      assert.equal(extract.error, undefined, extract.error?.message);
+      assert.equal(extract.result?.isError, undefined);
+      assert.equal(extract.result?.structuredContent?.untrusted, true);
+      assert.equal(typeof extract.result?.structuredContent?.notice, "string");
+      assert.ok(String(extract.result?.structuredContent?.notice ?? "").length > 0);
+      assert.equal(extract.result?.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
+      assert.match(extract.result?.content?.[0]?.text ?? "", /"untrusted": true/);
+      assert.match(extract.result?.content?.[0]?.text ?? "", /untrusted data/i);
+      assert.equal("bytes" in (extract.result?.structuredContent ?? {}), false);
+    } finally {
+      child.kill();
+    }
+  });
+});

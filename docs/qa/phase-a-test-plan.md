@@ -49,7 +49,7 @@
 | B3 | Tool I/O schemas + annotations | Zod in/out; readOnlyHint on reads | Missing schema / wrong hints | Partial | Assert annotations on read tools |
 | B4 | Sensitive reads need confirm: true | adam_read_page / adam_extract_file_text reject without literal true | Succeeds without confirm | Gap (B4-RPC) — schema may exist; RPC reject path incomplete | Add explicit RPC reject + success-with-confirm cases |
 | B5 | No file bytes to model | Text + sha256 only | Bytes/base64 in result | Covered | Keep regression on extract result shape |
-| B6 | Untrusted notice on page/extract | untrusted: true + notice string | Missing notice | Gap | Assert untrusted + notice on page/extract tools |
+| B6 | Untrusted notice on page/extract | untrusted: true + notice string | Missing notice | Covered — stdio + server fixture asserts | Assert untrusted + notice on page/extract tools |
 | B7 | Stdout hygiene | stdout = JSON-RPC only; logs on stderr | Log noise on stdout | Covered in stdio tests | Keep spawn hygiene asserts |
 | B8 | Resource URI != live ADAM URL | Cite https://adam.unibas.ch/go/...; handles adam://... | Host told to fetch adam:// in browser | Partial | Assert citation shape + handle form |
 | B9 | Session tools only with browser provider | Fixture: no login tools; --browser: login + status | Login on fixture / cookies in results | Partial | Fixture asserts no session/login tools |
@@ -57,7 +57,7 @@
 | B11 | No deprecated primitives | No Sampling, Roots, MCP Logging client API; stderr/OTel only | New Roots/Sampling/Logging or HTTP+SSE | Gap | Negative asserts: capabilities omit deprecated |
 | B12 | No MCP OAuth on stdio | Chrome session / env only | OAuth on local stdio | Gap | Assert no OAuth/auth routes on stdio server |
 
-**Known coverage gaps (must close for main gate):** B6, B10, B4-RPC, B11, B12.
+**Known coverage gaps (must close for main gate):** B10, B4-RPC, B11, B12.
 
 ## Phase A backlog (A1-A4 + A6)
 
@@ -96,7 +96,7 @@
 
 Still **fixture only** — no live ADAM in these PRs.
 
-1. **B6** — untrusted notice on page/extract (untrusted: true + notice)
+1. **B6** — untrusted notice on page/extract (untrusted: true + notice) — closed by fixture asserts on tool paths
 2. **B10** — tst deny / fail-closed golden
 3. **B4** — RPC confirm: true reject + success paths (B4-RPC gap)
 4. **B11 / B12** — no deprecated primitives; no MCP OAuth on stdio
@@ -108,7 +108,7 @@ Order rationale: close main-gate baseline gaps before backlog; B6/B10/B4 are hig
 
 Track until green on main under fixture:
 
-- [ ] **B6** — untrusted notice on page/extract
+- [x] **B6** — untrusted notice on page/extract
 - [ ] **B10** — tst denied / fail-closed
 - [ ] **B4** — sensitive reads RPC require confirm: true
 - [ ] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
