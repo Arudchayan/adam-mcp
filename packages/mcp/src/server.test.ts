@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { AdamError } from "adam-core";
 import { createFixtureProvider, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import {
@@ -13,6 +16,8 @@ import {
 } from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
 import { untrustedExtractOutputSchema, untrustedPageOutputSchema } from "./schemas.ts";
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 describe("read-only MCP facade", () => {
   it("exposes the student-focused v1 tools and no write tools", () => {
@@ -155,5 +160,41 @@ describe("read-only MCP facade", () => {
     assert.equal(children.items.some((item) => item.type === "tst"), false);
     const search = await provider.search("BLOCKED EXAM CONTENT");
     assert.equal(search.items.length, 0);
+  });
+
+  it("B11: server capabilities omit Sampling, Roots, and Logging; no HTTP transport wiring", () => {
+    const server = createAdamMcpServer({ provider: createFixtureProvider() });
+    const capabilities = server.server.getCapabilities();
+    assert.equal("sampling" in capabilities, false);
+    assert.equal("roots" in capabilities, false);
+    assert.equal("logging" in capabilities, false);
+    assert.equal(capabilities.tools?.listChanged, true);
+    assert.equal(capabilities.resources?.listChanged, true);
+    assert.equal(capabilities.prompts?.listChanged, true);
+
+    const wiringFiles = ["index.ts", "server.ts", "providers.ts", "results.ts"] as const;
+    const forbidden =
+      /\boauth\b|\bauthorize\b|sampling\/createMessage|roots\/list|logging\/setLevel|sendLoggingMessage|StreamableHTTP|SSEServerTransport|serveHttp|createMcpHandler/i;
+    for (const file of wiringFiles) {
+      const source = readFileSync(resolve(here, file), "utf8");
+      assert.equal(
+        forbidden.test(source),
+        false,
+        `${file} must not wire Sampling/Roots/Logging client APIs, OAuth, or HTTP MCP transports`,
+      );
+    }
+  });
+
+  it("B12: fixture server wiring exposes no oauth/authorize tools or routes", () => {
+    const server = createAdamMcpServer({ provider: createFixtureProvider() });
+    const toolNames = Object.keys(server["_registeredTools"] as Record<string, unknown>);
+    assert.equal(toolNames.some((name) => /oauth|authorize/i.test(name)), false);
+    assert.equal(toolNames.includes("adam_login"), false);
+    assert.equal(READ_ONLY_TOOLS.some((name) => /oauth|authorize/i.test(name)), false);
+
+    const indexSource = readFileSync(resolve(here, "index.ts"), "utf8");
+    assert.match(indexSource, /serveStdio/);
+    assert.doesNotMatch(indexSource, /\boauth\b|\bauthorize\b|StreamableHTTP|SSEServerTransport|serveHttp/i);
+    assert.match(indexSource, /ADAM_PROVIDER|detectProviderName|createConfiguredProvider/);
   });
 });

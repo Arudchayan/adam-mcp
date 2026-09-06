@@ -26,8 +26,8 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Docs / OSS DX (badge, CHANGELOG, capabilities, QA docs) | Known | Done (PR #1) |
 | B6 untrusted notice on page/extract | Known | Done (PR #2) |
 | B10 synthetic `tst` fail-closed | Known (policy) | Done (PR #5, `8af49c0`) |
-| B4 confirm RPC | Known (schema) | Done (this PR once merged) |
-| B11 / B12 no deprecated MCP / no OAuth on stdio | Known | Queued |
+| B4 confirm RPC | Known (schema) | Done (PR #6, `5982bdd`) |
+| B11 / B12 no deprecated MCP / no OAuth on stdio | Known | Done (this PR) |
 | Empty Exercises fold ≠ no deadlines (`100020` fold / `100021` exc) | Known (fixture SoT) | Locked |
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | After baseline |
