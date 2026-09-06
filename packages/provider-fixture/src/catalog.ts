@@ -164,11 +164,18 @@ const exercisePage: PageContent = {
   ...exercise,
   text: [
     "Exercise 1 – Retrieval summary.",
+    "Published: 1 September 2026.",
     "Deadline: 22 September 2026, 23:59.",
     "Write a one-page retrieval summary from the course notes.",
     "This connector cannot submit the exercise.",
   ].join("\n"),
   inferredDates: [
+    {
+      // AT6: unlabeled page date on an exc object — must stay source:page (not promoted to exc).
+      raw: "Published: 1 September 2026",
+      iso: "2026-09-01T00:00:00.000Z",
+      confidence: "inferred",
+    },
     {
       raw: "22 September 2026, 23:59",
       iso: "2026-09-22T21:59:00.000Z",

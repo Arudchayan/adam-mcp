@@ -197,7 +197,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM dates",
       description:
-        "Cross-course deadlines aggregated from enrolled exercises (exc), page-inferred dates, and calendar SoT. Each item has source (exc|page|calendar), confidence (explicit|inferred), and provenance. Not the ILIAS calendar GUI (robots.txt). Do not invent dates. Empty folders are not 'no deadlines'.",
+        "Cross-course deadlines aggregated from enrolled exercises (exc), page-inferred dates, and calendar SoT. source:exc|calendar = explicit SoT; source:page = page-inferred only (never promote unlabeled page dates to exc/calendar). Dedup same object+day: exc > calendar > page. startsAt only when ISO-parseable. Provenance + confidence. Not the ILIAS calendar GUI (robots.txt). Do not invent dates. Empty folders are not 'no deadlines'.",
       inputSchema: z.object({
         from: z.string().optional().describe("Inclusive ISO start"),
         to: z.string().optional().describe("Inclusive ISO end"),

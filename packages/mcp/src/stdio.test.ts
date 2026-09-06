@@ -1419,3 +1419,125 @@ describe("AT5 adam_get_exercise harden", () => {
     }
   });
 });
+
+describe("AT6 adam_list_calendar page vs exc provenance", () => {
+  it("keeps unlabeled page dates as page; labeled deadline as exc; A1 cites; no new tool", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    const progress: Array<{ progressToken?: string | number }> = [];
+    let buffer = "";
+    child.stdout.setEncoding("utf8");
+    const onData = (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line) as {
+            method?: string;
+            params?: { progressToken?: string | number };
+          };
+          if (parsed.method === "notifications/progress") {
+            progress.push(parsed.params ?? {});
+          }
+        } catch {
+          // ignore
+        }
+      }
+    };
+    child.stdout.on("data", onData);
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "at6-calendar-provenance", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_list_calendar"), true);
+      assert.equal(
+        names.some((name) => /adam_get_deadline|adam_list_deadline|adam_get_calendar/i.test(name)),
+        false,
+        "extend adam_list_calendar only — no new calendar tool",
+      );
+
+      const calendar = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_list_calendar",
+          arguments: {},
+          _meta: { progressToken: "at6-cal" },
+        },
+      });
+      assert.equal(calendar.error, undefined, calendar.error?.message);
+      assert.equal(calendar.result?.isError, undefined);
+      assert.ok(progress.some((p) => p.progressToken === "at6-cal"));
+
+      const items = calendar.result?.structuredContent?.items as Array<{
+        title?: string;
+        startsAt?: string;
+        source?: string;
+        confidence?: string;
+        objectRefId?: string;
+        url?: string;
+        resourceUri?: string;
+      }>;
+      assert.ok(items && items.length > 0);
+
+      const published = items.find(
+        (item) =>
+          item.objectRefId === "100021" &&
+          item.source === "page" &&
+          item.startsAt === "2026-09-01T00:00:00.000Z",
+      );
+      assert.ok(published, "unlabeled page date on exc stays source:page");
+      assert.equal(published?.confidence, "inferred");
+
+      const deadline = items.find((item) => item.objectRefId === "100021" && item.source === "exc");
+      assert.ok(deadline);
+      assert.equal(deadline?.startsAt, "2026-09-22T21:59:00.000Z");
+      assert.equal(deadline?.confidence, "explicit");
+      assert.equal(deadline?.resourceUri, "adam://exc/100021");
+      assert.equal(deadline?.url, "https://adam.unibas.ch/go/exc/100021");
+
+      assert.equal(
+        items.filter((item) => item.objectRefId === "100021" && item.startsAt?.startsWith("2026-09-22"))
+          .length,
+        1,
+        "dedup same object+day: exc > page",
+      );
+
+      assert.equal(items.some((item) => item.objectRefId === "100020"), false);
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+
+      assertAdamAndHttps(calendar.result?.structuredContent, calendar.result?.content?.[0]?.text ?? "");
+      assert.equal(
+        (calendar.result?.content ?? []).some(
+          (block) => block.type === "resource_link" && block.uri === "adam://exc/100021",
+        ),
+        true,
+      );
+    } finally {
+      child.stdout.off("data", onData);
+      child.kill();
+    }
+  });
+});

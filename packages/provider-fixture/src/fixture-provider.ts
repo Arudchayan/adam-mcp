@@ -7,6 +7,7 @@ import {
   syntheticPdfWithText,
   type AdamObject,
   type AdamProvider,
+  preferCalendarEvents,
   type CalendarEvent,
   type ExerciseObject,
   type FileExtract,
@@ -225,10 +226,9 @@ function rankEnrolledSearch(needle: string): AdamObject[] {
   return matches.map((entry) => entry.object);
 }
 
-/** AT1/AT2: cross-course deadlines from calendar SoT + page dates + exc units. */
+/** AT1/AT2/AT6: cross-course deadlines from calendar SoT + page dates + exc units. */
 function aggregateFixtureDeadlines(): CalendarEvent[] {
   const events: CalendarEvent[] = [...fixtureCalendar];
-  const seen = new Set(events.map(eventKey));
 
   const visit = (refId: RefId, walked: Set<RefId>) => {
     if (walked.has(refId)) {
@@ -240,9 +240,10 @@ function aggregateFixtureDeadlines(): CalendarEvent[] {
       return;
     }
 
+    // AT6: page-inferred dates stay source:page (including unlabeled dates on exc pages).
     if (record.page) {
       for (const date of record.page.inferredDates) {
-        const event: CalendarEvent = {
+        events.push({
           title: date.raw,
           ...(date.iso ? { startsAt: date.iso } : {}),
           source: "page",
@@ -250,12 +251,7 @@ function aggregateFixtureDeadlines(): CalendarEvent[] {
           objectRefId: record.object.refId,
           url: record.object.url,
           provenance: record.object.provenance,
-        };
-        const key = eventKey(event);
-        if (!seen.has(key)) {
-          seen.add(key);
-          events.push(event);
-        }
+        });
       }
     }
 
@@ -265,7 +261,7 @@ function aggregateFixtureDeadlines(): CalendarEvent[] {
         if (!unit.deadline) {
           continue;
         }
-        const event: CalendarEvent = {
+        events.push({
           title: `${exercise.title} deadline`,
           startsAt: unit.deadline,
           source: "exc",
@@ -273,12 +269,7 @@ function aggregateFixtureDeadlines(): CalendarEvent[] {
           objectRefId: exercise.refId,
           url: exercise.url,
           provenance: exercise.provenance,
-        };
-        const key = eventKey(event);
-        if (!seen.has(key)) {
-          seen.add(key);
-          events.push(event);
-        }
+        });
       }
     }
 
@@ -290,16 +281,8 @@ function aggregateFixtureDeadlines(): CalendarEvent[] {
   for (const courseId of enrolledCourseIds) {
     visit(courseId, new Set());
   }
-  return events;
-}
-
-function eventKey(event: CalendarEvent): string {
-  return [
-    event.source,
-    event.objectRefId ?? "",
-    event.startsAt ?? "",
-    event.title,
-  ].join("|");
+  // AT6: same event prefers exc > calendar > page.
+  return preferCalendarEvents(events);
 }
 
 export function createFixtureProvider(): FixtureAdamProvider {

@@ -209,7 +209,9 @@ describe("BrowserAdamProvider with a memory session", () => {
 
   it("fuses dates from enrolled course pages and keeps empty folders distinct", async () => {
     const calendar = await provider.listCalendar();
-    assert.equal(calendar.items.some((item) => /12 January 2027/i.test(item.title)), true);
+    const exam = calendar.items.find((item) => /12 January 2027/i.test(item.title ?? ""));
+    assert.ok(exam);
+    assert.equal(exam?.source, "page");
     const empty = await provider.listChildren("100020");
     assert.deepEqual(empty.items, []);
   });
@@ -390,3 +392,112 @@ describe("AT5 getExercise browser harden", () => {
     });
   });
 });
+
+describe("AT6 listCalendar provenance", () => {
+  it("does not promote unlabeled dates on exc pages to source:exc", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          `<main>
+  <h1>Schreibtisch</h1>
+  <a href="/go/crs/100001">00000-01 – Synthetic Multimedia Seminar</a>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Schreibtisch 00000-01 Synthetic Multimedia Seminar Abmelden",
+        ),
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100001",
+          "00000-01 – Synthetic Multimedia Seminar",
+          `<main>
+  <h1>00000-01 – Synthetic Multimedia Seminar</h1>
+  <a href="/go/exc/100022">Exercise without labeled deadline</a>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "00000-01 Synthetic Multimedia Seminar Exercise without labeled deadline Abmelden",
+        ),
+        "https://adam.unibas.ch/go/exc/100022": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100022",
+          "Exercise without labeled deadline",
+          `<main>
+  <h1>Exercise without labeled deadline</h1>
+  <p>Published: 1 September 2026</p>
+  <p>Write something before the exam on 12 January 2027.</p>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Exercise without labeled deadline Published: 1 September 2026 exam 12 January 2027 Abmelden",
+        ),
+      }),
+    });
+    const calendar = await hardened.listCalendar();
+    const fromExc = calendar.items.filter((item) => item.objectRefId === "100022");
+    assert.ok(fromExc.length >= 1, `expected page dates from exc page, got ${JSON.stringify(calendar.items)}`);
+    assert.equal(
+      fromExc.every((item) => item.source === "page"),
+      true,
+      "unlabeled page dates on exc must stay source:page (FAIL-to-fix)",
+    );
+    assert.equal(fromExc.some((item) => item.source === "exc"), false);
+  });
+
+  it("surfaces labeled deadline as exc and keeps other page dates as page; dedup prefers exc", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          `<main>
+  <h1>Schreibtisch</h1>
+  <a href="/go/crs/100001">00000-01 – Synthetic Multimedia Seminar</a>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Schreibtisch 00000-01 Synthetic Multimedia Seminar Abmelden",
+        ),
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100001",
+          "00000-01 – Synthetic Multimedia Seminar",
+          `<main>
+  <h1>00000-01 – Synthetic Multimedia Seminar</h1>
+  <a href="/go/exc/100021">Exercise 1 – Retrieval summary</a>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "00000-01 Synthetic Multimedia Seminar Exercise 1 Retrieval summary Abmelden",
+        ),
+        "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100021",
+          "Exercise 1 – Retrieval summary",
+          `<main>
+  <h1>Exercise 1 – Retrieval summary</h1>
+  <p>Published: 1 September 2026</p>
+  <p>Deadline: 22 September 2026, 23:59.</p>
+  <p>Write a one-page retrieval summary.</p>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Exercise 1 Retrieval summary Published: 1 September 2026 Deadline: 22 September 2026 Write a one-page retrieval summary Abmelden",
+        ),
+      }),
+    });
+    const calendar = await hardened.listCalendar();
+    const published = calendar.items.find(
+      (item) => item.objectRefId === "100021" && /September 2026/i.test(item.title ?? "") && item.source === "page" && item.startsAt?.startsWith("2026-09-01"),
+    );
+    assert.ok(published, `unlabeled published date stays page; items=${JSON.stringify(calendar.items)}`);
+
+    const deadline = calendar.items.find((item) => item.objectRefId === "100021" && item.source === "exc");
+    assert.ok(deadline, `expected labeled deadline as exc; items=${JSON.stringify(calendar.items)}`);
+    assert.equal(deadline?.confidence, "explicit");
+    assert.equal(deadline?.startsAt, "2026-09-22T00:00:00.000Z");
+
+    // Same object+day: page copy of deadline must lose to exc.
+    assert.equal(
+      calendar.items.filter(
+        (item) => item.objectRefId === "100021" && item.startsAt?.startsWith("2026-09-22"),
+      ).length,
+      1,
+    );
+  });
+});
+

@@ -18,7 +18,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 | --- | --- | --- | --- |
 | Study week | Courses → folders/pages → new files → readable text | partial–strong | Harden browser scrape; `what_changed` fidelity; empty-folder ≠ no deadlines |
 | Find materials | Title/keyword in enrolled tree; open file/page/link | partial→stronger (AT3) | Title-before-body ranking; enrolled-tree only; cite `https://adam.unibas.ch/go/...`; never claim global search |
-| Deadlines | Exercises + dates across courses | partial | First-class aggregation; provenance + confidence; no invented dates |
+| Deadlines | Exercises + dates across courses | partial→stronger (AT6) | Provenance honesty; unlabeled page≠exc; dedup exc>calendar>page; no invented dates |
 
 ### P1 — expand reads
 
@@ -59,7 +59,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `wiki` / `blog` / Etherpad | Collab | no | blocked — not observed |
 | `grp` / `svy` / ADAMtools | Groups, surveys | no | discoverability |
 | news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
-| calendar GUI | Agenda | partial (page walk) | widget seen; agenda empty |
+| calendar GUI | Agenda | partial→stronger (AT6 page walk) | widget seen; agenda empty; provenance honesty |
 | mail | Messaging | out | skip |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
@@ -70,7 +70,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 ## 4. Phase B read expansions (priority)
 
 1. **Cross-course deadlines** — first-class aggregation of exercise + page dates (AT1/AT2 — PR #10 / `533d5c5`)  
-2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — this PR; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
+2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — PR #13 / `ed40c2c`; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
 3. **News / what-changed reliability** when News is enabled (AT4 — PR #12 / `b3bb0c0`)  
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
 5. **Forum thread read** before any write (**blocked** until live `frm`)
