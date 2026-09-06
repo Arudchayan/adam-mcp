@@ -54,7 +54,7 @@ AI client  --stdio MCP-->  adam-mcp  -->  Chrome session  -->  adam.unibas.ch
 
 ADAM MCP uses a local Chrome session for ADAM authentication. Default without `--browser` is a fixture catalog so a clone does not hit production ADAM.
 
-[Architecture](docs/architecture.md) · [What is in scope](docs/scope.md) · [Capabilities](docs/capabilities.md)
+[Architecture](docs/architecture.md) · [What is in scope](docs/scope.md) · [Capabilities](docs/capabilities.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Tools
 
