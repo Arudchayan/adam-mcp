@@ -8,12 +8,12 @@ Lean source of truth for fixture gates and light security skims. Do not reconstr
 | --- | --- |
 | [phase-a-mcp-compliance-checklist.md](phase-a-mcp-compliance-checklist.md) | Architect checklist SoT (B1–B12, A1–A4+A6; A5 deferred) |
 | [phase-a-test-plan.md](phase-a-test-plan.md) | Fixture-first PASS/FAIL cases, goldens, PR order |
-| [open-pass-criteria.md](open-pass-criteria.md) | Short notes for gates (A1/A2/A6 closed PR #8 / `e52d947`; A3/A4 this PR; A5 deferred) |
+| [open-pass-criteria.md](open-pass-criteria.md) | Short notes for gates (A1/A2/A6 closed PR #8 / `e52d947`; A3/A4 closed PR #9 / `a5e1fd6`; A5 deferred; AT1/AT2 this PR) |
 | [security-skim-checklist.md](security-skim-checklist.md) | Light threat-model / SECURITY.md skim on docs & runtime PRs |
 
 ## Current Phase A order
 
-B6–B12 done → A1/A2/A6 done (PR #8 / `e52d947`) → **A3/A4 (this PR)**. A5 deferred Phase B P1; then Phase A-thin.
+B6–B12 done → A1/A2/A6 done (PR #8 / `e52d947`) → A3/A4 done (PR #9 / `a5e1fd6`) → **Phase A-thin AT1/AT2 (this PR)**. A5 deferred Phase B P1.
 
 ## Fixture goldens (locked)
 

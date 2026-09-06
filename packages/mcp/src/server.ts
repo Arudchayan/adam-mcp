@@ -197,7 +197,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM dates",
       description:
-        "Dates inferred from the dashboard and enrolled course/folder/exercise pages (browser) or the fixture catalog. Not the ILIAS calendar GUI (robots.txt). Label inferred dates as inferred. Empty folders are not 'no deadlines'.",
+        "Cross-course deadlines aggregated from enrolled exercises (exc), page-inferred dates, and calendar SoT. Each item has source (exc|page|calendar), confidence (explicit|inferred), and provenance. Not the ILIAS calendar GUI (robots.txt). Do not invent dates. Empty folders are not 'no deadlines'.",
       inputSchema: z.object({
         from: z.string().optional().describe("Inclusive ISO start"),
         to: z.string().optional().describe("Inclusive ISO end"),
@@ -419,7 +419,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
               "Call adam_list_courses, adam_list_calendar, and adam_list_news.",
               "Use adam_read_page only with confirm=true for courses the student named.",
               "If an exercise is in scope, call adam_get_exercise. Do not submit.",
-              "Every date must cite its ADAM URL and whether it is calendar, news, or page-inferred.",
+              "Every date must cite its ADAM URL and source (exc, page, or calendar) with confidence. Do not invent dates.",
               "Do not invent deadlines. Do not open tests. Do not submit anything.",
             ].join("\n"),
           },

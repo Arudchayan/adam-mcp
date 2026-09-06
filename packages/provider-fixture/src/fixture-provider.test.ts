@@ -10,8 +10,9 @@ describe("FixtureAdamProvider", () => {
 
   it("lists the synthetic enrolled course", async () => {
     const listed = await provider.listCourses();
-    assert.equal(listed.items.length, 1);
+    assert.equal(listed.items.length, 2);
     assert.equal(listed.items[0]?.refId, "100001");
+    assert.equal(listed.items[1]?.refId, "100101");
     assert.match(listed.items[0]?.url ?? "", /\/go\/crs\/100001$/);
   });
 
@@ -21,8 +22,14 @@ describe("FixtureAdamProvider", () => {
     const courseChildren = await provider.listChildren("100001");
     assert.equal(courseChildren.items.some((item) => item.refId === "100021"), true);
     const calendar = await provider.listCalendar();
-    assert.equal(calendar.items.some((item) => item.title === "Written exam"), true);
-    assert.equal(calendar.items.some((item) => item.objectRefId === "100021"), true);
+    assert.equal(
+      calendar.items.some((item) => item.objectRefId === "100001" && item.source === "page"),
+      true,
+    );
+    assert.equal(
+      calendar.items.some((item) => item.objectRefId === "100021" && item.source === "exc"),
+      true,
+    );
   });
 
   it("extracts fixture PDF text without returning bytes", async () => {
@@ -127,5 +134,60 @@ describe("A2 LongWalkStub progress", () => {
     await provider.search("Fourier");
     await provider.listCalendar();
     await provider.extractFileText("100011");
+  });
+});
+
+describe("AT1/AT2 cross-course deadline aggregation", () => {
+  const provider = createFixtureProvider();
+
+  it("aggregates exc + page + calendar SoT across enrolled courses with provenance", async () => {
+    const emptyFold = await provider.listChildren("100020");
+    assert.deepEqual(emptyFold.items, []);
+
+    const calendar = await provider.listCalendar();
+    const items = calendar.items;
+
+    const sources = new Set(items.map((item) => item.source));
+    assert.equal(sources.has("exc"), true);
+    assert.equal(sources.has("page"), true);
+    assert.equal(sources.has("calendar"), true);
+
+    const exercise = items.find((item) => item.objectRefId === "100021" && item.source === "exc");
+    assert.ok(exercise);
+    assert.equal(exercise?.startsAt, "2026-09-22T21:59:00.000Z");
+    assert.equal(exercise?.confidence, "explicit");
+    assert.equal(exercise?.url, "https://adam.unibas.ch/go/exc/100021");
+    assert.equal(exercise?.provenance.provider, "fixture");
+    assert.ok(exercise?.provenance.sourceUrl);
+    assert.ok(exercise?.provenance.fetchedAt);
+    assert.ok(exercise?.provenance.iliasVersion || exercise?.provenance.freshness);
+
+    const course2Exc = items.find((item) => item.objectRefId === "100121" && item.source === "exc");
+    assert.ok(course2Exc, "cross-course exc deadline from 100101 must surface");
+    assert.equal(course2Exc?.startsAt, "2026-10-05T21:59:00.000Z");
+
+    const course2Page = items.find((item) => item.objectRefId === "100101" && item.source === "page" && item.startsAt);
+    assert.ok(course2Page);
+    assert.equal(course2Page?.confidence, "inferred");
+
+    const undated = items.find(
+      (item) => item.objectRefId === "100101" && item.source === "page" && !item.startsAt,
+    );
+    assert.ok(undated, "honest omit: page date without iso must omit startsAt");
+
+    const calSot = items.find((item) => item.source === "calendar");
+    assert.ok(calSot);
+    assert.equal(calSot?.confidence, "explicit");
+
+    // Empty fold is not represented as a fabricated no-deadlines event.
+    assert.equal(items.some((item) => item.objectRefId === "100020"), false);
+
+    for (const item of items) {
+      assert.ok(["exc", "page", "calendar"].includes(item.source));
+      assert.ok(["explicit", "inferred"].includes(item.confidence));
+      assert.match(item.provenance.sourceUrl, /^https:\/\/adam\.unibas\.ch\//);
+      assert.equal(typeof item.provenance.fetchedAt, "string");
+      assert.equal(item.provenance.provider, "fixture");
+    }
   });
 });

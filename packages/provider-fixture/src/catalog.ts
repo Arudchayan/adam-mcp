@@ -202,6 +202,68 @@ const quizPage: PageContent = {
   inferredDates: [],
 };
 
+
+const course2Breadcrumb = [
+  crumb("root", "1", "ADAM"),
+  crumb("cat", "900001", "Public courses (synthetic)"),
+  crumb("cat", "900065", "Synthetic Faculty of Science"),
+  crumb("cat", "900165", "Synthetic Department of Computing"),
+];
+
+const course2 = obj(
+  "crs",
+  "100101",
+  "00000-02 – Synthetic Algorithms Lab",
+  course2Breadcrumb,
+  {
+    accessClass: "Authenticated Users",
+    updatedAt: "2026-09-02T08:00:00.000Z",
+  },
+);
+
+const course2Exercise: ExerciseObject = {
+  ...obj(
+    "exc",
+    "100121",
+    "Lab sheet 1 – Sorting warm-up",
+    [...course2Breadcrumb, crumb("crs", "100101", course2.title)],
+    {
+      accessClass: "Authenticated Users",
+      updatedAt: "2026-09-02T09:00:00.000Z",
+    },
+  ),
+  type: "exc",
+  units: [
+    {
+      title: "Unit 1",
+      deadline: "2026-10-05T21:59:00.000Z",
+      instructionText:
+        "Submit the warm-up sort implementation. This connector cannot submit the exercise.",
+      ownStatus: "none",
+    },
+  ],
+};
+
+const course2Page: PageContent = {
+  ...course2,
+  text: [
+    "Synthetic algorithms lab for cross-course deadline aggregation tests.",
+    "Mid-term quiz window: 3 November 2026, 14:00–15:00 (room TBA).",
+    "Lab sheet deadlines are on the exercise objects, not in empty folders.",
+  ].join("\n"),
+  inferredDates: [
+    {
+      raw: "3 November 2026, 14:00–15:00 (room TBA)",
+      iso: "2026-11-03T13:00:00.000Z",
+      confidence: "inferred",
+    },
+    {
+      raw: "room TBA — date not yet announced for oral slot",
+      confidence: "inferred",
+    },
+  ],
+};
+
 export const fixtureNews: NewsItem[] = [
   {
     title: "New file in Course & Notes",
@@ -217,26 +279,18 @@ export const fixtureNews: NewsItem[] = [
   },
 ];
 
+/** Explicit calendar SoT only — page/exc deadlines are aggregated at list time. */
 export const fixtureCalendar: CalendarEvent[] = [
   {
-    title: "Written exam",
-    startsAt: "2027-01-12T09:00:00.000Z",
-    endsAt: "2027-01-12T11:00:00.000Z",
-    location: "Lecture Hall A",
-    source: "page",
+    title: "Faculty briefing (calendar SoT)",
+    startsAt: "2026-09-15T12:00:00.000Z",
+    endsAt: "2026-09-15T13:00:00.000Z",
+    location: "Zoom (fixture)",
+    source: "calendar",
     confidence: "explicit",
     objectRefId: "100001",
     url: canonicalUrl("crs", "100001"),
     provenance: provenance({ type: "crs", refId: "100001" }),
-  },
-  {
-    title: "Exercise 1 deadline",
-    startsAt: "2026-09-22T21:59:00.000Z",
-    source: "page",
-    confidence: "explicit",
-    objectRefId: "100021",
-    url: canonicalUrl("exc", "100021"),
-    provenance: provenance({ type: "exc", refId: "100021" }),
   },
 ];
 
@@ -246,7 +300,7 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "1": { object: root, children: ["900001"] },
   "900001": { object: publicCat, children: ["900065"] },
   "900065": { object: faculty, children: ["900165"] },
-  "900165": { object: department, children: ["100001"] },
+  "900165": { object: department, children: ["100001", "100101"] },
   "100001": {
     object: course,
     children: ["100010", "100020", "100021"],
@@ -257,6 +311,12 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "100021": { object: exercise, children: [], page: exercisePage },
   "100011": { object: overviewFile, children: [], file: overviewFile },
   "100030": { object: quiz, children: [], page: quizPage },
+  "100101": {
+    object: course2,
+    children: ["100121"],
+    page: course2Page,
+  },
+  "100121": { object: course2Exercise, children: [], page: undefined },
 };
 
-export const enrolledCourseIds: RefId[] = ["100001"];
+export const enrolledCourseIds: RefId[] = ["100001", "100101"];
