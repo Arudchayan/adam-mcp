@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
 import { fixtureCatalog, GOLDEN_TST_REF_ID } from "./catalog.ts";
 import { createFixtureProvider } from "./fixture-provider.ts";
+import { LongWalkStub } from "./long-walk.ts";
 
 describe("FixtureAdamProvider", () => {
   const provider = createFixtureProvider();
@@ -91,5 +92,40 @@ describe("FixtureAdamProvider", () => {
     await assert.rejects(() => provider.readPage(GOLDEN_TST_REF_ID), deny);
     await assert.rejects(() => provider.getCourse(GOLDEN_TST_REF_ID), deny);
     await assert.rejects(() => provider.getExercise(GOLDEN_TST_REF_ID), deny);
+  });
+});
+
+describe("A2 LongWalkStub progress", () => {
+  it("emits progress for search / calendar / extract when onProgress is set", async () => {
+    const provider = createFixtureProvider();
+    const seen: Array<{ progress: number; total?: number; message?: string }> = [];
+    const onProgress = async (update: { progress: number; total?: number; message?: string }) => {
+      seen.push(update);
+    };
+
+    await LongWalkStub.emit("unit", onProgress, 2);
+    assert.equal(seen.length, 2);
+    assert.equal(seen[0]?.progress, 1);
+    assert.equal(seen[1]?.total, 2);
+
+    seen.length = 0;
+    await provider.search("Fourier", { onProgress });
+    assert.ok(seen.length >= 3);
+    assert.ok(seen.every((step) => typeof step.message === "string"));
+
+    seen.length = 0;
+    await provider.listCalendar({ onProgress });
+    assert.ok(seen.length >= 3);
+
+    seen.length = 0;
+    await provider.extractFileText("100011", { onProgress });
+    assert.ok(seen.length >= 3);
+  });
+
+  it("stays silent when onProgress is omitted", async () => {
+    const provider = createFixtureProvider();
+    await provider.search("Fourier");
+    await provider.listCalendar();
+    await provider.extractFileText("100011");
   });
 });

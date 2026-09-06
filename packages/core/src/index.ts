@@ -35,8 +35,20 @@ export {
   type NewsItem,
   type PageContent,
   type Paginated,
+  type ProgressReporter,
+  type ProgressUpdate,
   type Provenance,
   type ProviderId,
   type RefId,
 } from "./types.ts";
-export { canonicalUrl, isAdamObjectType, objectTypeLabel, objectUrl, parseAdamRef } from "./urls.ts";
+export {
+  canonicalUrl,
+  isAdamObjectType,
+  isResourceHandleType,
+  objectTypeLabel,
+  objectUrl,
+  parseAdamRef,
+  RESOURCE_HANDLE_TYPES,
+  resourceUri,
+  type ResourceHandleType,
+} from "./urls.ts";

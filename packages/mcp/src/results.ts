@@ -1,4 +1,14 @@
-import { AdamError, isAdamError, redactText, type AdamProvider } from "adam-core";
+import {
+  AdamError,
+  isAdamError,
+  isResourceHandleType,
+  parseAdamRef,
+  redactText,
+  resourceUri,
+  type AdamProvider,
+  type ProgressReporter,
+  type ProgressUpdate,
+} from "adam-core";
 
 export const READ_ONLY_TOOLS = [
   "adam_list_courses",
@@ -51,11 +61,150 @@ export class ConfirmGate {
   }
 }
 
+/**
+ * A1: attach adam:// resource handles alongside canonical HTTPS citations.
+ * Hosts attach adam://; browsers open https://adam.unibas.ch/go/...
+ */
+export class ResourceLinks {
+  static forRecord(record: Record<string, unknown>): string | undefined {
+    const type = typeof record.type === "string" ? record.type : undefined;
+    const refId = typeof record.refId === "string" ? record.refId : undefined;
+    if (type && refId && isResourceHandleType(type)) {
+      return resourceUri(type, refId);
+    }
+    if (refId && typeof record.url === "string") {
+      const parsed = parseAdamRef(record.url);
+      if (parsed && isResourceHandleType(parsed.type)) {
+        return resourceUri(parsed.type, parsed.refId);
+      }
+    }
+    if (typeof record.objectRefId === "string" && typeof record.url === "string") {
+      const parsed = parseAdamRef(record.url);
+      if (parsed && isResourceHandleType(parsed.type)) {
+        return resourceUri(parsed.type, parsed.refId);
+      }
+    }
+    return undefined;
+  }
+
+  static enrich(data: unknown): unknown {
+    if (Array.isArray(data)) {
+      return data.map((item) => ResourceLinks.enrich(item));
+    }
+    if (data === null || typeof data !== "object") {
+      return data;
+    }
+    const source = data as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
+      next[key] = ResourceLinks.enrich(value);
+    }
+    const handle = ResourceLinks.forRecord(source);
+    if (handle && typeof next.resourceUri !== "string") {
+      next.resourceUri = handle;
+    }
+    return next;
+  }
+
+  static contentBlocks(data: unknown): ResourceLinkBlock[] {
+    const seen = new Set<string>();
+    const blocks: ResourceLinkBlock[] = [];
+    const visit = (value: unknown) => {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          visit(item);
+        }
+        return;
+      }
+      if (value === null || typeof value !== "object") {
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      const uri = typeof record.resourceUri === "string" ? record.resourceUri : ResourceLinks.forRecord(record);
+      if (uri && !seen.has(uri)) {
+        seen.add(uri);
+        const name =
+          typeof record.title === "string" && record.title.length > 0
+            ? record.title
+            : uri.replace(/^adam:\/\//, "");
+        blocks.push({
+          type: "resource_link",
+          uri,
+          name,
+          mimeType: "application/json",
+          description:
+            typeof record.url === "string"
+              ? `MCP handle; live citation ${record.url}`
+              : "MCP resource handle (not a browser URL)",
+        });
+      }
+      for (const child of Object.values(record)) {
+        visit(child);
+      }
+    };
+    visit(data);
+    return blocks;
+  }
+}
+
+export type ResourceLinkBlock = {
+  type: "resource_link";
+  uri: string;
+  name: string;
+  mimeType?: string;
+  description?: string;
+};
+
+type NotifyFn = (notification: {
+  method: "notifications/progress";
+  params: {
+    progressToken: string | number;
+    progress: number;
+    total?: number;
+    message?: string;
+  };
+}) => Promise<void>;
+
+/** A2: emit MCP progress notifications for long walks when the client sent progressToken. */
+export class WalkProgress {
+  static fromContext(ctx: {
+    mcpReq: {
+      _meta?: { progressToken?: string | number };
+      notify: NotifyFn;
+    };
+  }): ProgressReporter {
+    const token = ctx.mcpReq._meta?.progressToken;
+    if (token === undefined) {
+      return async () => {};
+    }
+    return async (update: ProgressUpdate) => {
+      await ctx.mcpReq.notify({
+        method: "notifications/progress",
+        params: {
+          progressToken: token,
+          progress: update.progress,
+          total: update.total,
+          message: update.message,
+        },
+      });
+    };
+  }
+}
+
+export type ToolContent =
+  | { type: "text"; text: string }
+  | ResourceLinkBlock;
+
 export type ToolResponse = {
-  content: Array<{ type: "text"; text: string }>;
+  content: ToolContent[];
   structuredContent?: Record<string, unknown>;
   isError?: boolean;
 };
+
+export function toolText(result: ToolResponse): string {
+  const block = result.content.find((entry): entry is { type: "text"; text: string } => entry.type === "text");
+  return block?.text ?? "";
+}
 
 export function asStructured(data: unknown): Record<string, unknown> {
   if (data !== null && typeof data === "object" && !Array.isArray(data)) {
@@ -65,9 +214,14 @@ export function asStructured(data: unknown): Record<string, unknown> {
 }
 
 export function ok(data: unknown): ToolResponse {
-  const structuredContent = asStructured(data);
+  const enriched = ResourceLinks.enrich(data);
+  const structuredContent = asStructured(enriched);
+  const links = ResourceLinks.contentBlocks(structuredContent);
   return {
-    content: [{ type: "text", text: redactText(JSON.stringify(structuredContent, null, 2)) }],
+    content: [
+      { type: "text", text: redactText(JSON.stringify(structuredContent, null, 2)) },
+      ...links,
+    ],
     structuredContent,
   };
 }
