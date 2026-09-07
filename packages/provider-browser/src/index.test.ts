@@ -501,3 +501,77 @@ describe("AT6 listCalendar provenance", () => {
   });
 });
 
+
+describe("A2-news-browser listNews onProgress", () => {
+  const session = createMemorySession({
+    "https://adam.unibas.ch/": snapshotFromHtml(
+      "https://adam.unibas.ch/",
+      "Schreibtisch",
+      dashboardHtml,
+      "Schreibtisch 00000-01 Written exam: 12 January 2027 News 00_Overview.pdf New file Abmelden",
+    ),
+    "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "00000-01 – Synthetic Multimedia Seminar",
+      courseHtml,
+      "00000-01 Written exam: 12 January 2027 Course Notes Exercises Exercise 1 Abmelden",
+    ),
+    "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100010",
+      "03 - Course & Notes",
+      folderHtml,
+      "03 - Course Notes 00_Overview.pdf Abmelden",
+    ),
+    "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100020",
+      "04 - Exercises",
+      emptyFolderHtml,
+      "04 - Exercises This folder is empty Abmelden",
+    ),
+    "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+      "https://adam.unibas.ch/go/exc/100021",
+      "Exercise 1 – Retrieval summary",
+      exerciseHtml,
+      "Exercise 1 Retrieval summary Deadline: 22 September 2026 Abmelden",
+    ),
+  });
+  const provider = createBrowserProvider({ session, origin: "https://adam.unibas.ch" });
+
+  it("emits progress during the live page walk when onProgress is set", async () => {
+    const seen: Array<{ progress: number; total?: number; message?: string }> = [];
+    const news = await provider.listNews({
+      onProgress: async (update) => {
+        seen.push(update);
+      },
+    });
+    assert.ok(seen.length >= 1, `expected progress during news walk; got ${seen.length}`);
+    assert.ok(seen.every((step) => step.progress >= 1));
+    assert.ok(seen.every((step) => typeof step.message === "string" && /news:/i.test(step.message ?? "")));
+    assert.equal(news.items.some((item) => item.url.includes("/go/file/100011")), true);
+  });
+
+  it("stays silent when onProgress is omitted", async () => {
+    // Omit onProgress — walk must complete without requiring a reporter.
+    const news = await provider.listNews();
+    assert.equal(news.items.some((item) => item.url.includes("/go/file/100011")), true);
+  });
+
+  it("keeps AT4 honesty: HTTPS provenance, since filter, no Magazin invention", async () => {
+    const news = await provider.listNews();
+    assert.ok(news.items.length >= 1);
+    for (const item of news.items) {
+      assert.match(item.url, /^https:\/\/adam\.unibas\.ch\//);
+      assert.equal(item.provenance.provider, "browser");
+      assert.match(item.provenance.sourceUrl, /^https:\/\/adam\.unibas\.ch\//);
+      assert.equal(typeof item.provenance.fetchedAt, "string");
+    }
+    // Magazin nav is present in the dashboard fixture HTML but must not invent Magazin news.
+    assert.equal(news.items.some((item) => /Magazin/i.test(item.title) || item.url.includes("/go/root/")), false);
+
+    const recent = await provider.listNews({ since: "2026-09-01T00:00:00.000Z" });
+    assert.equal(recent.items.some((item) => item.url.includes("/go/file/100011")), true);
+
+    const future = await provider.listNews({ since: "2099-01-01T00:00:00.000Z" });
+    assert.deepEqual(future.items, []);
+  });
+});
