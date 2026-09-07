@@ -14,8 +14,9 @@ Living sequencing for University of Basel ADAM coverage. Community project — n
 | **Known** | In scope.md / shipped tools, and/or observed in a Course Member session |
 | **Live-unverified** | Tool or plan exists; not yet seen on live ADAM for this project |
 | **Unknown** | May exist on ADAM; no live sighting yet — **actively hunting** via deep walks, in-ADAM search, Magazin/public cats, ADAMtools (not “impossible”) |
+| **Wait-for-inventory** | Empty re-verify of enrolled courses found none; **parked** — not actively hunting; unlock when inventory/sighting appears |
 
-We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work.
+We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work. Some types (`frm` / `sess` / `webr`) are **wait-for-inventory** after empty enrolled re-verify rather than active hunt.
 
 ## Phase A — Harden shipped reads (fixture-first)
 
@@ -49,11 +50,13 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 
 After **live sighting** of each type (or honest synthetic fixture). Prefer resources for read-by-id; keep tool count tight.
 
+`frm` / `sess` / `webr`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting; wait for inventory.
+
 | Item | Confidence | Gate |
 | --- | --- | --- |
-| Forum thread read (`frm`) | Unknown → hunting | Live `frm` |
-| Session / timetable (`sess`) | Unknown → hunting | Live `sess` |
-| Web links (`webr`) | Unknown → hunting | Live `webr`; no generic fetch |
+| Forum thread read (`frm`) | Wait-for-inventory | Live `frm` (parked; not hunting) |
+| Session / timetable (`sess`) | Wait-for-inventory | Live `sess` (parked; not hunting) |
+| Web links (`webr`) | Wait-for-inventory | Live `webr`; no generic fetch (parked; not hunting) |
 | HTML / LM modules | Unknown → hunting | Live presence |
 | Postbox / MWA **list** | Unknown → hunting | Live labels; upload = Phase C |
 | ADAMtools `grp` / `svy` discover | Unknown → hunting | Live |
