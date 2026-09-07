@@ -10,7 +10,7 @@ This is a community project, not a University of Basel service.
 
 ![Demo](docs/demo/demo.gif)
 
-[Full demo (about a minute)](docs/demo/adam-mcp-demo.mp4)
+[YC marketing demo (~90s, chat UX)](docs/demo/adam-mcp-demo-yc.mp4) · [Legacy Inspector cut](docs/demo/adam-mcp-demo.mp4)
 
 ## What you can ask
 

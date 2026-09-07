@@ -1,0 +1,121 @@
+{
+  "news": [
+    {
+      "title": "New file in Course & Notes",
+      "summary": "00_Overview.pdf was added to 03 - Course & Notes.",
+      "url": "https://adam.unibas.ch/go/file/100011",
+      "courseRefId": "100001",
+      "updatedAt": "2026-09-01T08:00:00.000Z",
+      "author": "Fixture Author",
+      "freshness": "synthetic",
+      "provider": "fixture"
+    },
+    {
+      "title": "Seminar kickoff note",
+      "summary": "Welcome note posted before the overview PDF.",
+      "url": "https://adam.unibas.ch/go/crs/100001",
+      "courseRefId": "100001",
+      "updatedAt": "2026-08-20T10:00:00.000Z",
+      "author": "Fixture Author",
+      "freshness": "synthetic",
+      "provider": "fixture"
+    }
+  ],
+  "calendar": [
+    {
+      "title": "Faculty briefing (calendar SoT)",
+      "startsAt": "2026-09-15T12:00:00.000Z",
+      "endsAt": "2026-09-15T13:00:00.000Z",
+      "location": "Zoom (fixture)",
+      "source": "calendar",
+      "confidence": "explicit",
+      "objectRefId": "100001",
+      "url": "https://adam.unibas.ch/go/crs/100001"
+    },
+    {
+      "title": "12 January 2027, 10:00–12:00, Lecture Hall A",
+      "startsAt": "2027-01-12T09:00:00.000Z",
+      "source": "page",
+      "confidence": "explicit",
+      "objectRefId": "100001",
+      "url": "https://adam.unibas.ch/go/crs/100001"
+    },
+    {
+      "title": "Published: 1 September 2026",
+      "startsAt": "2026-09-01T00:00:00.000Z",
+      "source": "page",
+      "confidence": "inferred",
+      "objectRefId": "100021",
+      "url": "https://adam.unibas.ch/go/exc/100021"
+    },
+    {
+      "title": "Exercise 1 – Retrieval summary deadline",
+      "startsAt": "2026-09-22T21:59:00.000Z",
+      "source": "exc",
+      "confidence": "explicit",
+      "objectRefId": "100021",
+      "url": "https://adam.unibas.ch/go/exc/100021"
+    },
+    {
+      "title": "3 November 2026, 14:00–15:00 (room TBA)",
+      "startsAt": "2026-11-03T13:00:00.000Z",
+      "source": "page",
+      "confidence": "inferred",
+      "objectRefId": "100101",
+      "url": "https://adam.unibas.ch/go/crs/100101"
+    },
+    {
+      "title": "room TBA — date not yet announced for oral slot",
+      "source": "page",
+      "confidence": "inferred",
+      "objectRefId": "100101",
+      "url": "https://adam.unibas.ch/go/crs/100101"
+    },
+    {
+      "title": "Lab sheet 1 – Sorting warm-up deadline",
+      "startsAt": "2026-10-05T21:59:00.000Z",
+      "source": "exc",
+      "confidence": "explicit",
+      "objectRefId": "100121",
+      "url": "https://adam.unibas.ch/go/exc/100121"
+    }
+  ],
+  "search": [
+    {
+      "type": "crs",
+      "refId": "100001",
+      "title": "00000-01 – Synthetic Multimedia Seminar",
+      "url": "https://adam.unibas.ch/go/crs/100001"
+    }
+  ],
+  "page": {
+    "type": "crs",
+    "refId": "100001",
+    "title": "00000-01 – Synthetic Multimedia Seminar",
+    "url": "https://adam.unibas.ch/go/crs/100001",
+    "text": "Synthetic course description for local tests.\nPrepare the assigned reading before each session.\nWeek 3 reading: Fourier transforms and the DFT (see 00_Overview.pdf).\nWritten exam: 12 January 2027, 10:00–12:00, Lecture Hall A.\nAn empty exercises folder must not be read as 'no deadlines'.",
+    "inferredDates": [
+      {
+        "raw": "12 January 2027, 10:00–12:00, Lecture Hall A",
+        "iso": "2027-01-12T09:00:00.000Z",
+        "confidence": "explicit"
+      }
+    ]
+  },
+  "exercise": {
+    "type": "exc",
+    "refId": "100021",
+    "title": "Exercise 1 – Retrieval summary",
+    "url": "https://adam.unibas.ch/go/exc/100021",
+    "units": [
+      {
+        "title": "Unit 1",
+        "deadline": "2026-09-22T21:59:00.000Z",
+        "instructionText": "Write a one-page retrieval summary from the course notes. This connector cannot submit the exercise.",
+        "ownStatus": "none"
+      }
+    ],
+    "updatedAt": "2026-09-01T09:00:00.000Z",
+    "freshness": "synthetic"
+  }
+}
