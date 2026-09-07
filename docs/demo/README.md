@@ -8,3 +8,11 @@ npm run demo:record   # rebuilds docs/demo/adam-mcp-demo.mp4
 ```
 
 Shot list: [SHOTLIST.md](SHOTLIST.md). Working files: `docs/demo/out/` (gitignored).
+
+## YC Act B (extended)
+
+```bash
+npm run demo:record:yc
+```
+
+Shot list: [SHOTLIST-yc.md](SHOTLIST-yc.md). Narration: `narration.txt` / `narration.srt`.

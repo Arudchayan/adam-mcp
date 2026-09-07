@@ -27,6 +27,7 @@
     "setup": "npm run build && node scripts/print-mcp-config.mjs",
     "demo": "node docs/demo/serve.mjs",
     "demo:record": "node docs/demo/record.mjs",
+    "demo:record:yc": "node docs/demo/record-yc.mjs",
     "audit": "npm audit --omit=dev --audit-level=high"
   },
   "engines": {

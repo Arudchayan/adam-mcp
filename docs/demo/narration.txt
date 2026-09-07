@@ -1,0 +1,9 @@
+So I built adam-mcp — ADAM, for the AI tools you already use.
+
+Ask what changed. Pull every deadline. Search the reading. Open the page.
+
+Same ADAM — seconds, not a scavenger hunt.
+
+Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.
+
+Open source. github.com/Arudchayan/adam-mcp.
