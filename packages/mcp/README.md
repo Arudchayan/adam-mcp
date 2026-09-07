@@ -1,6 +1,10 @@
 # adam-mcp
 
-MCP server for University of Basel ADAM. Clone the repo and follow the root [README](../../README.md). Host JSON: [docs/setup.md](../../docs/setup.md).
+MCP server for University of Basel ADAM.
+
+Once published, install with `npx -y adam-mcp` or `npm install -g adam-mcp`. The pack is self-contained (`dist/adam-mcp.mjs` bundles workspace packages).
+
+For host JSON snippets and Chrome login helpers, clone the repo and follow the root [README](../../README.md) / [docs/setup.md](../../docs/setup.md):
 
 ```bash
 npm run setup

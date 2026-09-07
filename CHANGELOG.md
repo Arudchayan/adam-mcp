@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-07
+
 ### Added
 
 - Soft backlog A2-news-browser: browser `listNews` `onProgress` during live page walk (fixture parity)
@@ -18,13 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI status badge on the README
 - Expanded [CONTRIBUTING.md](CONTRIBUTING.md) (CoC, fixture-first PRs, setup, issue routing, review rules)
 - Feature request issue template for Uni Basel ADAM workflows
-
-## [0.1.0] - 2026-09-05
-
-GitHub Release / `v0.1.0` tag pending Security + Leonidas (not cut yet).
-
-### Added
-
 - Local stdio MCP server for University of Basel ADAM (community project)
 - Fixture catalog provider and optional Chrome `--browser` session path
 - Tools: course/folder/page/file/search/calendar/news/exercise/session surfaces, plus prompts (`what_changed`, `prepare_my_week`, `study_this`)
