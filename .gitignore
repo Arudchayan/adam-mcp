@@ -23,3 +23,10 @@ chrome-profile/
 /packages/mcp/NOTICE
 docs/demo/out/
 docs/demo/*.webm
+
+# demo intermediates (never ship)
+docs/demo/work/
+docs/demo/work-*/
+docs/demo/**/raw.mp4
+docs/demo/**/probe-*.png
+docs/demo/chat-demo/out/

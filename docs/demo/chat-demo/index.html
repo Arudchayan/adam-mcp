@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Assistant · adam-mcp</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">◆</div>
+        <div>
+          <div class="brand-name">Assist</div>
+          <div class="brand-sub">demo shell</div>
+        </div>
+      </div>
+      <div class="nav-label">Chats</div>
+      <div class="nav-item active">
+        <span class="dot"></span>
+        ADAM study week
+      </div>
+      <div class="nav-item muted">New chat</div>
+      <div class="sidebar-foot">
+        <div class="mcp-pill">
+          <span class="mcp-led"></span>
+          <div>
+            <div class="mcp-title">adam-mcp</div>
+            <div class="mcp-sub">connected · fixture demo</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="top-title">ADAM study week</div>
+        <div class="top-meta">
+          <span class="badge">fixture catalog</span>
+          <span class="badge soft">local-first</span>
+        </div>
+      </header>
+
+      <section id="messages" class="messages" aria-live="polite"></section>
+
+      <footer class="composer">
+        <div class="composer-box">
+          <div id="input-mirror" class="input-mirror"></div>
+          <div class="composer-hint">Ask about courses, news, deadlines…</div>
+          <div class="composer-tools">
+            <span class="tool-hint">tools via adam-mcp</span>
+            <button class="send-btn" type="button" aria-label="Send">↑</button>
+          </div>
+        </div>
+        <div class="disclaimer">Community Uni Basel student tool · not a University product · demo uses synthetic fixture data</div>
+      </footer>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
