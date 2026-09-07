@@ -32,7 +32,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
 | A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
-| Release tag / npm | Known | Held on SECURITY.md checklist |
+| Release tag / npm | Known | Done v0.1.0 |
 
 ## Phase A-thin — must-ship reads still incomplete
 
@@ -43,7 +43,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | News reliability (AT4) | Known + live (thin) | Done (PR #12 / `b3bb0c0`) — extend `adam_list_news`; news-on/off |
 | `adam_get_exercise` browser path (AT5) | Live-unverified | Done (PR #13 / `ed40c2c`) — labeled synthetic `100021` |
 | Calendar vs page-inferred dates (AT6) | Known (partial) | Done (PR #14 / `16f08c8`) — unlabeled→page; dedup exc>calendar>page |
-| Soft backlog A2-news-browser (`listNews` onProgress) | Known | Done (this PR) — browser live-walk progress parity with fixture |
+| Soft backlog A2-news-browser (`listNews` onProgress) | Known | Done (PR #16 / `5593840`) — browser live-walk progress parity with fixture |
 
 ## Phase B — valuable unread surfaces (reads only)
 

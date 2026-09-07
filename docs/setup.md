@@ -22,7 +22,7 @@ npm run login
 
 Sign in to ADAM in the Chrome window and leave it open. `npm run status` checks the session.
 
-The package is not on npm. Use the printed `node …/adam-mcp.mjs` path, not `npx adam-mcp`.
+After publish of `adam-mcp` 0.1.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
 
 ## Cursor, Claude Desktop, Windsurf
 

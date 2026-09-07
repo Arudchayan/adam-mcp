@@ -26,6 +26,21 @@ Answers include canonical ADAM URLs (`https://adam.unibas.ch/go/...`).
 
 You need Node.js 20+ and Google Chrome.
 
+### From the registry (after publish)
+
+`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are only `@modelcontextprotocol/server`, `playwright-core`, and `zod`. Once `adam-mcp@0.1.0` is published:
+
+```bash
+npx -y adam-mcp
+# or
+npm install -g adam-mcp
+adam-mcp
+```
+
+Default without `--browser` is the synthetic fixture catalog. For live ADAM, pass `--browser` and keep a signed-in Chrome session (see [docs/setup.md](docs/setup.md)).
+
+### Clone (setup helpers + host snippets)
+
 ```bash
 git clone https://github.com/Arudchayan/adam-mcp.git
 cd adam-mcp
@@ -43,8 +58,6 @@ Restart the client, then ask:
 > What courses am I in? Include the ADAM URL for each.
 
 Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code): [docs/setup.md](docs/setup.md).
-
-The package is not on npm yet. Clone is the install path.
 
 ## How it works
 
