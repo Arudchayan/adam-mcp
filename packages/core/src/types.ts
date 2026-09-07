@@ -135,7 +135,7 @@ export type ProgressReporter = (update: ProgressUpdate) => void | Promise<void>;
 export type ListOptions = {
   cursor?: string;
   limit?: number;
-  /** Optional long-walk progress (search / calendar / extract). */
+  /** Optional long-walk progress (search / calendar / extract / news). */
   onProgress?: ProgressReporter;
 };
 

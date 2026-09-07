@@ -19,6 +19,7 @@ import {
   type NewsItem,
   type PageContent,
   type Paginated,
+  type ProgressReporter,
   type RefId,
 } from "adam-core";
 import { defaultOrigin } from "./config.ts";
@@ -258,7 +259,8 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
-    const pages = await this.collectLivePages();
+    // A2-news-browser: long enrolled walk reports progress when onProgress is set (fixture parity).
+    const pages = await this.collectLivePages(options?.onProgress);
     const items = uniqueNews(pages.flatMap((page) => page.catalog.news));
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     const filtered = items.filter((item) => {
@@ -268,9 +270,21 @@ export class BrowserAdamProvider implements AdamProvider {
     return paginate(filtered, options);
   }
 
-  private async collectLivePages(): Promise<LivePage[]> {
+  private async collectLivePages(onProgress?: ProgressReporter): Promise<LivePage[]> {
+    const report = async (progress: number) => {
+      if (!onProgress) {
+        return;
+      }
+      await onProgress({
+        progress,
+        total: MAX_LIVE_PAGES,
+        message: `news: page ${progress}/${MAX_LIVE_PAGES}`,
+      });
+    };
+
     const home = await this.openAuthorized(this.origin);
     const pages: LivePage[] = [{ snapshot: home, catalog: extractCatalog(home, now()) }];
+    await report(pages.length);
     const seen = new Set<string>(pages[0]?.catalog.current?.refId ? [pages[0].catalog.current.refId] : []);
     const queue: Array<{ type: AdamObjectType; refId: RefId }> = [];
 
@@ -303,6 +317,7 @@ export class BrowserAdamProvider implements AdamProvider {
         const snapshot = await this.openAuthorized(objectUrl(next.type, next.refId, this.origin));
         const catalog = extractCatalog(snapshot, now());
         pages.push({ snapshot, catalog });
+        await report(pages.length);
         if (catalog.current?.type === "crs" || catalog.current?.type === "fold") {
           for (const child of catalog.objects) {
             enqueue(child.type, child.refId);
