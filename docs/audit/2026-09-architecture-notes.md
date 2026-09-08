@@ -39,7 +39,7 @@ Full src file listing is in section 2.4.
 ### 1.3 Auth and live adapter model
 
 See docs/adr/0001-browser-session.md and packages/provider-browser/src/*.
-Dedicated headed browser profile; attach over localhost debug port file; SerialQueue + rate limits; HTTPS host allowlist; download cancel policy; login-page detection maps to unauthorized; status tools omit secrets; redaction on tool text (packages/core/src/redaction.ts). No proactive expiry timer — student re-runs login when unauthorized appears.
+Dedicated headed browser profile; attach over localhost debug port file; SerialQueue, no nav quota throw (ADR 0004/0005); HTTPS host allowlist; download cancel policy; login-page detection maps to unauthorized; status tools omit secrets; redaction on tool text and structured payloads (packages/core/src/redaction.ts). No proactive expiry timer — student re-runs login when unauthorized appears.
 
 ### 1.4 Provider interface
 
@@ -49,7 +49,7 @@ Wiring: ADAM_PROVIDER or --browser in packages/mcp/src/providers.ts. Default fix
 
 ### 1.5 Live scrape path (fragility hotspot)
 
-packages/provider-browser/src/extract.ts parses page snapshots (aria labels, link collection, news/date regexes, /go/{type}/{id} refs). Search/calendar/news walks capped at MAX_LIVE_PAGES=12 in browser-provider.ts. ADR 0001 notes DOM selectors will break.
+packages/provider-browser/src/extract.ts parses page snapshots (aria labels, link collection, news/date regexes, /go/{type}/{id} refs). Search/calendar/news walks capped at MAX_LIVE_PAGES=48 in browser-provider.ts. ADR 0001 notes DOM selectors will break.
 
 ---
 
@@ -115,8 +115,9 @@ packages/provider-fixture/src/
 packages/provider-browser/src/
   allowlist.ts, browser-provider.ts, cdp.ts, config.ts, download-guard.ts,
   extract.ts, index.ts, index.test.ts, is-main.ts, login-cli.ts,
-  memory-session.ts, playwright-session.ts, rate-limit.ts, safety.test.ts,
-  serial-queue.ts, session-types.ts, status-cli.ts
+  memory-session.ts, playwright-session.ts, safety.test.ts,
+  serial-queue.ts, session-feedback.ts, session-feedback.test.ts,
+  session-handoff.ts, session-handoff.test.ts, session-types.ts, status-cli.ts
 
 packages/provider-soap/src/   index.ts, index.test.ts
 packages/provider-html/src/   index.ts, index.test.ts

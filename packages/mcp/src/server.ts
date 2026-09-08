@@ -298,7 +298,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(listed, null, 2),
+            text: redactText(JSON.stringify(listed, null, 2)),
           },
         ],
       };

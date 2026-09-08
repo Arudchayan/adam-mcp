@@ -15,9 +15,11 @@ slow and flaky on ILIAS 10, and timeouts were swallowed into `[]`. Separately,
 - Add optional `listingState: "ok" | "empty" | "unknown"` (+ optional
   `listingSignals`, `notice`) on `Paginated<T>`. Page-backed lists must set it;
   walks (`search` / `calendar` / `news`) stay best-effort `Paginated`.
-  - `ok`: list finished, `items.length >= 1` (may still have `nextCursor`).
+  - `ok`: source listing hydrated (usually `items.length >= 1`; a later cursor
+    page may be `items: []` with `totalHint > 0` and no `nextCursor`).
   - `empty`: list finished, zero children (ADAM empty copy or finished item
-    list with zero rows). `items` must be `[]`, `totalHint: 0`.
+    list with zero rows). `items` must be `[]`, `totalHint: 0`. Only valid on
+    the first page (no cursor).
   - `unknown`: page opened, list not trustworthy. May carry partial items.
     Never claim "folder is empty". Omit `totalHint`.
   - `not_found` stays an error, never a `listingState`.

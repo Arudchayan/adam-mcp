@@ -398,5 +398,15 @@ describe("Fixture populated folder", () => {
     assert.notDeepEqual(children.items, []);
     assert.equal(children.listingState, "ok");
   });
+
+  it("listFiles marks file-less empties empty and file hits ok", async () => {
+    const provider = createFixtureProvider();
+    const notes = await provider.listFiles("100010");
+    assert.ok(notes.items.some((item) => item.refId === "100011"));
+    assert.equal(notes.listingState, "ok");
+    const empty = await provider.listFiles("100020");
+    assert.deepEqual(empty.items, []);
+    assert.equal(empty.listingState, "empty");
+  });
 });
 

@@ -471,12 +471,7 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(landed.type, landed.refId);
     }
     if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
-      // Folder GUIs carry ref_id=PARENT&item_ref_id=CHILD in the URL while showing
-      // the parent container. Accept when the parent ref_id matches the request.
-      const parentRef = snapshot.url.match(/[?&]ref_id=(\d+)/i)?.[1];
-      if (parentRef !== requested.refId) {
-        throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
-      }
+      throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
     }
     if (isLoginSnapshot(snapshot)) {
       throw new AdamError(

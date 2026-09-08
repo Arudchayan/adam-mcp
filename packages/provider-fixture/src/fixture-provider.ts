@@ -103,11 +103,22 @@ export class FixtureAdamProvider implements AdamProvider {
             : [],
         );
     const page = paginate(nested, options);
-    return withListingState(page, nested.length > 0 ? "ok" : "empty", {
-      contentItemCount: nested.length,
-      emptyCopy: nested.length === 0,
-      chromeOnly: false,
-    });
+    // Files filtered to zero while the container has children is complete + [],
+    // not an empty container (ADR 0005).
+    const hydrated = resolveChildren(refId).length;
+    const state = nested.length > 0 || hydrated > 0 ? "ok" : "empty";
+    return withListingState(
+      page,
+      state,
+      {
+        contentItemCount: nested.length,
+        emptyCopy: nested.length === 0 && hydrated === 0,
+        chromeOnly: false,
+      },
+      state === "empty"
+        ? "Listed successfully; this folder has no files. Not a failure. Not 'no deadlines'."
+        : undefined,
+    );
   }
 
   async getFile(refId: RefId): Promise<FileObject> {

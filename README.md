@@ -81,7 +81,9 @@ ADAM MCP uses a local Chrome session for ADAM authentication. Default without `-
 | `adam_search` | Title matches in enrolled objects |
 | `adam_list_calendar` / `adam_list_news` | Dates and news from pages you can see |
 | `adam_get_exercise` | Exercise text and deadline; no submit |
-| `adam_login` / `adam_session_status` | Chrome session |
+| `adam_login` / `adam_session_status` | Chrome session (`--browser` only; fixture hides them) |
+
+Listings carry `listingState: ok | empty | unknown` — `empty` means the folder listed and has nothing (not a failure, not "no deadlines"); `unknown` means the list did not load, do not call it empty.
 
 Prompts: `what_changed`, `prepare_my_week`, `study_this`.
 

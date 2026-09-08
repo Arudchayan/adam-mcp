@@ -20,10 +20,11 @@
 - **Ban:** grepping agent transcripts for durable policy or gates.
 - Prefer committed docs / AGENTS.md; this handoff is continuity only.
 
-## Status (2026-09-06)
+## Status (2026-09-09)
 
-- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`), PR #8 **A1/A2/A6** (`e52d947`), PR #9 **A3/A4** (`a5e1fd6`), PR #10 **AT1/AT2** (`533d5c5`), PR #11 **AT3** (`01069ef`), PR #12 **AT4** (`b3bb0c0`), PR #13 **AT5** (`ed40c2c`).
-- **In flight:** **Phase A-thin AT6** (calendar vs page-inferred dates). **Next:** remaining A-thin; A5 deferred.
+- **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`), PR #8 **A1/A2/A6** (`e52d947`), PR #9 **A3/A4** (`a5e1fd6`), PR #10 **AT1/AT2** (`533d5c5`), PR #11 **AT3** (`01069ef`), PR #12 **AT4** (`b3bb0c0`), PR #13 **AT5** (`ed40c2c`), PR #14 **AT6** (`16f08c8`), PR #16 A2-news-browser (`5593840`), PR #22 session-headless-handoff (`0f00720`, ADRs 0003–0005).
+- **Live:** 2026-09-09 pass recorded in capabilities.md — course listing `ok`, MM folds `unknown`, no live file/exc objects (pre-semester). Re-verify after HS 2026 uploads.
+- **Next:** perf follow-ups (slim snapshots, shared walk memo, unknown fast-fail); A5 deferred.
 - Lean review: QA Lead → MCP Architect → Domain only if semantics change → Lingxi/Leonidas merge.
 
 ## Eng group
@@ -47,5 +48,5 @@ Retired (do not recreate): Researchy, Security, OSS/DX, Projects Manager.
 
 Eng group 2a035929-3c85-4322-a610-8ee697252c53 max 6 — rebuild without dead members.
 
-Status 2026-09-06: through PR #13 AT5 (`ed40c2c`) merged; Phase A-thin AT6 in flight. A5 deferred. Read AGENTS.md + docs/qa/ before acting.
+Status 2026-09-09: through PR #22 session-headless-handoff (ADRs 0003–0005) merged to main; live pass 2026-09-09 in capabilities.md. A5 deferred. Read AGENTS.md + docs/qa/ before acting.
 ```
