@@ -82,10 +82,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       assertUrlAllowed(target);
       const page = await this.ensurePage();
       await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      await page.waitForLoadState("load").catch(() => undefined);
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+      await delay(1_500);
       await page
         .waitForFunction(
           `() => {
-            const items = document.querySelectorAll(".il-item, .il-item-title, a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']");
+            const items = document.querySelectorAll(
+              ".il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']"
+            );
             const text = document.body ? document.body.innerText : "";
             const empty = /this folder is empty|dieser ordner ist leer/i.test(text);
             return items.length > 0 || empty;
@@ -362,10 +367,29 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   private async readSnapshot(page: Page): Promise<PageSnapshot> {
     await this.rejectIfBlocked(page);
-    const html = capText(await page.content(), MAX_HTML_BYTES);
-    const text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
+    let html = capText(await page.content(), MAX_HTML_BYTES);
+    let text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
     const title = await page.title();
-    const links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+    let links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) {
+        continue;
+      }
+      try {
+        const frameText = await frame.locator("body").innerText().catch(() => "");
+        if (frameText) {
+          text = capText(`${text}\n${frameText}`, MAX_PAGE_TEXT * 2);
+        }
+        const frameHtml = await frame.content().catch(() => "");
+        if (frameHtml) {
+          html = capText(`${html}\n${frameHtml}`, MAX_HTML_BYTES);
+        }
+        const frameLinks = (await frame.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+        links = links.concat(frameLinks);
+      } catch {
+        continue;
+      }
+    }
     return { url: page.url(), title, html, text, links };
   }
 
