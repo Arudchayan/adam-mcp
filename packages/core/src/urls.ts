@@ -17,6 +17,14 @@ const CMD_CLASS_TO_TYPE: Record<string, AdamObjectType> = {
   ilobjfilegui: "file",
   ilobjbloggui: "blog",
   ilobjrootfoldergui: "root",
+  ilobjexercisegui: "exc",
+  ilexercisehandlergui: "exc",
+  ilobjtestgui: "tst",
+  iltestplayergui: "tst",
+  iltestoutputgui: "tst",
+  ilobjforumgui: "frm",
+  ilobjlinkresourcegui: "webr",
+  ilobjweblinkgui: "webr",
 };
 
 export function isAdamObjectType(value: string): value is AdamObjectType {
@@ -90,10 +98,14 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
 
     const refMatch = url.search.match(REF_ID_QUERY);
     if (refMatch) {
-      const cmdClass = url.searchParams.get("cmdClass")?.toLowerCase() ?? "";
+      const classes = url.searchParams.getAll("cmdClass").map((value) => value.toLowerCase());
+      const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]);
+      const itemRef = url.searchParams.get("item_ref_id");
+      const child =
+        itemRef && /^\d+$/.test(itemRef) && itemRef !== "0" && itemRef !== refMatch[1] ? itemRef : refMatch[1];
       return {
-        type: CMD_CLASS_TO_TYPE[cmdClass] ?? "unknown",
-        refId: refMatch[1],
+        type: (mapped ? CMD_CLASS_TO_TYPE[mapped] : undefined) ?? "unknown",
+        refId: child,
       };
     }
   } catch {

@@ -199,6 +199,36 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(children.items.some((item) => item.refId === "100020"), true);
   });
 
+  it("lists folder children via /go/fold when type is known", async () => {
+    const children = await provider.listChildren("100010", { type: "fold" });
+    assert.equal(children.items.some((item) => item.refId === "100011"), true);
+  });
+
+  it("returns course children from the same /go/crs snapshot", async () => {
+    const course = await provider.getCourse("100001");
+    const children = (course as { children?: Array<{ refId: string }> }).children ?? [];
+    assert.equal(children.some((item) => item.refId === "100010"), true);
+    assert.equal(children.some((item) => item.refId === "100021"), true);
+  });
+
+  it("throws not_found on ADAM failure pages", async () => {
+    const locked = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/999999": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/999999",
+          "Failure Message",
+          "<main><h1>Failure Message</h1><p>The requested page could not be found.</p></main>",
+          "Failure Message The requested page could not be found.",
+        ),
+      }),
+    });
+    await assert.rejects(
+      () => locked.listChildren("999999", { type: "fold" }),
+      (error: unknown) => error instanceof AdamError && error.code === "not_found",
+    );
+  });
+
   it("searches enrolled course and folder titles, not every dashboard card", async () => {
     const overview = await provider.search("Overview");
     assert.equal(overview.items.some((item) => item.refId === "100011"), true);
@@ -299,7 +329,7 @@ describe("BrowserAdamProvider with a memory session", () => {
         ),
       }),
     });
-    await assert.rejects(() => exams.readPage("900001"), (error: unknown) => {
+    await assert.rejects(() => exams.readPage("900001", { type: "tst" }), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "unsupported_type");
       return true;

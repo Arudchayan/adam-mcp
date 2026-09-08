@@ -38,6 +38,7 @@ export {
   type FileObject,
   type InferredDate,
   type ListOptions,
+  type ObjectOpenOptions,
   type NewsItem,
   type PageContent,
   type Paginated,

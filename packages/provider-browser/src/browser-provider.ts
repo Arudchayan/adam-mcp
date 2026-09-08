@@ -17,13 +17,21 @@ import {
   type FileObject,
   type ListOptions,
   type NewsItem,
+  type ObjectOpenOptions,
   type PageContent,
   type Paginated,
   type ProgressReporter,
   type RefId,
 } from "adam-core";
 import { defaultOrigin } from "./config.ts";
-import { extractCatalog, exerciseDeadlineFromPage, isLoggedInSnapshot, isLoginSnapshot, type ExtractedCatalog } from "./extract.ts";
+import {
+  extractCatalog,
+  exerciseDeadlineFromPage,
+  isAdamFailurePage,
+  isLoggedInSnapshot,
+  isLoginSnapshot,
+  type ExtractedCatalog,
+} from "./extract.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
@@ -33,7 +41,9 @@ export type BrowserProviderOptions = {
 };
 
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
-const MAX_LIVE_PAGES = 12;
+const MAX_LIVE_PAGES = 48;
+const MAX_COURSE_CHILDREN = 100;
+const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "exc", "cat"];
 
 type LivePage = {
   snapshot: PageSnapshot;
@@ -45,6 +55,7 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly origin: string;
   private sessionHandle: AdamBrowserSession | undefined;
   private readonly injected: boolean;
+  private readonly typeByRefId = new Map<RefId, AdamObjectType>();
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -73,26 +84,32 @@ export class BrowserAdamProvider implements AdamProvider {
     return paginate(courses, options);
   }
 
-  async getCourse(refId: RefId): Promise<AdamObject> {
-    const snapshot = await this.openAuthorized(objectUrl("crs", refId, this.origin));
+  async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
+    const snapshot = await this.openObject(refId, options?.type ?? "crs");
     const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
     if (!course) {
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a course in the browser session.`);
     }
-    return course;
+    const children = uniqueByRef(
+      catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type)),
+    ).slice(0, MAX_COURSE_CHILDREN);
+    return { ...course, children };
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
-    const snapshot = await this.openAuthorized(objectUrl("unknown", refId, this.origin));
+    const snapshot = await this.openObject(refId, options?.type);
     const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
     return paginate(children, options);
   }
 
-  async readPage(refId: RefId): Promise<PageContent> {
-    const snapshot = await this.openAuthorized(objectUrl("unknown", refId, this.origin));
+  async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
+    const snapshot = await this.openObject(refId, options?.type);
     const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
       throw new AdamError("not_found", `No page could be read for ref_id ${refId}.`);
@@ -105,27 +122,53 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
-    const snapshot = await this.openAuthorized(objectUrl("unknown", refId, this.origin));
+    const snapshot = await this.openObject(refId, options?.type);
     const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
     const direct = catalog.files.filter((item) => item.refId !== refId);
     const nested = catalog.objects.filter((item): item is FileObject => item.type === "file");
     return paginate(direct.length > 0 ? direct : nested, options);
   }
 
-  async getFile(refId: RefId): Promise<FileObject> {
-    const snapshot = await this.openAuthorized(objectUrl("file", refId, this.origin));
-    const catalog = extractCatalog(snapshot, now());
-    const file =
-      catalog.files.find((item) => item.refId === refId) ??
-      (catalog.current?.type === "file" ? { ...catalog.current, type: "file" as const } : undefined);
-    if (!file) {
+  async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
+    try {
+      const snapshot = await this.openObject(refId, options?.type ?? "file");
+      const catalog = extractCatalog(snapshot, now());
+      this.rememberTypes(catalog);
+      const file =
+        catalog.files.find((item) => item.refId === refId) ??
+        (catalog.current?.type === "file" && catalog.current.refId === refId
+          ? { ...catalog.current, type: "file" as const }
+          : undefined);
+      if (file) {
+        return file;
+      }
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a file.`);
+    } catch (error) {
+      if (isDownloadNavigationError(error)) {
+        return {
+          type: "file",
+          refId,
+          title: refId,
+          url: objectUrl("file", refId, this.origin),
+          breadcrumb: [],
+          provenance: {
+            sourceUrl: objectUrl("file", refId, this.origin),
+            fetchedAt: now(),
+            provider: "browser",
+            freshness: "live-browser-session",
+          },
+        };
+      }
+      throw error;
     }
-    return file;
   }
 
-  async extractFileText(refId: RefId, options?: { maxPages?: number }): Promise<FileExtract> {
-    const file = await this.getFile(refId);
+  async extractFileText(
+    refId: RefId,
+    options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
+  ): Promise<FileExtract> {
+    const file = await this.getFile(refId, options);
     const origin = this.origin.replace(/\/$/, "");
     const candidates = uniqueUrls([`${origin}/goto_adam_file_${refId}_download.html`, file.url]);
     let sawHtml = false;
@@ -155,9 +198,10 @@ export class BrowserAdamProvider implements AdamProvider {
     throw new AdamError("not_found", `Could not fetch extractable bytes for file ${refId}.`);
   }
 
-  async getExercise(refId: RefId): Promise<ExerciseObject> {
-    const snapshot = await this.openAuthorized(objectUrl("exc", refId, this.origin));
+  async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
+    const snapshot = await this.openObject(refId, options?.type ?? "exc");
     const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
       throw new AdamError("not_found", `No exercise could be read for ref_id ${refId}.`);
@@ -330,6 +374,64 @@ export class BrowserAdamProvider implements AdamProvider {
     return pages;
   }
 
+  private rememberTypes(catalog: ExtractedCatalog): void {
+    if (catalog.current && catalog.current.type !== "unknown") {
+      this.typeByRefId.set(catalog.current.refId, catalog.current.type);
+    }
+    for (const item of catalog.objects) {
+      if (item.type !== "unknown") {
+        this.typeByRefId.set(item.refId, item.type);
+      }
+    }
+  }
+
+  private async openObject(refId: RefId, typeHint?: AdamObjectType): Promise<PageSnapshot> {
+    if (!/^\d+$/.test(refId)) {
+      throw new AdamError("not_found", "ADAM ref_id must contain digits only.");
+    }
+    const preferred = typeHint && typeHint !== "unknown" ? typeHint : this.typeByRefId.get(refId);
+    const tried = new Set<AdamObjectType>();
+    let lastNotFound: AdamError | undefined;
+
+    const tryType = async (type: AdamObjectType): Promise<PageSnapshot | undefined> => {
+      if (tried.has(type)) {
+        return undefined;
+      }
+      tried.add(type);
+      assertReadableObjectType(type, refId);
+      try {
+        const snapshot = await this.openAuthorized(objectUrl(type, refId, this.origin));
+        const landed = parseAdamRef(snapshot.url);
+        if (landed && landed.type !== "unknown") {
+          this.typeByRefId.set(refId, landed.type);
+        } else {
+          this.typeByRefId.set(refId, type);
+        }
+        return snapshot;
+      } catch (error) {
+        if (error instanceof AdamError && error.code === "not_found") {
+          lastNotFound = error;
+          return undefined;
+        }
+        throw error;
+      }
+    };
+
+    if (preferred) {
+      const hit = await tryType(preferred);
+      if (hit) {
+        return hit;
+      }
+    }
+    for (const type of TYPE_PROBE_ORDER) {
+      const hit = await tryType(type);
+      if (hit) {
+        return hit;
+      }
+    }
+    throw lastNotFound ?? new AdamError("not_found", `ADAM did not return an object for ${refId}.`);
+  }
+
   private session(): AdamBrowserSession {
     if (!this.sessionHandle) {
       this.sessionHandle = createPlaywrightSession({ origin: this.origin });
@@ -343,9 +445,13 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(parsed.type, parsed.refId);
     }
     const snapshot = await this.session().open(url);
+    const requested = parseAdamRef(url);
     const landed = parseAdamRef(snapshot.url);
     if (landed) {
       assertReadableObjectType(landed.type, landed.refId);
+    }
+    if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
+      throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
     }
     if (isLoginSnapshot(snapshot)) {
       throw new AdamError(
@@ -407,7 +513,11 @@ function uniqueNews(items: NewsItem[]): NewsItem[] {
 }
 
 function looksMissing(snapshot: PageSnapshot): boolean {
-  return /object not found|kein objekt|keine berechtigung|permission denied/i.test(snapshot.text);
+  return isAdamFailurePage(snapshot);
+}
+
+function isDownloadNavigationError(error: unknown): boolean {
+  return error instanceof Error && /download is starting|net::ERR_ABORTED|Download is starting/i.test(error.message);
 }
 
 function filterRange(events: CalendarEvent[], from?: string, to?: string): CalendarEvent[] {

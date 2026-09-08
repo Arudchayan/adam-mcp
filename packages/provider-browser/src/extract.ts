@@ -200,7 +200,9 @@ export function inferDates(text: string): InferredDate[] {
  * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
  */
 export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
-  const labeled = [...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*:\s*([^\n.;]{3,80})/gi)];
+  const labeled = [
+    ...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
+  ];
   if (labeled.length === 0) {
     return undefined;
   }
@@ -410,4 +412,30 @@ function cleanTitle(value: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). */
+export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" | "html">): boolean {
+  const title = snapshot.title ?? "";
+  const text = snapshot.text ?? "";
+  const haystack = `${title}\n${text}`;
+  if (/the requested page could not be found/i.test(haystack)) {
+    return true;
+  }
+  if (/failure message/i.test(title) && /could not be found|nicht gefunden/i.test(haystack)) {
+    return true;
+  }
+  if (/die angeforderte seite konnte nicht gefunden werden/i.test(haystack)) {
+    return true;
+  }
+  if (/objekt konnte nicht gefunden/i.test(haystack) || /\bobject not found\b/i.test(haystack) || /\bkein objekt\b/i.test(haystack)) {
+    return true;
+  }
+  if (
+    (/keine berechtigung/i.test(haystack) || /permission denied/i.test(haystack)) &&
+    (/failure message/i.test(haystack) || /fehler/i.test(title) || /nicht gefunden/i.test(haystack))
+  ) {
+    return true;
+  }
+  return false;
 }

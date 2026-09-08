@@ -9,14 +9,11 @@ import {
   defaultOrigin,
   defaultProfileDir,
   headedByDefault,
-  maxNavigationsPerMinute,
-  minNavigationGapMs,
 } from "./config.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { MAX_HTML_BYTES, MAX_PAGE_TEXT, capText, isLoggedInSnapshot } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
 import { injectableCookies } from "./session-handoff.ts";
-import { NavigationLimiter } from "./rate-limit.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
@@ -53,7 +50,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private attachedBrowser: Browser | undefined;
   private ownsChrome = false;
   private readonly queue = new SerialQueue();
-  private readonly limiter: NavigationLimiter;
   private readonly origin: string;
   private readonly profileDir: string;
   private headed: boolean;
@@ -66,10 +62,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     this.headed = options.headed ?? headedByDefault();
     this.feedbackHoldMs = options.feedbackHoldMs ?? DEFAULT_FEEDBACK_HOLD_MS;
     this.hideWindowAfterFeedback = options.hideWindowAfterFeedback ?? true;
-    this.limiter = new NavigationLimiter({
-      gapMs: minNavigationGapMs(),
-      perMinute: maxNavigationsPerMinute(),
-    });
   }
 
   async status(): Promise<SessionStatus> {
@@ -77,7 +69,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const page = await this.ensurePage();
       if (page.url() === "about:blank" || page.url() === "") {
         assertUrlAllowed(this.origin);
-        await this.limiter.take();
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
       }
       const snapshot = await this.readSnapshot(page);
@@ -89,9 +80,11 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      await this.limiter.take();
       const page = await this.ensurePage();
       await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      await page
+        .waitForSelector("h1, .il-item, a[href*='/go/'], a[href*='ref_id=']", { timeout: 8_000 })
+        .catch(() => undefined);
       await this.rejectIfBlocked(page);
       return this.readSnapshot(page);
     });
@@ -100,8 +93,14 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   async loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS): Promise<SessionStatus> {
     return this.serialize(async () => {
       this.headed = true;
-      const page = await this.ensurePage();
-      await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      let page = await this.ensurePage();
+      try {
+        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      } catch {
+        await this.closeContext();
+        page = await this.ensurePage();
+        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      }
       await this.rejectIfBlocked(page);
       let snapshot: PageSnapshot | undefined = await this.readSnapshot(page);
       if (isLoggedInSnapshot(snapshot)) {
@@ -143,7 +142,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      await this.limiter.take();
       const page = await this.ensurePage();
       const response = await page.context().request.get(target, { timeout: 45_000, maxRedirects: 5 });
       assertUrlAllowed(response.url());
@@ -258,7 +256,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       this.page = this.context.pages()[0] ?? (await this.context.newPage());
       attachDownloadGuard(this.page);
       assertUrlAllowed(this.origin);
-      await this.limiter.take();
       await this.page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
       const snapshot = await this.readSnapshot(this.page);
       if (!isLoggedInSnapshot(snapshot)) {
@@ -280,8 +277,26 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   }
 
   private async ensurePage(): Promise<Page> {
-    if (this.page && this.context) {
+    if (this.page && this.context && !this.page.isClosed()) {
       return this.page;
+    }
+    this.page = undefined;
+    if (this.context) {
+      try {
+        const stillOpen = this.context.pages().find((open) => !open.isClosed());
+        if (stillOpen) {
+          this.page = stillOpen;
+          attachDownloadGuard(this.page);
+          return this.page;
+        }
+        this.page = await this.context.newPage();
+        attachDownloadGuard(this.page);
+        return this.page;
+      } catch {
+        this.context = undefined;
+        this.attachedBrowser = undefined;
+        this.ownsChrome = false;
+      }
     }
 
     const attached = await this.tryAttachCdp();

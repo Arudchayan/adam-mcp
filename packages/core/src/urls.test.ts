@@ -25,6 +25,18 @@ describe("canonicalUrl and parseAdamRef", () => {
     const raw =
       "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdClass=ilobjcategorygui&ref_id=621897&item_ref_id=0";
     assert.deepEqual(parseAdamRef(raw), { type: "cat", refId: "621897" });
+    assert.deepEqual(
+      parseAdamRef(
+        "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdClass=ilrepositorygui&cmdClass=ilexercisehandlergui&ref_id=100021",
+      ),
+      { type: "exc", refId: "100021" },
+    );
+    assert.deepEqual(
+      parseAdamRef(
+        "https://adam.unibas.ch/ilias.php?cmdClass=ilobjfoldergui&ref_id=2291290&item_ref_id=2291904",
+      ),
+      { type: "fold", refId: "2291904" },
+    );
   });
 
   it("treats a bare numeric id as unknown type until a provider resolves it", () => {

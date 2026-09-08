@@ -19,6 +19,7 @@ import {
   paginatedFilesOutputSchema,
   paginatedNewsOutputSchema,
   paginatedObjectsOutputSchema,
+  objectTypeHintSchema,
   readPageInputSchema,
   refIdSchema,
   sessionStatusOutputSchema,
@@ -29,6 +30,7 @@ import {
 const refId = refIdSchema;
 const cursor = cursorSchema;
 const limit = limitSchema;
+const type = objectTypeHintSchema;
 
 export type SessionController = {
   status(): Promise<unknown>;
@@ -80,13 +82,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM folder children",
       description:
-        "List child objects of a category, course, or folder. Includes empty folders; emptiness is not 'no deadlines'. Tests (tst) are omitted.",
-      inputSchema: z.object({ refId, cursor, limit }),
+        "List child objects of a category, course, or folder. Pass type from a prior listing when known. Includes empty folders; emptiness is not 'no deadlines'. Tests (tst) are omitted.",
+      inputSchema: z.object({ refId, type, cursor, limit }),
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(() => provider.listChildren(id, { cursor: pageCursor, limit: pageLimit })),
+    async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
+      runProvider(() => provider.listChildren(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
   );
 
   server.registerTool(
@@ -99,9 +101,9 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: untrustedPageOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, confirm }) => {
+    async ({ refId: id, type: objectType, confirm }) => {
       ConfirmGate.requireTrue(confirm, "adam_read_page");
-      return runProvider(async () => UntrustedContent.wrap(await provider.readPage(id)));
+      return runProvider(async () => UntrustedContent.wrap(await provider.readPage(id, { type: objectType })));
     },
   );
 
@@ -110,13 +112,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM files",
       description:
-        "List files under a course or folder. Returns metadata and canonical URLs, not file bytes. Do not download PDFs into the model.",
-      inputSchema: z.object({ refId, cursor, limit }),
+        "List files under a course or folder. Pass type when known. Returns metadata and canonical URLs, not file bytes. Do not download PDFs into the model.",
+      inputSchema: z.object({ refId, type, cursor, limit }),
       outputSchema: paginatedFilesOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(() => provider.listFiles(id, { cursor: pageCursor, limit: pageLimit })),
+    async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
+      runProvider(() => provider.listFiles(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
   );
 
   server.registerTool(
@@ -125,11 +127,11 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       title: "Get ADAM file metadata",
       description:
         "Get permitted file metadata. Does not download or send PDF bytes to the model. Open the returned URL in ADAM instead.",
-      inputSchema: z.object({ refId }),
+      inputSchema: z.object({ refId, type }),
       outputSchema: fileObjectOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id }) => runProvider(() => provider.getFile(id)),
+    async ({ refId: id, type: objectType }) => runProvider(() => provider.getFile(id, { type: objectType })),
   );
 
   server.registerTool(
@@ -142,11 +144,12 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: untrustedExtractOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, confirm, maxPages }, ctx) => {
+    async ({ refId: id, type: objectType, confirm, maxPages }, ctx) => {
       ConfirmGate.requireTrue(confirm, "adam_extract_file_text");
       return runProvider(async () =>
         UntrustedContent.wrap(
           await provider.extractFileText(id, {
+            type: objectType,
             maxPages,
             onProgress: WalkProgress.fromContext(ctx),
           }),
@@ -161,11 +164,11 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       title: "Read an ADAM exercise (no submit)",
       description:
         "Read-only exercise object: units, deadline, instruction text, and this user's status when visible. Does not submit, does not list other students' files, and does not open tests (tst).",
-      inputSchema: z.object({ refId }),
+      inputSchema: z.object({ refId, type }),
       outputSchema: exerciseOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id }) => runProvider(() => provider.getExercise(id)),
+    async ({ refId: id, type: objectType }) => runProvider(() => provider.getExercise(id, { type: objectType })),
   );
 
   server.registerTool(

@@ -47,6 +47,8 @@ export type AdamObject = {
   accessClass?: string;
   author?: string;
   provenance: Provenance;
+  /** Present on course snapshots from getCourse (bounded). */
+  children?: AdamObject[];
 };
 
 export type InferredDate = {
@@ -132,12 +134,17 @@ export type ProgressUpdate = {
 
 export type ProgressReporter = (update: ProgressUpdate) => void | Promise<void>;
 
+/** Optional type from a prior listing so providers open /go/{type}/{id}. */
+export type ObjectOpenOptions = {
+  type?: AdamObjectType;
+};
+
 export type ListOptions = {
   cursor?: string;
   limit?: number;
   /** Optional long-walk progress (search / calendar / extract / news). */
   onProgress?: ProgressReporter;
-};
+} & ObjectOpenOptions;
 
 export const ADAM_ERROR_CODES = [
   "unauthorized",
