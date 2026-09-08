@@ -120,6 +120,10 @@ export class BrowserAdamProvider implements AdamProvider {
     if (!object) {
       throw new AdamError("not_found", `No page could be read for ref_id ${refId}.`);
     }
+    assertReadableObjectType(object.type, object.refId);
+    if (object.type === "unknown") {
+      throw new AdamError("not_found", `No page could be read for ref_id ${refId}.`);
+    }
     return {
       ...object,
       text: catalog.text,

@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AdamError } from "adam-core";
 import { hostnameAllowed, urlAllowed } from "./allowlist.ts";
 import { parseDevToolsActivePort } from "./cdp.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { MAX_PAGE_TEXT, capText } from "./extract.ts";
-import { NavigationLimiter } from "./rate-limit.ts";
 import { SerialQueue } from "./serial-queue.ts";
 
 describe("allowlist", () => {
@@ -60,25 +58,6 @@ describe("CDP endpoint parsing", () => {
     assert.equal(parseDevToolsActivePort("41221\n/devtools/browser/abc"), 41221);
     assert.equal(parseDevToolsActivePort("nope"), undefined);
     assert.equal(parseDevToolsActivePort("0"), undefined);
-  });
-});
-
-describe("navigation limiter", () => {
-  it("enforces a per-minute cap without waiting a real minute", async () => {
-    let now = 1_000;
-    const limiter = new NavigationLimiter({
-      gapMs: 0,
-      perMinute: 2,
-      now: () => now,
-      sleep: async () => undefined,
-    });
-    await limiter.take();
-    await limiter.take();
-    await assert.rejects(() => limiter.take(), (error: unknown) => {
-      assert.ok(error instanceof AdamError);
-      assert.equal(error.code, "rate_limited");
-      return true;
-    });
   });
 });
 

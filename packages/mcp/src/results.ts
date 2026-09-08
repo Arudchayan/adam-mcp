@@ -222,7 +222,7 @@ export function asStructured(data: unknown): Record<string, unknown> {
 
 export function ok(data: unknown): ToolResponse {
   const enriched = ResourceLinks.enrich(data);
-  const structuredContent = asStructured(enriched);
+  const structuredContent = asStructured(deepRedact(enriched));
   const links = ResourceLinks.contentBlocks(structuredContent);
   return {
     content: [
@@ -231,6 +231,24 @@ export function ok(data: unknown): ToolResponse {
     ],
     structuredContent,
   };
+}
+
+/** Redact secrets inside structured payloads, not just the text block (T4). */
+function deepRedact(value: unknown): unknown {
+  if (typeof value === "string") {
+    return redactText(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => deepRedact(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const next: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      next[key] = deepRedact(entry);
+    }
+    return next;
+  }
+  return value;
 }
 
 export function fail(error: unknown): ToolResponse {

@@ -166,7 +166,6 @@ export const ADAM_ERROR_CODES = [
   "unauthorized",
   "not_found",
   "stale_id",
-  "rate_limited",
   "unsupported_type",
   "provider_unavailable",
   "confirmation_required",

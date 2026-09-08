@@ -26,11 +26,11 @@ const COLLECT_LINKS_SCRIPT = `(() => {
       text: (anchor.textContent || "").replace(/\\s+/g, " ").trim(),
       inChrome: Boolean(
         anchor.closest(
-          "header, footer, [aria-label='Hauptnavigationsleiste'], .il-mainbar, #ilTopBar, .il-footer, .ilMainMenu",
+          ".il-layout-page > header, header.il-layout-page-header, [aria-label='Hauptnavigationsleiste'], .il-mainbar, #ilTopBar, .il-footer, footer.il-footer, .ilMainMenu",
         ),
       ),
       inBreadcrumb: Boolean(
-        anchor.closest("[aria-label='Brotkrumen'], [aria-label='Breadcrumb'], .breadcrumb, .il-breadcrumb"),
+        anchor.closest("[aria-label='Brotkrumen'], [aria-label='Breadcrumb'], .breadcrumb, .breadcrumbs, .il-breadcrumb"),
       ),
     };
   });
@@ -81,20 +81,36 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
       const page = await this.ensurePage();
+      // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
+      // content wait with a real function predicate (arg undefined, options 3rd).
       await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
-      await page.waitForLoadState("load").catch(() => undefined);
-      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
-      await delay(1_500);
+      if (/\/go\/crs\//i.test(target)) {
+        await page
+          .locator("[role='tab'], a, button")
+          .filter({ hasText: /^(Content|Inhalt)$/i })
+          .first()
+          .click({ timeout: 3_000 })
+          .catch(() => undefined);
+      }
       await page
         .waitForFunction(
-          `() => {
-            const items = document.querySelectorAll(
-              ".il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']"
+          `(() => {
+            const root =
+              document.querySelector("main #il_center_col") ??
+              document.querySelector("#il_center_col") ??
+              document.querySelector("main") ??
+              document;
+            const items = root.querySelectorAll(
+              ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']"
             );
-            const text = document.body ? document.body.innerText : "";
-            const empty = /this folder is empty|dieser ordner ist leer/i.test(text);
+            const text = root instanceof Document ? (root.body ? root.body.innerText : "") : root.innerText;
+            const empty =
+              /this folder is empty|dieser ordner ist leer|no items available|keine eintr[äa]ge vorhanden/i.test(
+                text || ""
+              );
             return items.length > 0 || empty;
-          }`,
+          })()`,
+          undefined,
           { timeout: 12_000 },
         )
         .catch(() => undefined);
@@ -370,7 +386,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     let html = capText(await page.content(), MAX_HTML_BYTES);
     let text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
     const title = await page.title();
-    let links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+    // ADR 0005: frame links are not merged — without provenance they become false
+    // children. Frame text/html still merge for LM reads.
+    const links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) {
         continue;
@@ -384,8 +402,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         if (frameHtml) {
           html = capText(`${html}\n${frameHtml}`, MAX_HTML_BYTES);
         }
-        const frameLinks = (await frame.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
-        links = links.concat(frameLinks);
       } catch {
         continue;
       }

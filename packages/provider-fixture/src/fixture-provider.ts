@@ -112,6 +112,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getFile(refId: RefId): Promise<FileObject> {
     const record = requireRecord(refId);
+    assertReadableObjectType(record.object.type, refId);
     if (!record.file) {
       throw new AdamError("unsupported_type", `ref_id ${refId} is not a file.`);
     }

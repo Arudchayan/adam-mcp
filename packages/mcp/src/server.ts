@@ -1,5 +1,5 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/server";
-import { type AdamProvider } from "adam-core";
+import { type AdamProvider, redactText } from "adam-core";
 import * as z from "zod/v4";
 import {
   ConfirmGate,
@@ -70,11 +70,11 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       title: "Get one ADAM course",
       description:
         "Get one course by ref_id (metadata and child summary). For full page text use adam_read_page with confirm=true. Fails if the id is not a course or is not visible.",
-      inputSchema: z.object({ refId }),
+      inputSchema: z.object({ refId, type }),
       outputSchema: adamObjectOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id }) => runProvider(() => provider.getCourse(id)),
+    async ({ refId: id, type: objectType }) => runProvider(() => provider.getCourse(id, { type: objectType })),
   );
 
   server.registerTool(
@@ -82,7 +82,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM folder children",
       description:
-        "List child objects of a category, course, or folder. Pass type from a prior listing when known. Includes empty folders; emptiness is not 'no deadlines'. Tests (tst) are omitted.",
+        "List child objects of a category, course, or folder. Pass type from a prior listing when known. Success with listingState empty and items [] means the folder listed and contains no objects — not a failure and not 'no deadlines'. If listingState is unknown, do not claim the folder is empty; retry with type from the parent listing or tell the student to open the ADAM URL. not_found is the only missing-object error. Tests (tst) are omitted.",
       inputSchema: z.object({ refId, type, cursor, limit }),
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
@@ -317,13 +317,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const course = await provider.getCourse(id);
+      const course = await provider.getCourse(id, { type: "crs" });
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(course, null, 2),
+            text: redactText(JSON.stringify(course, null, 2)),
           },
         ],
       };
@@ -342,13 +342,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const listed = await provider.listChildren(id);
+      const listed = await provider.listChildren(id, { type: "fold" });
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(listed, null, 2),
+            text: redactText(JSON.stringify(listed, null, 2)),
           },
         ],
       };
@@ -367,13 +367,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const file = await provider.getFile(id);
+      const file = await provider.getFile(id, { type: "file" });
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(file, null, 2),
+            text: redactText(JSON.stringify(file, null, 2)),
           },
         ],
       };
@@ -392,13 +392,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const exercise = await provider.getExercise(id);
+      const exercise = await provider.getExercise(id, { type: "exc" });
       return {
         contents: [
           {
             uri: uri.href,
             mimeType: "application/json",
-            text: JSON.stringify(exercise, null, 2),
+            text: redactText(JSON.stringify(exercise, null, 2)),
           },
         ],
       };

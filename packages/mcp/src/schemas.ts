@@ -76,6 +76,16 @@ export const paginatedObjectsOutputSchema = z
     items: z.array(adamObjectOutputSchema),
     nextCursor: z.string().optional(),
     totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+    listingSignals: z
+      .object({
+        contentItemCount: z.number(),
+        emptyCopy: z.boolean(),
+        chromeOnly: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+    notice: z.string().optional(),
   })
   .passthrough();
 
@@ -91,6 +101,16 @@ export const paginatedFilesOutputSchema = z
     items: z.array(fileObjectOutputSchema),
     nextCursor: z.string().optional(),
     totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+    listingSignals: z
+      .object({
+        contentItemCount: z.number(),
+        emptyCopy: z.boolean(),
+        chromeOnly: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+    notice: z.string().optional(),
   })
   .passthrough();
 

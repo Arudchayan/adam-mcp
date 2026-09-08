@@ -51,7 +51,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | blocked — not observed |
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **done** metadata (2026-09-06) |
-| `exc` | Instructions, deadline, status | tool partial | labeled synthetic `100021` (AT5); live still unverified |
+| `exc` | Instructions, deadline, status | tool + resource (`adam_get_exercise` + `adam://exc/{refId}`) | labeled synthetic `100021` (AT5); live still unverified |
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `webr` | External links | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
