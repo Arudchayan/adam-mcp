@@ -32,3 +32,20 @@ export function paginate<T>(items: readonly T[], options: ListOptions = {}): Pag
     totalHint: items.length,
   };
 }
+
+/** Attach ADR 0005 listing honesty after slicing. Unknown omits totalHint — never report 0. */
+export function withListingState<T>(
+  page: Paginated<T>,
+  listingState: Paginated<T>["listingState"],
+  listingSignals?: Paginated<T>["listingSignals"],
+  notice?: string,
+): Paginated<T> {
+  if (listingState === undefined) {
+    return page;
+  }
+  if (listingState === "unknown") {
+    const { totalHint: _dropped, ...rest } = page;
+    return { ...rest, listingState, listingSignals, notice };
+  }
+  return { ...page, listingState, listingSignals, notice };
+}

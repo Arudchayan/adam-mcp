@@ -14,13 +14,20 @@ export const confirmExtractSchema = z
     "Required. Set true only after the student asked to extract this file locally. Extracted text is untrusted. File bytes never go to the model.",
   );
 
+export const objectTypeHintSchema = z
+  .enum(ADAM_OBJECT_TYPES)
+  .optional()
+  .describe("Optional object type from a prior listing (crs, fold, file, exc, …). Prefer this so the server opens /go/{type}/{refId}.");
+
 export const readPageInputSchema = z.object({
   refId: refIdSchema,
+  type: objectTypeHintSchema,
   confirm: confirmReadSchema,
 });
 
 export const extractFileInputSchema = z.object({
   refId: refIdSchema,
+  type: objectTypeHintSchema,
   confirm: confirmExtractSchema,
   maxPages: z.number().int().min(1).max(20).optional().describe("Max PDF pages to extract, default 8, max 20"),
 });
@@ -69,6 +76,16 @@ export const paginatedObjectsOutputSchema = z
     items: z.array(adamObjectOutputSchema),
     nextCursor: z.string().optional(),
     totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+    listingSignals: z
+      .object({
+        contentItemCount: z.number(),
+        emptyCopy: z.boolean(),
+        chromeOnly: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+    notice: z.string().optional(),
   })
   .passthrough();
 
@@ -84,6 +101,16 @@ export const paginatedFilesOutputSchema = z
     items: z.array(fileObjectOutputSchema),
     nextCursor: z.string().optional(),
     totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+    listingSignals: z
+      .object({
+        contentItemCount: z.number(),
+        emptyCopy: z.boolean(),
+        chromeOnly: z.boolean(),
+      })
+      .passthrough()
+      .optional(),
+    notice: z.string().optional(),
   })
   .passthrough();
 

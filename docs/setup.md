@@ -20,7 +20,7 @@ That builds `packages/mcp/dist/adam-mcp.mjs` and prints snippets with **absolute
 npm run login
 ```
 
-Sign in to ADAM in the Chrome window and leave it open. `npm run status` checks the session.
+Sign in to ADAM in the Chrome window. After success the window closes and a headless Chrome in that process keeps the session. `npm run status` checks it. Do not force-quit that Node process.
 
 After publish of `adam-mcp` 0.1.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
 

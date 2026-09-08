@@ -3,7 +3,14 @@ import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 
 export { hostnameAllowed, urlAllowed } from "./allowlist.ts";
-export { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoggedInSnapshot, isLoginSnapshot } from "./extract.ts";
+export {
+  extractCatalog,
+  exerciseDeadlineFromPage,
+  inferDates,
+  isAdamFailurePage,
+  isLoggedInSnapshot,
+  isLoginSnapshot,
+} from "./extract.ts";
 export { defaultProfileDir } from "./config.ts";
 export { createBrowserProvider, BrowserAdamProvider };
 export { createMemorySession, snapshotFromHtml };

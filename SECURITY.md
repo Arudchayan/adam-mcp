@@ -20,7 +20,7 @@ Do not tag GitHub/npm until all of these hold:
 4. Default provider is `fixture`. SOAP and HTML stay fail closed.
 5. Chrome debugging is not a well-known localhost port.
 6. HTTPS + pinned `https://adam.unibas.ch`; allowlist on start and final URL.
-7. Rate limit, concurrency 1, size caps — tested.
+7. Concurrency 1 (SerialQueue), size caps — tested.
 8. `adam_read_page` requires `confirm: true`.
 9. Object type `tst` is denied. No write tools.
 10. No PDF bytes to the model. Download cancel is tested.

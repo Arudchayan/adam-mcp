@@ -200,7 +200,9 @@ export function inferDates(text: string): InferredDate[] {
  * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
  */
 export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
-  const labeled = [...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*:\s*([^\n.;]{3,80})/gi)];
+  const labeled = [
+    ...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
+  ];
   if (labeled.length === 0) {
     return undefined;
   }
@@ -410,4 +412,74 @@ function cleanTitle(value: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Live ADAM EN/DE empty-container copy (ILIAS 10). Absence of copy must not mean empty. */
+export function isAdamEmptyContainerPage(snapshot: Pick<PageSnapshot, "text">): boolean {
+  return /this folder is empty|dieser ordner ist leer|no items available|keine eintr[äa]ge vorhanden/i.test(
+    snapshot.text ?? "",
+  );
+}
+
+export type ListingClassification = {
+  state: "ok" | "empty" | "unknown";
+  signals: { contentItemCount: number; emptyCopy: boolean; chromeOnly: boolean };
+  notice?: string;
+};
+
+export const LISTING_EMPTY_NOTICE =
+  "Listed successfully; this folder has no child objects. Not a failure. Not 'no deadlines'.";
+export const LISTING_UNKNOWN_NOTICE =
+  "Folder page opened but the object list did not load. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
+
+/** ADR 0005: classify from DOM signals in extract, not from waits. First match wins. */
+export function classifyListing(
+  snapshot: PageSnapshot,
+  keptCount: number,
+): ListingClassification {
+  const emptyCopy = isAdamEmptyContainerPage(snapshot);
+  if (keptCount > 0) {
+    return {
+      state: "ok",
+      signals: { contentItemCount: keptCount, emptyCopy, chromeOnly: false },
+    };
+  }
+  if (emptyCopy) {
+    return {
+      state: "empty",
+      signals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
+      notice: LISTING_EMPTY_NOTICE,
+    };
+  }
+  return {
+    state: "unknown",
+    signals: { contentItemCount: 0, emptyCopy: false, chromeOnly: true },
+    notice: LISTING_UNKNOWN_NOTICE,
+  };
+}
+
+/** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). */
+export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" | "html">): boolean {
+  const title = snapshot.title ?? "";
+  const text = snapshot.text ?? "";
+  const haystack = `${title}\n${text}`;
+  if (/the requested page could not be found/i.test(haystack)) {
+    return true;
+  }
+  if (/failure message/i.test(title) && /could not be found|nicht gefunden/i.test(haystack)) {
+    return true;
+  }
+  if (/die angeforderte seite konnte nicht gefunden werden/i.test(haystack)) {
+    return true;
+  }
+  if (/objekt konnte nicht gefunden/i.test(haystack) || /\bobject not found\b/i.test(haystack) || /\bkein objekt\b/i.test(haystack)) {
+    return true;
+  }
+  if (
+    (/keine berechtigung/i.test(haystack) || /permission denied/i.test(haystack)) &&
+    (/failure message/i.test(haystack) || /fehler/i.test(title) || /nicht gefunden/i.test(haystack))
+  ) {
+    return true;
+  }
+  return false;
 }

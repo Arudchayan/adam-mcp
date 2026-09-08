@@ -199,6 +199,36 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(children.items.some((item) => item.refId === "100020"), true);
   });
 
+  it("lists folder children via /go/fold when type is known", async () => {
+    const children = await provider.listChildren("100010", { type: "fold" });
+    assert.equal(children.items.some((item) => item.refId === "100011"), true);
+  });
+
+  it("returns course children from the same /go/crs snapshot", async () => {
+    const course = await provider.getCourse("100001");
+    const children = (course as { children?: Array<{ refId: string }> }).children ?? [];
+    assert.equal(children.some((item) => item.refId === "100010"), true);
+    assert.equal(children.some((item) => item.refId === "100021"), true);
+  });
+
+  it("throws not_found on ADAM failure pages", async () => {
+    const locked = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/999999": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/999999",
+          "Failure Message",
+          "<main><h1>Failure Message</h1><p>The requested page could not be found.</p></main>",
+          "Failure Message The requested page could not be found.",
+        ),
+      }),
+    });
+    await assert.rejects(
+      () => locked.listChildren("999999", { type: "fold" }),
+      (error: unknown) => error instanceof AdamError && error.code === "not_found",
+    );
+  });
+
   it("searches enrolled course and folder titles, not every dashboard card", async () => {
     const overview = await provider.search("Overview");
     assert.equal(overview.items.some((item) => item.refId === "100011"), true);
@@ -299,7 +329,7 @@ describe("BrowserAdamProvider with a memory session", () => {
         ),
       }),
     });
-    await assert.rejects(() => exams.readPage("900001"), (error: unknown) => {
+    await assert.rejects(() => exams.readPage("900001", { type: "tst" }), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "unsupported_type");
       return true;
@@ -573,5 +603,98 @@ describe("A2-news-browser listNews onProgress", () => {
 
     const future = await provider.listNews({ since: "2099-01-01T00:00:00.000Z" });
     assert.deepEqual(future.items, []);
+  });
+});
+
+describe("ADR 0005 listing honesty", () => {
+  it("marks populated folder listings ok and honest empty folds empty", async () => {
+    const honest = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "Notes",
+          folderHtml,
+          "03 - Course & Notes 00_Overview.pdf 04 - Exercises Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+      }),
+    });
+    const children = await honest.listChildren("100010", { type: "fold" });
+    assert.equal(children.listingState, "ok");
+    assert.ok(children.items.length > 0);
+    const empty = await honest.listChildren("100020", { type: "fold" });
+    assert.deepEqual(empty.items, []);
+    assert.equal(empty.listingState, "empty");
+  });
+
+  it("marks chrome-only folder snapshots unknown, never empty", async () => {
+    const chromeOnly = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100099": snapshotFromHtml(
+          "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdNode=xs:nl&cmdClass=ilobjfoldergui&ref_id=100099&item_ref_id=0",
+          "Content: Mystery folder: ADAM",
+          "<main><h1>Mystery folder</h1><p>Content Info</p></main>",
+          "ADAM Search Dashboard Content (Selected) Info Accessibility Rendered by its-ilias-web-prod-04 - 10.11",
+        ),
+      }),
+    });
+    const listed = await chromeOnly.listChildren("100099", { type: "fold" });
+    assert.deepEqual(listed.items, []);
+    assert.equal(listed.listingState, "unknown");
+  });
+
+  it("parses ILIAS container item titles with parent ref_id cmdClass hrefs", async () => {
+    const ks = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "03 - Course & Notes",
+          `<nav aria-label="Brotkrumen"><a href="/go/crs/100001">Course</a></nav>
+<main>
+  <h1>03 - Course & Notes</h1>
+  <div class="ilContainerListItemOuter">
+    <div class="il_ContainerItemTitle">
+      <a class="il_ContainerItemTitle" href="https://adam.unibas.ch/ilias.php?ref_id=100011&cmdClass=ilobjfilegui&cmdNode=ab:cd">00_Overview.pdf</a>
+    </div>
+  </div>
+  <div class="ilContainerListItemOuter">
+    <div class="il_ContainerItemTitle">
+      <a class="il_ContainerItemTitle" href="https://adam.unibas.ch/ilias.php?ref_id=100020&cmdClass=ilobjfoldergui&cmdNode=ef:gh">04 - Exercises</a>
+    </div>
+  </div>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "03 - Course & Notes 00_Overview.pdf 04 - Exercises Abmelden",
+        ),
+      }),
+    });
+    const children = await ks.listChildren("100010", { type: "fold" });
+    assert.ok(children.items.some((item) => item.refId === "100011" && item.type === "file"));
+    assert.ok(children.items.some((item) => item.refId === "100020" && item.type === "fold"));
+    assert.equal(children.listingState, "ok");
+  });
+
+  it("populated KS HTML plus [] is a scrape-miss FAIL never honest empty", async () => {
+    const toy = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "Notes",
+          folderHtml,
+          "03 - Course & Notes 00_Overview.pdf 04 - Exercises Abmelden",
+        ),
+      }),
+    });
+    const children = await toy.listChildren("100010", { type: "fold" });
+    assert.notDeepEqual(children.items, []);
   });
 });

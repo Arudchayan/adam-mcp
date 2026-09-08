@@ -47,6 +47,8 @@ export type AdamObject = {
   accessClass?: string;
   author?: string;
   provenance: Provenance;
+  /** Present on course snapshots from getCourse (bounded). */
+  children?: AdamObject[];
 };
 
 export type InferredDate = {
@@ -122,6 +124,22 @@ export type Paginated<T> = {
   items: T[];
   nextCursor?: string;
   totalHint?: number;
+  /** Honesty of the source listing (ADR 0005). Walks may omit; page-backed lists must set. */
+  listingState?: ListingState;
+  listingSignals?: ListingSignals;
+  notice?: string;
+};
+
+/** Honesty of the source listing, not of this cursor page (ADR 0005). */
+export type ListingState = "ok" | "empty" | "unknown";
+
+export type ListingSignals = {
+  /** Non-chrome, non-breadcrumb /go/{type}/{id} objects (pre-paginate). */
+  contentItemCount: number;
+  /** EN/DE empty-folder copy in content text. */
+  emptyCopy: boolean;
+  /** After stripping chrome/nav/footer/breadcrumb, no listing body. */
+  chromeOnly: boolean;
 };
 
 export type ProgressUpdate = {
@@ -132,18 +150,22 @@ export type ProgressUpdate = {
 
 export type ProgressReporter = (update: ProgressUpdate) => void | Promise<void>;
 
+/** Optional type from a prior listing so providers open /go/{type}/{id}. */
+export type ObjectOpenOptions = {
+  type?: AdamObjectType;
+};
+
 export type ListOptions = {
   cursor?: string;
   limit?: number;
   /** Optional long-walk progress (search / calendar / extract / news). */
   onProgress?: ProgressReporter;
-};
+} & ObjectOpenOptions;
 
 export const ADAM_ERROR_CODES = [
   "unauthorized",
   "not_found",
   "stale_id",
-  "rate_limited",
   "unsupported_type",
   "provider_unavailable",
   "confirmation_required",

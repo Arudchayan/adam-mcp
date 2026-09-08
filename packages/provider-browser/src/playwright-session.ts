@@ -9,12 +9,11 @@ import {
   defaultOrigin,
   defaultProfileDir,
   headedByDefault,
-  maxNavigationsPerMinute,
-  minNavigationGapMs,
 } from "./config.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { MAX_HTML_BYTES, MAX_PAGE_TEXT, capText, isLoggedInSnapshot } from "./extract.ts";
-import { NavigationLimiter } from "./rate-limit.ts";
+import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
+import { injectableCookies } from "./session-handoff.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
@@ -27,11 +26,11 @@ const COLLECT_LINKS_SCRIPT = `(() => {
       text: (anchor.textContent || "").replace(/\\s+/g, " ").trim(),
       inChrome: Boolean(
         anchor.closest(
-          "header, footer, [aria-label='Hauptnavigationsleiste'], .il-mainbar, #ilTopBar, .il-footer, .ilMainMenu",
+          ".il-layout-page > header, header.il-layout-page-header, [aria-label='Hauptnavigationsleiste'], .il-mainbar, #ilTopBar, .il-footer, footer.il-footer, .ilMainMenu",
         ),
       ),
       inBreadcrumb: Boolean(
-        anchor.closest("[aria-label='Brotkrumen'], [aria-label='Breadcrumb'], .breadcrumb, .il-breadcrumb"),
+        anchor.closest("[aria-label='Brotkrumen'], [aria-label='Breadcrumb'], .breadcrumb, .breadcrumbs, .il-breadcrumb"),
       ),
     };
   });
@@ -41,6 +40,8 @@ export type PlaywrightSessionOptions = {
   origin?: string;
   profileDir?: string;
   headed?: boolean;
+  feedbackHoldMs?: number;
+  hideWindowAfterFeedback?: boolean;
 };
 
 export class PlaywrightAdamSession implements AdamBrowserSession {
@@ -49,19 +50,18 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private attachedBrowser: Browser | undefined;
   private ownsChrome = false;
   private readonly queue = new SerialQueue();
-  private readonly limiter: NavigationLimiter;
   private readonly origin: string;
   private readonly profileDir: string;
   private headed: boolean;
+  private readonly feedbackHoldMs: number;
+  private readonly hideWindowAfterFeedback: boolean;
 
   constructor(options: PlaywrightSessionOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
     this.profileDir = options.profileDir ?? defaultProfileDir();
     this.headed = options.headed ?? headedByDefault();
-    this.limiter = new NavigationLimiter({
-      gapMs: minNavigationGapMs(),
-      perMinute: maxNavigationsPerMinute(),
-    });
+    this.feedbackHoldMs = options.feedbackHoldMs ?? DEFAULT_FEEDBACK_HOLD_MS;
+    this.hideWindowAfterFeedback = options.hideWindowAfterFeedback ?? true;
   }
 
   async status(): Promise<SessionStatus> {
@@ -69,7 +69,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const page = await this.ensurePage();
       if (page.url() === "about:blank" || page.url() === "") {
         assertUrlAllowed(this.origin);
-        await this.limiter.take();
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
       }
       const snapshot = await this.readSnapshot(page);
@@ -81,9 +80,40 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      await this.limiter.take();
       const page = await this.ensurePage();
+      // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
+      // content wait with a real function predicate (arg undefined, options 3rd).
       await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      if (/\/go\/crs\//i.test(target)) {
+        await page
+          .locator("[role='tab'], a, button")
+          .filter({ hasText: /^(Content|Inhalt)$/i })
+          .first()
+          .click({ timeout: 3_000 })
+          .catch(() => undefined);
+      }
+      await page
+        .waitForFunction(
+          `(() => {
+            const root =
+              document.querySelector("main #il_center_col") ??
+              document.querySelector("#il_center_col") ??
+              document.querySelector("main") ??
+              document;
+            const items = root.querySelectorAll(
+              ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']"
+            );
+            const text = root instanceof Document ? (root.body ? root.body.innerText : "") : root.innerText;
+            const empty =
+              /this folder is empty|dieser ordner ist leer|no items available|keine eintr[äa]ge vorhanden/i.test(
+                text || ""
+              );
+            return items.length > 0 || empty;
+          })()`,
+          undefined,
+          { timeout: 12_000 },
+        )
+        .catch(() => undefined);
       await this.rejectIfBlocked(page);
       return this.readSnapshot(page);
     });
@@ -92,12 +122,20 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   async loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS): Promise<SessionStatus> {
     return this.serialize(async () => {
       this.headed = true;
-      const page = await this.ensurePage();
-      await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      let page = await this.ensurePage();
+      try {
+        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      } catch {
+        await this.closeContext();
+        page = await this.ensurePage();
+        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      }
       await this.rejectIfBlocked(page);
       let snapshot: PageSnapshot | undefined = await this.readSnapshot(page);
       if (isLoggedInSnapshot(snapshot)) {
-        return this.toStatus(snapshot);
+        await this.announceLogin(page, "success");
+        await this.continueHeadlessIfOwned(page);
+        return this.toStatus(await this.readSnapshot(await this.ensurePage()));
       }
       await this.clickSwitchIfPresent(page);
       console.error(
@@ -117,12 +155,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         }
       }
       if (!snapshot || !isLoggedInSnapshot(snapshot)) {
+        await this.announceLogin(page, "error");
         throw new AdamError(
           "unauthorized",
           "SWITCH login did not finish in time. Complete it in the Chrome window, then retry npm run login.",
         );
       }
-      return this.toStatus(snapshot);
+      await this.announceLogin(page, "success");
+      await this.continueHeadlessIfOwned(page);
+      return this.toStatus(await this.readSnapshot(await this.ensurePage()));
     });
   }
 
@@ -130,7 +171,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      await this.limiter.take();
       const page = await this.ensurePage();
       const response = await page.context().request.get(target, { timeout: 45_000, maxRedirects: 5 });
       assertUrlAllowed(response.url());
@@ -173,9 +213,119 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.queue.enqueue(work);
   }
 
+  private async announceLogin(page: Page, kind: "success" | "error"): Promise<void> {
+    const copy =
+      kind === "success"
+        ? {
+            headline: "You're signed in to ADAM",
+            detail: "This window will close. Your ADAM session stays in the background.",
+          }
+        : {
+            headline: "ADAM sign-in did not finish",
+            detail: "Sign-in did not finish in time. If SWITCH said the request was too old, that form expired — run login again.",
+          };
+    await showSessionFeedback(page, kind, copy.headline, copy.detail, {
+      holdMs: this.feedbackHoldMs,
+      hideWindow: false,
+    });
+  }
+
+  private async continueHeadlessIfOwned(page: Page): Promise<void> {
+    if (!this.ownsChrome || !this.context) {
+      if (this.hideWindowAfterFeedback) {
+        await minimizeChromeWindow(page);
+      }
+      return;
+    }
+    let userAgent = "Mozilla/5.0";
+    try {
+      userAgent = String(await page.evaluate("navigator.userAgent"));
+    } catch {
+      // Keep a generic UA; verification below fail-closes if ADAM rejects it.
+    }
+    const state = await this.context.storageState();
+    const jar = injectableCookies(state.cookies);
+    await this.closeContext();
+    this.headed = false;
+    await mkdir(this.profileDir, { recursive: true });
+    let launched: BrowserContext | undefined;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        launched = await chromium.launchPersistentContext(this.profileDir, {
+          channel: "chrome",
+          headless: true,
+          acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
+          viewport: { width: 1280, height: 900 },
+          locale: "de-CH",
+          userAgent,
+          args: chromeLaunchArgs(),
+        });
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        await delay(250 * (attempt + 1));
+      }
+    }
+    if (!launched) {
+      const detail = lastError instanceof Error ? lastError.message : "unknown error";
+      throw new AdamError(
+        "provider_unavailable",
+        `Could not continue the ADAM session in the background. ${detail}`,
+      );
+    }
+    this.context = launched;
+    this.ownsChrome = true;
+    this.context.on("page", (opened) => {
+      attachDownloadGuard(opened);
+    });
+    try {
+      await this.context.addCookies(jar);
+      this.page = this.context.pages()[0] ?? (await this.context.newPage());
+      attachDownloadGuard(this.page);
+      assertUrlAllowed(this.origin);
+      await this.page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      const snapshot = await this.readSnapshot(this.page);
+      if (!isLoggedInSnapshot(snapshot)) {
+        throw new AdamError(
+          "unauthorized",
+          "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
+        );
+      }
+    } catch (error) {
+      await this.closeContext();
+      if (error instanceof AdamError) {
+        throw error;
+      }
+      throw new AdamError(
+        "unauthorized",
+        "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
+      );
+    }
+  }
+
   private async ensurePage(): Promise<Page> {
-    if (this.page && this.context) {
+    if (this.page && this.context && !this.page.isClosed()) {
       return this.page;
+    }
+    this.page = undefined;
+    if (this.context) {
+      try {
+        const stillOpen = this.context.pages().find((open) => !open.isClosed());
+        if (stillOpen) {
+          this.page = stillOpen;
+          attachDownloadGuard(this.page);
+          return this.page;
+        }
+        this.page = await this.context.newPage();
+        attachDownloadGuard(this.page);
+        return this.page;
+      } catch {
+        this.context = undefined;
+        this.attachedBrowser = undefined;
+        this.ownsChrome = false;
+      }
     }
 
     const attached = await this.tryAttachCdp();
@@ -233,10 +383,29 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   private async readSnapshot(page: Page): Promise<PageSnapshot> {
     await this.rejectIfBlocked(page);
-    const html = capText(await page.content(), MAX_HTML_BYTES);
-    const text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
+    let html = capText(await page.content(), MAX_HTML_BYTES);
+    let text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
     const title = await page.title();
+    // ADR 0005: frame links are not merged — without provenance they become false
+    // children. Frame text/html still merge for LM reads.
     const links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) {
+        continue;
+      }
+      try {
+        const frameText = await frame.locator("body").innerText().catch(() => "");
+        if (frameText) {
+          text = capText(`${text}\n${frameText}`, MAX_PAGE_TEXT * 2);
+        }
+        const frameHtml = await frame.content().catch(() => "");
+        if (frameHtml) {
+          html = capText(`${html}\n${frameHtml}`, MAX_HTML_BYTES);
+        }
+      } catch {
+        continue;
+      }
+    }
     return { url: page.url(), title, html, text, links };
   }
 

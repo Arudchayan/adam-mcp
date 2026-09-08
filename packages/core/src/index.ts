@@ -16,7 +16,7 @@ export {
   sha256Hex,
 } from "./local-extract.ts";
 export { PRODUCTION_ADAM_ORIGIN, resolveAdamOrigin } from "./origin.ts";
-export { decodeCursor, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, normalizeLimit, paginate } from "./pagination.ts";
+export { decodeCursor, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, normalizeLimit, paginate, withListingState } from "./pagination.ts";
 export { assertReadableObjectType, DENIED_OBJECT_TYPES, isDeniedObjectType, ObjectReadPolicy } from "./policy.ts";
 export type { DeniedObjectType } from "./policy.ts";
 export type { AdamProvider } from "./provider.ts";
@@ -38,9 +38,12 @@ export {
   type FileObject,
   type InferredDate,
   type ListOptions,
+  type ObjectOpenOptions,
   type NewsItem,
   type PageContent,
   type Paginated,
+  type ListingSignals,
+  type ListingState,
   type ProgressReporter,
   type ProgressUpdate,
   type Provenance,

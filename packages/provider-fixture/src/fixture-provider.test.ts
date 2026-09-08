@@ -87,6 +87,7 @@ describe("FixtureAdamProvider", () => {
     // Empty Exercises fold + exc+deadline unchanged.
     const emptyFold = await provider.listChildren("100020");
     assert.deepEqual(emptyFold.items, []);
+    assert.equal(emptyFold.listingState, "empty");
     const exercise = await provider.getExercise("100021");
     assert.equal(exercise.type, "exc");
     assert.equal(exercise.units[0]?.deadline, "2026-09-22T21:59:00.000Z");
@@ -386,6 +387,16 @@ describe("AT6 calendar vs page-inferred dates", () => {
         assert.equal(Number.isFinite(Date.parse(item.startsAt)), true);
       }
     }
+  });
+});
+
+describe("Fixture populated folder", () => {
+  it("listChildren 100010 contains 100011 file — populated not empty", async () => {
+    const provider = createFixtureProvider();
+    const children = await provider.listChildren("100010");
+    assert.ok(children.items.some((item) => item.refId === "100011" && item.type === "file"));
+    assert.notDeepEqual(children.items, []);
+    assert.equal(children.listingState, "ok");
   });
 });
 

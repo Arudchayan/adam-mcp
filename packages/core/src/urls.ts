@@ -17,6 +17,14 @@ const CMD_CLASS_TO_TYPE: Record<string, AdamObjectType> = {
   ilobjfilegui: "file",
   ilobjbloggui: "blog",
   ilobjrootfoldergui: "root",
+  ilobjexercisegui: "exc",
+  ilexercisehandlergui: "exc",
+  ilobjtestgui: "tst",
+  iltestplayergui: "tst",
+  iltestoutputgui: "tst",
+  ilobjforumgui: "frm",
+  ilobjlinkresourcegui: "webr",
+  ilobjweblinkgui: "webr",
 };
 
 export function isAdamObjectType(value: string): value is AdamObjectType {
@@ -90,10 +98,19 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
 
     const refMatch = url.search.match(REF_ID_QUERY);
     if (refMatch) {
-      const cmdClass = url.searchParams.get("cmdClass")?.toLowerCase() ?? "";
+      const refId = refMatch[1];
+      const itemRef = url.searchParams.get("item_ref_id");
+      const hasChild = itemRef && /^\d+$/.test(itemRef) && itemRef !== "0" && itemRef !== refId;
+      if (hasChild) {
+        // cmdClass describes the parent ref_id, not the child item_ref_id.
+        // Child type is unknowable from this URL — unknown is the needs-resolve marker.
+        return { type: "unknown", refId: itemRef };
+      }
+      const classes = url.searchParams.getAll("cmdClass").map((value) => value.toLowerCase());
+      const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]);
       return {
-        type: CMD_CLASS_TO_TYPE[cmdClass] ?? "unknown",
-        refId: refMatch[1],
+        type: (mapped ? CMD_CLASS_TO_TYPE[mapped] : undefined) ?? "unknown",
+        refId,
       };
     }
   } catch {

@@ -17,19 +17,3 @@ export function headedByDefault(): boolean {
   }
   return true;
 }
-
-export function minNavigationGapMs(): number {
-  const raw = Number(process.env.ADAM_NAV_GAP_MS);
-  if (Number.isFinite(raw) && raw >= 250) {
-    return raw;
-  }
-  return 1_000;
-}
-
-export function maxNavigationsPerMinute(): number {
-  const raw = Number(process.env.ADAM_NAV_PER_MINUTE);
-  if (Number.isFinite(raw) && raw >= 1) {
-    return raw;
-  }
-  return 20;
-}
