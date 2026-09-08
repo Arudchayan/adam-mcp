@@ -6,6 +6,8 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Live pass (2026-09-06, Course Member session):** validated `crs`, standard `fold`, `file`, and News/what-changed on one contentful course; calendar widget present (agenda empty). **Not observed** (do not invent fixtures): `exc`, `frm`, Postbox / Member Work Area, Etherpad, `sess`, `webr`, `htlm` / `lm`. Later empty re-verify of enrolled courses: park `frm` / `sess` / `webr` as **wait-for-inventory** (not actively hunting).
 
+**Live pass (2026-09-09, ADR 0005 build):** 8 enrolled courses; only Multimedia Retrieval (`2206931`) exposes children — `list_children` → `ok` + 2 folds (`2291290`, `2291292`); the other 7 courses list zero children. Both MM folds report `listingState: unknown` (folder GUI served, no parseable items, no empty copy); `read_page` is chrome-only (538 chars). No `file`/`exc` reachable anywhere (`search pdf` → 0), so file-extract and exercise paths remain live-unverified for lack of live objects, not connector failure. Pre-semester timing (HS 2026) fits truly-empty folders. Re-verify after semester start.
+
 ## 1. Purpose
 
 Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. No writes until Security + academic-integrity review.
