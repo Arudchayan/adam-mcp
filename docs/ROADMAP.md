@@ -33,7 +33,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
 | A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
-| Release tag / npm | Known | Done v0.1.0 |
+| Release tag / npm | Known | GitHub tag/Release **v0.1.0** Done @ `3380daf`; npm publish **paused** (not Done) |
 
 ## Phase A-thin — must-ship reads still incomplete
 
