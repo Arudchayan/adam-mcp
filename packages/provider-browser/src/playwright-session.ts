@@ -83,7 +83,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const page = await this.ensurePage();
       await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
       await page
-        .waitForSelector("h1, .il-item, a[href*='/go/'], a[href*='ref_id=']", { timeout: 8_000 })
+        .waitForFunction(
+          `() => {
+            const items = document.querySelectorAll(".il-item, .il-item-title, a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']");
+            const text = document.body ? document.body.innerText : "";
+            const empty = /this folder is empty|dieser ordner ist leer/i.test(text);
+            return items.length > 0 || empty;
+          }`,
+          { timeout: 12_000 },
+        )
         .catch(() => undefined);
       await this.rejectIfBlocked(page);
       return this.readSnapshot(page);
