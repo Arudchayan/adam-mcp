@@ -124,6 +124,22 @@ export type Paginated<T> = {
   items: T[];
   nextCursor?: string;
   totalHint?: number;
+  /** Honesty of the source listing (ADR 0005). Walks may omit; page-backed lists must set. */
+  listingState?: ListingState;
+  listingSignals?: ListingSignals;
+  notice?: string;
+};
+
+/** Honesty of the source listing, not of this cursor page (ADR 0005). */
+export type ListingState = "ok" | "empty" | "unknown";
+
+export type ListingSignals = {
+  /** Non-chrome, non-breadcrumb /go/{type}/{id} objects (pre-paginate). */
+  contentItemCount: number;
+  /** EN/DE empty-folder copy in content text. */
+  emptyCopy: boolean;
+  /** After stripping chrome/nav/footer/breadcrumb, no listing body. */
+  chromeOnly: boolean;
 };
 
 export type ProgressUpdate = {

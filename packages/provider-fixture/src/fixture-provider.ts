@@ -5,6 +5,7 @@ import {
   isDeniedObjectType,
   paginate,
   syntheticPdfWithText,
+  withListingState,
   type AdamObject,
   type AdamProvider,
   preferCalendarEvents,
@@ -52,7 +53,12 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
     const courses = enrolledCourseIds.map((id) => requireRecord(id).object);
-    return paginate(courses, options);
+    const page = paginate(courses, options);
+    return withListingState(page, courses.length > 0 ? "ok" : "empty", {
+      contentItemCount: courses.length,
+      emptyCopy: courses.length === 0,
+      chromeOnly: false,
+    });
   }
 
   async getCourse(refId: RefId): Promise<AdamObject> {
@@ -65,7 +71,14 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
-    return paginate(resolveChildren(refId), options);
+    const children = resolveChildren(refId);
+    const page = paginate(children, options);
+    // Fixture catalog is complete data: zero children is honest empty (100020).
+    return withListingState(page, children.length > 0 ? "ok" : "empty", {
+      contentItemCount: children.length,
+      emptyCopy: children.length === 0,
+      chromeOnly: false,
+    });
   }
 
   async readPage(refId: RefId): Promise<PageContent> {
@@ -89,7 +102,12 @@ export class FixtureAdamProvider implements AdamProvider {
             ? resolveChildren(child.refId).filter((item): item is FileObject => item.type === "file")
             : [],
         );
-    return paginate(nested, options);
+    const page = paginate(nested, options);
+    return withListingState(page, nested.length > 0 ? "ok" : "empty", {
+      contentItemCount: nested.length,
+      emptyCopy: nested.length === 0,
+      chromeOnly: false,
+    });
   }
 
   async getFile(refId: RefId): Promise<FileObject> {

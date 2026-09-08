@@ -21,6 +21,7 @@ scratch/
 chrome-profile/
 /packages/mcp/LICENSE
 /packages/mcp/NOTICE
+opencode.json
 docs/demo/out/
 docs/demo/*.webm
 

@@ -98,14 +98,19 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
 
     const refMatch = url.search.match(REF_ID_QUERY);
     if (refMatch) {
+      const refId = refMatch[1];
+      const itemRef = url.searchParams.get("item_ref_id");
+      const hasChild = itemRef && /^\d+$/.test(itemRef) && itemRef !== "0" && itemRef !== refId;
+      if (hasChild) {
+        // cmdClass describes the parent ref_id, not the child item_ref_id.
+        // Child type is unknowable from this URL — unknown is the needs-resolve marker.
+        return { type: "unknown", refId: itemRef };
+      }
       const classes = url.searchParams.getAll("cmdClass").map((value) => value.toLowerCase());
       const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]);
-      const itemRef = url.searchParams.get("item_ref_id");
-      const child =
-        itemRef && /^\d+$/.test(itemRef) && itemRef !== "0" && itemRef !== refMatch[1] ? itemRef : refMatch[1];
       return {
         type: (mapped ? CMD_CLASS_TO_TYPE[mapped] : undefined) ?? "unknown",
-        refId: child,
+        refId,
       };
     }
   } catch {

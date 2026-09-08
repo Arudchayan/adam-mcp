@@ -35,7 +35,14 @@ describe("canonicalUrl and parseAdamRef", () => {
       parseAdamRef(
         "https://adam.unibas.ch/ilias.php?cmdClass=ilobjfoldergui&ref_id=2291290&item_ref_id=2291904",
       ),
-      { type: "fold", refId: "2291904" },
+      // Child id, parent type unknowable → unknown (needs-resolve, ADR 0005).
+      { type: "unknown", refId: "2291904" },
+    );
+    assert.deepEqual(
+      parseAdamRef(
+        "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdClass=ilobjcoursegui&ref_id=100001&item_ref_id=2291904",
+      ),
+      { type: "unknown", refId: "2291904" },
     );
   });
 

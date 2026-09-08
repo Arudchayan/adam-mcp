@@ -8,6 +8,7 @@ import {
   paginate,
   preferCalendarEvents,
   parseAdamRef,
+  withListingState,
   type AdamObject,
   type AdamObjectType,
   type AdamProvider,
@@ -27,6 +28,7 @@ import { defaultOrigin } from "./config.ts";
 import {
   extractCatalog,
   exerciseDeadlineFromPage,
+  classifyListing,
   isAdamFailurePage,
   isLoggedInSnapshot,
   isLoginSnapshot,
@@ -43,7 +45,7 @@ export type BrowserProviderOptions = {
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
 const MAX_LIVE_PAGES = 48;
 const MAX_COURSE_CHILDREN = 100;
-const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "exc", "cat"];
+const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "file", "exc", "cat"];
 
 type LivePage = {
   snapshot: PageSnapshot;
@@ -81,7 +83,9 @@ export class BrowserAdamProvider implements AdamProvider {
     const snapshot = await this.openAuthorized(this.origin);
     const catalog = extractCatalog(snapshot, now());
     const courses = uniqueByRef(catalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type)));
-    return paginate(courses, options);
+    const page = paginate(courses, options);
+    const classified = classifyListing(snapshot, courses.length);
+    return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
@@ -103,7 +107,9 @@ export class BrowserAdamProvider implements AdamProvider {
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
-    return paginate(children, options);
+    const page = paginate(children, options);
+    const classified = classifyListing(snapshot, children.length);
+    return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
@@ -127,7 +133,14 @@ export class BrowserAdamProvider implements AdamProvider {
     this.rememberTypes(catalog);
     const direct = catalog.files.filter((item) => item.refId !== refId);
     const nested = catalog.objects.filter((item): item is FileObject => item.type === "file");
-    return paginate(direct.length > 0 ? direct : nested, options);
+    const files = direct.length > 0 ? direct : nested;
+    const page = paginate(files, options);
+    // Files filtered to zero while the container list hydrated is complete + [] (ADR 0005).
+    const hydrated = catalog.objects.filter((item) => item.refId !== refId).length;
+    const classified = files.length > 0 || hydrated > 0
+      ? { state: "ok" as const, signals: classifyListing(snapshot, hydrated).signals, notice: undefined as string | undefined }
+      : classifyListing(snapshot, 0);
+    return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
@@ -375,11 +388,11 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   private rememberTypes(catalog: ExtractedCatalog): void {
-    if (catalog.current && catalog.current.type !== "unknown") {
+    if (catalog.current && catalog.current.type !== "unknown" && !isDeniedObjectType(catalog.current.type)) {
       this.typeByRefId.set(catalog.current.refId, catalog.current.type);
     }
     for (const item of catalog.objects) {
-      if (item.type !== "unknown") {
+      if (item.type !== "unknown" && !isDeniedObjectType(item.type)) {
         this.typeByRefId.set(item.refId, item.type);
       }
     }
@@ -402,9 +415,12 @@ export class BrowserAdamProvider implements AdamProvider {
       try {
         const snapshot = await this.openAuthorized(objectUrl(type, refId, this.origin));
         const landed = parseAdamRef(snapshot.url);
-        if (landed && landed.type !== "unknown") {
+        // Only cache when the landed object is the requested one (ADR 0005).
+        // Folder GUIs render as ilias.php?ref_id=PARENT&item_ref_id=CHILD, which
+        // now parses as unknown/CHILD — never cache that as the parent's type.
+        if (landed && landed.type !== "unknown" && landed.refId === refId && !isDeniedObjectType(landed.type)) {
           this.typeByRefId.set(refId, landed.type);
-        } else {
+        } else if (!landed || landed.type === "unknown") {
           this.typeByRefId.set(refId, type);
         }
         return snapshot;
@@ -451,7 +467,12 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(landed.type, landed.refId);
     }
     if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
-      throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
+      // Folder GUIs carry ref_id=PARENT&item_ref_id=CHILD in the URL while showing
+      // the parent container. Accept when the parent ref_id matches the request.
+      const parentRef = snapshot.url.match(/[?&]ref_id=(\d+)/i)?.[1];
+      if (parentRef !== requested.refId) {
+        throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
+      }
     }
     if (isLoginSnapshot(snapshot)) {
       throw new AdamError(
