@@ -14,6 +14,8 @@ import {
 } from "./config.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { MAX_HTML_BYTES, MAX_PAGE_TEXT, capText, isLoggedInSnapshot } from "./extract.ts";
+import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
+import { injectableCookies } from "./session-handoff.ts";
 import { NavigationLimiter } from "./rate-limit.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
@@ -41,6 +43,8 @@ export type PlaywrightSessionOptions = {
   origin?: string;
   profileDir?: string;
   headed?: boolean;
+  feedbackHoldMs?: number;
+  hideWindowAfterFeedback?: boolean;
 };
 
 export class PlaywrightAdamSession implements AdamBrowserSession {
@@ -53,11 +57,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private readonly origin: string;
   private readonly profileDir: string;
   private headed: boolean;
+  private readonly feedbackHoldMs: number;
+  private readonly hideWindowAfterFeedback: boolean;
 
   constructor(options: PlaywrightSessionOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
     this.profileDir = options.profileDir ?? defaultProfileDir();
     this.headed = options.headed ?? headedByDefault();
+    this.feedbackHoldMs = options.feedbackHoldMs ?? DEFAULT_FEEDBACK_HOLD_MS;
+    this.hideWindowAfterFeedback = options.hideWindowAfterFeedback ?? true;
     this.limiter = new NavigationLimiter({
       gapMs: minNavigationGapMs(),
       perMinute: maxNavigationsPerMinute(),
@@ -97,7 +105,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       await this.rejectIfBlocked(page);
       let snapshot: PageSnapshot | undefined = await this.readSnapshot(page);
       if (isLoggedInSnapshot(snapshot)) {
-        return this.toStatus(snapshot);
+        await this.announceLogin(page, "success");
+        await this.continueHeadlessIfOwned(page);
+        return this.toStatus(await this.readSnapshot(await this.ensurePage()));
       }
       await this.clickSwitchIfPresent(page);
       console.error(
@@ -117,12 +127,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         }
       }
       if (!snapshot || !isLoggedInSnapshot(snapshot)) {
+        await this.announceLogin(page, "error");
         throw new AdamError(
           "unauthorized",
           "SWITCH login did not finish in time. Complete it in the Chrome window, then retry npm run login.",
         );
       }
-      return this.toStatus(snapshot);
+      await this.announceLogin(page, "success");
+      await this.continueHeadlessIfOwned(page);
+      return this.toStatus(await this.readSnapshot(await this.ensurePage()));
     });
   }
 
@@ -171,6 +184,99 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   private serialize<T>(work: () => Promise<T>): Promise<T> {
     return this.queue.enqueue(work);
+  }
+
+  private async announceLogin(page: Page, kind: "success" | "error"): Promise<void> {
+    const copy =
+      kind === "success"
+        ? {
+            headline: "You're signed in to ADAM",
+            detail: "This window will close. Your ADAM session stays in the background.",
+          }
+        : {
+            headline: "ADAM sign-in did not finish",
+            detail: "Sign-in did not finish in time. If SWITCH said the request was too old, that form expired — run login again.",
+          };
+    await showSessionFeedback(page, kind, copy.headline, copy.detail, {
+      holdMs: this.feedbackHoldMs,
+      hideWindow: false,
+    });
+  }
+
+  private async continueHeadlessIfOwned(page: Page): Promise<void> {
+    if (!this.ownsChrome || !this.context) {
+      if (this.hideWindowAfterFeedback) {
+        await minimizeChromeWindow(page);
+      }
+      return;
+    }
+    let userAgent = "Mozilla/5.0";
+    try {
+      userAgent = String(await page.evaluate("navigator.userAgent"));
+    } catch {
+      // Keep a generic UA; verification below fail-closes if ADAM rejects it.
+    }
+    const state = await this.context.storageState();
+    const jar = injectableCookies(state.cookies);
+    await this.closeContext();
+    this.headed = false;
+    await mkdir(this.profileDir, { recursive: true });
+    let launched: BrowserContext | undefined;
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        launched = await chromium.launchPersistentContext(this.profileDir, {
+          channel: "chrome",
+          headless: true,
+          acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
+          viewport: { width: 1280, height: 900 },
+          locale: "de-CH",
+          userAgent,
+          args: chromeLaunchArgs(),
+        });
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        await delay(250 * (attempt + 1));
+      }
+    }
+    if (!launched) {
+      const detail = lastError instanceof Error ? lastError.message : "unknown error";
+      throw new AdamError(
+        "provider_unavailable",
+        `Could not continue the ADAM session in the background. ${detail}`,
+      );
+    }
+    this.context = launched;
+    this.ownsChrome = true;
+    this.context.on("page", (opened) => {
+      attachDownloadGuard(opened);
+    });
+    try {
+      await this.context.addCookies(jar);
+      this.page = this.context.pages()[0] ?? (await this.context.newPage());
+      attachDownloadGuard(this.page);
+      assertUrlAllowed(this.origin);
+      await this.limiter.take();
+      await this.page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      const snapshot = await this.readSnapshot(this.page);
+      if (!isLoggedInSnapshot(snapshot)) {
+        throw new AdamError(
+          "unauthorized",
+          "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
+        );
+      }
+    } catch (error) {
+      await this.closeContext();
+      if (error instanceof AdamError) {
+        throw error;
+      }
+      throw new AdamError(
+        "unauthorized",
+        "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
+      );
+    }
   }
 
   private async ensurePage(): Promise<Page> {

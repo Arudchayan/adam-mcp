@@ -6,7 +6,7 @@ export async function runLoginCli(): Promise<void> {
   const session = createPlaywrightSession({ headed: true });
   console.error("Opening Chrome for ADAM.");
   console.error(`Profile: ${defaultProfileDir()}`);
-  console.error("Sign in in that window, then leave it open.");
+  console.error("Sign in in that window.");
   const status = await session.loginInteractively();
   if (!status.loggedIn) {
     console.error("Login did not complete.");
@@ -14,7 +14,7 @@ export async function runLoginCli(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  console.error("Signed in. Leave this Chrome window open.");
+  console.error("Signed in. The window should close; a background Chrome keeps the session.");
   console.error("Enable the adam MCP server in your client, then list courses.");
   console.error("Ctrl+C closes Chrome and ends the session.");
   await new Promise<void>((resolve) => {
