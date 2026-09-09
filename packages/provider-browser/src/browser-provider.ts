@@ -47,10 +47,31 @@ const MAX_LIVE_PAGES = 48;
 const MAX_COURSE_CHILDREN = 100;
 const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "file", "exc", "cat"];
 
-type LivePage = {
-  snapshot: PageSnapshot;
+/** Walk cache entry: catalog + provenance URLs only (no HTML/aria PageSnapshot body). */
+export type LivePage = {
+  url: string;
+  title: string;
   catalog: ExtractedCatalog;
 };
+
+/** Drop full HTML/aria snapshot body after extract; keep objects, text, dates, news, provenance. */
+export function retainWalkPage(snapshot: PageSnapshot, catalog: ExtractedCatalog): LivePage {
+  return {
+    url: snapshot.url,
+    title: snapshot.title,
+    catalog,
+  };
+}
+
+/** Byte-ish proxy for retained walk pages (JSON length). */
+export function walkRetentionByteProxy(page: LivePage): number {
+  return Buffer.byteLength(JSON.stringify(page), "utf8");
+}
+
+/** Byte-ish proxy for a full live PageSnapshot (includes html). */
+export function fullSnapshotByteProxy(snapshot: PageSnapshot): number {
+  return Buffer.byteLength(JSON.stringify(snapshot), "utf8");
+}
 
 export class BrowserAdamProvider implements AdamProvider {
   readonly id = "browser" as const;
@@ -58,6 +79,9 @@ export class BrowserAdamProvider implements AdamProvider {
   private sessionHandle: AdamBrowserSession | undefined;
   private readonly injected: boolean;
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
+  /** PERF-1: shared enrolled walk memo; invalidated on close() (new provider = fresh). */
+  private livePagesMemo: LivePage[] | undefined;
+  private livePagesInflight: Promise<LivePage[]> | undefined;
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -74,6 +98,8 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async close(): Promise<void> {
+    this.livePagesMemo = undefined;
+    this.livePagesInflight = undefined;
     if (this.sessionHandle) {
       await this.sessionHandle.close();
     }
@@ -103,7 +129,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
-    const snapshot = await this.openObject(refId, options?.type);
+    const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
@@ -132,7 +158,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
-    const snapshot = await this.openObject(refId, options?.type);
+    const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
     const direct = catalog.files.filter((item) => item.refId !== refId);
@@ -276,15 +302,16 @@ export class BrowserAdamProvider implements AdamProvider {
   ): Promise<Paginated<CalendarEvent>> {
     const pages = await this.collectLivePages();
     const events: CalendarEvent[] = [];
-    for (const { snapshot, catalog } of pages) {
+    for (const page of pages) {
+      const { catalog } = page;
       const provenance = catalog.current?.provenance ?? {
-        sourceUrl: snapshot.url,
+        sourceUrl: page.url,
         fetchedAt: now(),
         provider: "browser" as const,
         freshness: "live-browser-session",
       };
       const objectRefId = catalog.current?.refId;
-      const url = catalog.current?.url ?? snapshot.url;
+      const url = catalog.current?.url ?? page.url;
 
       // AT6: unlabeled / page-inferred dates stay source:page — never promote all dates on exc pages to exc.
       for (const date of catalog.inferredDates) {
@@ -332,6 +359,26 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   private async collectLivePages(onProgress?: ProgressReporter): Promise<LivePage[]> {
+    // PERF-1 memo: reuse enrolled walk across search / calendar / news.
+    // Invalidation: close() (and a new provider instance). Memo hit emits no progress.
+    if (this.livePagesMemo) {
+      return this.livePagesMemo;
+    }
+    if (this.livePagesInflight) {
+      return this.livePagesInflight;
+    }
+    this.livePagesInflight = this.walkLivePages(onProgress)
+      .then((pages) => {
+        this.livePagesMemo = pages;
+        return pages;
+      })
+      .finally(() => {
+        this.livePagesInflight = undefined;
+      });
+    return this.livePagesInflight;
+  }
+
+  private async walkLivePages(onProgress?: ProgressReporter): Promise<LivePage[]> {
     const report = async (progress: number) => {
       if (!onProgress) {
         return;
@@ -344,9 +391,11 @@ export class BrowserAdamProvider implements AdamProvider {
     };
 
     const home = await this.openAuthorized(this.origin);
-    const pages: LivePage[] = [{ snapshot: home, catalog: extractCatalog(home, now()) }];
+    const homeCatalog = extractCatalog(home, now());
+    this.rememberTypes(homeCatalog);
+    const pages: LivePage[] = [retainWalkPage(home, homeCatalog)];
     await report(pages.length);
-    const seen = new Set<string>(pages[0]?.catalog.current?.refId ? [pages[0].catalog.current.refId] : []);
+    const seen = new Set<string>(homeCatalog.current?.refId ? [homeCatalog.current.refId] : []);
     const queue: Array<{ type: AdamObjectType; refId: RefId }> = [];
 
     const enqueue = (type: AdamObjectType, refId: RefId) => {
@@ -363,9 +412,15 @@ export class BrowserAdamProvider implements AdamProvider {
       queue.push({ type, refId });
     };
 
-    for (const item of pages[0]?.catalog.objects ?? []) {
-      if (item.type === "crs") {
-        enqueue(item.type, item.refId);
+    const homeChildren = homeCatalog.objects.filter(
+      (item) => item.refId !== homeCatalog.current?.refId && !isDeniedObjectType(item.type),
+    );
+    const homeListing = classifyListing(home, homeChildren.length);
+    if (homeListing.state === "ok") {
+      for (const item of homeCatalog.objects) {
+        if (item.type === "crs") {
+          enqueue(item.type, item.refId);
+        }
       }
     }
 
@@ -377,8 +432,17 @@ export class BrowserAdamProvider implements AdamProvider {
       try {
         const snapshot = await this.openAuthorized(objectUrl(next.type, next.refId, this.origin));
         const catalog = extractCatalog(snapshot, now());
-        pages.push({ snapshot, catalog });
+        this.rememberTypes(catalog);
+        pages.push(retainWalkPage(snapshot, catalog));
         await report(pages.length);
+        const childCount = catalog.objects.filter(
+          (item) => item.refId !== catalog.current?.refId && !isDeniedObjectType(item.type),
+        ).length;
+        const listing = classifyListing(snapshot, childCount);
+        // PERF-1 / ADR 0005: unknown (and empty) — prune branch; never deepen from untrustworthy list.
+        if (listing.state !== "ok") {
+          continue;
+        }
         if (catalog.current?.type === "crs" || catalog.current?.type === "fold") {
           for (const child of catalog.objects) {
             enqueue(child.type, child.refId);
@@ -402,16 +466,25 @@ export class BrowserAdamProvider implements AdamProvider {
     }
   }
 
-  private async openObject(refId: RefId, typeHint?: AdamObjectType): Promise<PageSnapshot> {
+  private async openObject(
+    refId: RefId,
+    typeHint?: AdamObjectType,
+    opts?: { listingFastFail?: boolean },
+  ): Promise<PageSnapshot> {
     if (!/^\d+$/.test(refId)) {
       throw new AdamError("not_found", "ADAM ref_id must contain digits only.");
     }
     const preferred = typeHint && typeHint !== "unknown" ? typeHint : this.typeByRefId.get(refId);
     const tried = new Set<AdamObjectType>();
     let lastNotFound: AdamError | undefined;
+    // PERF-1: page-backed lists — preferred + ≤1 retry; no TYPE_PROBE_ORDER storm.
+    const maxAttempts = opts?.listingFastFail ? 2 : TYPE_PROBE_ORDER.length + 1;
 
     const tryType = async (type: AdamObjectType): Promise<PageSnapshot | undefined> => {
       if (tried.has(type)) {
+        return undefined;
+      }
+      if (tried.size >= maxAttempts) {
         return undefined;
       }
       tried.add(type);
