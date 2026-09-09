@@ -1,4 +1,10 @@
-import { createBrowserProvider, BrowserAdamProvider } from "./browser-provider.ts";
+import {
+  createBrowserProvider,
+  BrowserAdamProvider,
+  retainWalkPage,
+  walkRetentionByteProxy,
+  fullSnapshotByteProxy,
+} from "./browser-provider.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 
@@ -12,7 +18,14 @@ export {
   isLoginSnapshot,
 } from "./extract.ts";
 export { defaultProfileDir } from "./config.ts";
-export { createBrowserProvider, BrowserAdamProvider };
+export {
+  createBrowserProvider,
+  BrowserAdamProvider,
+  retainWalkPage,
+  walkRetentionByteProxy,
+  fullSnapshotByteProxy,
+};
+export type { LivePage } from "./browser-provider.ts";
 export { createMemorySession, snapshotFromHtml };
 export { createPlaywrightSession };
 export { runLoginCli } from "./login-cli.ts";

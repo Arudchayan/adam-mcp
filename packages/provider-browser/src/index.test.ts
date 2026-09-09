@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError, syntheticPdfWithText } from "adam-core";
 import { hostnameAllowed, urlAllowed } from "./allowlist.ts";
-import { createBrowserProvider } from "./browser-provider.ts";
+import {
+  createBrowserProvider,
+  retainWalkPage,
+  walkRetentionByteProxy,
+  fullSnapshotByteProxy,
+} from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot } from "./extract.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
@@ -696,5 +701,248 @@ describe("ADR 0005 listing honesty", () => {
     });
     const children = await toy.listChildren("100010", { type: "fold" });
     assert.notDeepEqual(children.items, []);
+  });
+});
+
+describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
+  it("slims retained walk pages: no html body; byte proxy smaller than full snapshot", () => {
+    const fatHtml = `${folderHtml}\n<!-- ${"x".repeat(20_000)} -->`;
+    const snapshot = snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100010",
+      "03 - Course & Notes",
+      fatHtml,
+      "03 - Course Notes 00_Overview.pdf Abmelden",
+    );
+    const catalog = extractCatalog(snapshot, "2026-09-09T08:00:00.000Z");
+    const retained = retainWalkPage(snapshot, catalog);
+    assert.equal("html" in retained, false);
+    assert.equal("links" in retained, false);
+    assert.equal(retained.url, snapshot.url);
+    assert.ok(retained.catalog.objects.length > 0);
+    assert.ok(typeof retained.catalog.text === "string");
+    const slim = walkRetentionByteProxy(retained);
+    const full = fullSnapshotByteProxy(snapshot);
+    assert.ok(slim < full, `expected slim ${slim} < full ${full}`);
+    // Across MAX_LIVE_PAGES (48) the retained shape stays without html.
+    let slimSum = 0;
+    let fullSum = 0;
+    for (let i = 0; i < 48; i += 1) {
+      slimSum += slim;
+      fullSum += full;
+    }
+    assert.ok(slimSum < fullSum);
+  });
+
+  it("shares collectLivePages memo across search/calendar/news; invalidate on close()", async () => {
+    const opens: string[] = [];
+    const session = createMemorySession(
+      {
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardHtml,
+          "Schreibtisch 00000-01 Written exam: 12 January 2027 News 00_Overview.pdf New file Abmelden",
+        ),
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100001",
+          "00000-01 – Synthetic Multimedia Seminar",
+          courseHtml,
+          "00000-01 Written exam: 12 January 2027 Course Notes Exercises Exercise 1 Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "03 - Course & Notes",
+          folderHtml,
+          "03 - Course Notes 00_Overview.pdf Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+        "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100021",
+          "Exercise 1 – Retrieval summary",
+          exerciseHtml,
+          "Exercise 1 Retrieval summary Deadline: 22 September 2026 Abmelden",
+        ),
+      },
+      { onOpen: (url) => opens.push(url) },
+    );
+    const provider = createBrowserProvider({ session, origin: "https://adam.unibas.ch" });
+
+    await provider.search("exam");
+    const afterSearch = opens.length;
+    assert.ok(afterSearch >= 2, `expected enrolled walk opens; got ${afterSearch}`);
+
+    await provider.listCalendar();
+    assert.equal(opens.length, afterSearch, "calendar must reuse walk memo (no re-walk)");
+
+    const progress: unknown[] = [];
+    await provider.listNews({
+      onProgress: async (update) => {
+        progress.push(update);
+      },
+    });
+    assert.equal(opens.length, afterSearch, "news must reuse walk memo (no re-walk)");
+    // Memo hit: no progress callbacks (reuse path is silent).
+    assert.deepEqual(progress, []);
+
+    await provider.close();
+    await provider.search("exam");
+    assert.ok(opens.length > afterSearch, "close() invalidates memo; next walk re-opens");
+  });
+
+  it("unknown list_children returns immediately; ≤1 retry; no TYPE_PROBE storm", async () => {
+    const opens: string[] = [];
+    const unknownFold = snapshotFromHtml(
+      "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdClass=ilobjfoldergui&ref_id=100099",
+      "Content: Mystery folder: ADAM",
+      `<nav aria-label="Hauptnavigationsleiste"><a href="/go/fold/888888">Chrome trap</a></nav>
+<main><h1>Mystery folder</h1><p>Content Info</p></main>`,
+      "ADAM Search Dashboard Content (Selected) Info Accessibility Rendered by its-ilias-web-prod-04 - 10.11",
+    );
+    const notFound = (type: string) =>
+      snapshotFromHtml(
+        `https://adam.unibas.ch/go/${type}/100099`,
+        "Failure Message",
+        "<main><h1>Failure Message</h1><p>The requested page could not be found.</p></main>",
+        "Failure Message The requested page could not be found.",
+      );
+
+    // Typed list: one open, unknown, never coerce to empty, no further probes.
+    const typedOpens: string[] = [];
+    const typed = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        {
+          "https://adam.unibas.ch/go/fold/100099": unknownFold,
+        },
+        { onOpen: (url) => typedOpens.push(url) },
+      ),
+    });
+    const listed = await typed.listChildren("100099", { type: "fold" });
+    assert.equal(listed.listingState, "unknown");
+    assert.deepEqual(listed.items, []);
+    assert.ok(listed.notice);
+    assert.equal(typedOpens.length, 1, `expected single open, got ${typedOpens.join(",")}`);
+
+    // Untyped list against all-not-found: ≤2 probes (preferred absent → ≤1 retry budget), not full TYPE_PROBE_ORDER.
+    const storm = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        {
+          "https://adam.unibas.ch/go/crs/100099": notFound("crs"),
+          "https://adam.unibas.ch/go/fold/100099": notFound("fold"),
+          "https://adam.unibas.ch/go/file/100099": notFound("file"),
+          "https://adam.unibas.ch/go/exc/100099": notFound("exc"),
+          "https://adam.unibas.ch/go/cat/100099": notFound("cat"),
+        },
+        { onOpen: (url) => opens.push(url) },
+      ),
+    });
+    await assert.rejects(() => storm.listChildren("100099"), (error: unknown) => {
+      return error instanceof AdamError && error.code === "not_found";
+    });
+    assert.ok(opens.length <= 2, `TYPE_PROBE storm: ${opens.length} opens (${opens.join(",")})`);
+    assert.ok(opens.length >= 1);
+  });
+
+  it("walk prunes unknown listing branches; continues enrolled ok branches; never Magazin-only", async () => {
+    const opens: string[] = [];
+    const unknownFoldHtml = `<nav aria-label="Hauptnavigationsleiste"><a href="/go/fold/888888">Chrome trap</a></nav>
+<main><h1>Mystery folder</h1><p>Content Info</p></main>`;
+    const courseWithUnknown = `
+<nav aria-label="Brotkrumen"><a href="/go/root/1">ADAM</a></nav>
+<main>
+  <h1>00000-01 – Synthetic Multimedia Seminar</h1>
+  <a href="/go/fold/100099">Mystery folder</a>
+  <a href="/go/fold/100010">03 - Course &amp; Notes</a>
+  <a href="/go/exc/100021">Exercise 1 – Retrieval summary</a>
+  <a href="/logout.php">Abmelden</a>
+</main>`;
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        {
+          "https://adam.unibas.ch/": snapshotFromHtml(
+            "https://adam.unibas.ch/",
+            "Schreibtisch",
+            dashboardHtml,
+            "Schreibtisch 00000-01 Written exam Abmelden",
+          ),
+          "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+            "https://adam.unibas.ch/go/crs/100001",
+            "00000-01 – Synthetic Multimedia Seminar",
+            courseWithUnknown,
+            "00000-01 Mystery folder Course Notes Exercise 1 Abmelden",
+          ),
+          "https://adam.unibas.ch/go/fold/100099": snapshotFromHtml(
+            "https://adam.unibas.ch/go/fold/100099",
+            "Content: Mystery folder: ADAM",
+            unknownFoldHtml,
+            "ADAM Search Dashboard Content (Selected) Info Accessibility Rendered by its-ilias-web-prod-04 - 10.11",
+          ),
+          "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+            "https://adam.unibas.ch/go/fold/100010",
+            "03 - Course & Notes",
+            folderHtml,
+            "03 - Course Notes 00_Overview.pdf Abmelden",
+          ),
+          "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+            "https://adam.unibas.ch/go/fold/100020",
+            "04 - Exercises",
+            emptyFolderHtml,
+            "04 - Exercises This folder is empty Abmelden",
+          ),
+          "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+            "https://adam.unibas.ch/go/exc/100021",
+            "Exercise 1 – Retrieval summary",
+            exerciseHtml,
+            "Exercise 1 Deadline: 22 September 2026 Abmelden",
+          ),
+          "https://adam.unibas.ch/go/fold/888888": snapshotFromHtml(
+            "https://adam.unibas.ch/go/fold/888888",
+            "Should not open",
+            "<main><h1>trap</h1></main>",
+            "trap",
+          ),
+        },
+        { onOpen: (url) => opens.push(url) },
+      ),
+    });
+
+    const found = await provider.search("Overview");
+    assert.equal(found.items.some((item) => item.refId === "100011"), true);
+    assert.equal(
+      opens.some((url) => url.includes("888888")),
+      false,
+      `Magazin/chrome trap must not be crawled: ${opens.join(",")}`,
+    );
+    assert.equal(opens.some((url) => url.includes("100099")), true, "unknown fold is visited once");
+    assert.equal(opens.some((url) => url.includes("100010")), true, "ok fold still walked");
+    assert.equal(opens.some((url) => url.includes("/go/exc/100021")), true, "ok exc still walked");
+  });
+
+  it("direct readPage still full-opens (not walk-cache only)", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        {
+          "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+            "https://adam.unibas.ch/go/fold/100010",
+            "03 - Course & Notes",
+            folderHtml,
+            "03 - Course Notes 00_Overview.pdf Abmelden",
+          ),
+        },
+        { onOpen: (url) => opens.push(url) },
+      ),
+    });
+    const page = await provider.readPage("100010", { type: "fold" });
+    assert.match(page.text, /Course/);
+    assert.equal(opens.length, 1);
   });
 });

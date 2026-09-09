@@ -23,7 +23,7 @@ export type MemoryBlob = {
 
 export function createMemorySession(
   pages: MemorySessionPages,
-  options: { files?: Record<string, MemoryBlob> } = {},
+  options: { files?: Record<string, MemoryBlob>; onOpen?: (url: string) => void } = {},
 ): AdamBrowserSession {
   const origin = defaultOrigin();
   let current = pages.home ?? Object.values(pages)[0];
@@ -39,6 +39,7 @@ export function createMemorySession(
     },
     async open(url: string): Promise<PageSnapshot> {
       assertUrlAllowed(url);
+      options.onOpen?.(url);
       const hit = pages[url] ?? matchByRef(pages, url);
       if (!hit) {
         throw new AdamError("not_found", `No snapshot for ${url} in the memory session.`);
