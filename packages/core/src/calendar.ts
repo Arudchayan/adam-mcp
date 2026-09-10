@@ -31,15 +31,33 @@ export function calendarEventDedupeKey(event: CalendarEvent): string {
   return `${event.objectRefId ?? ""}||${event.title}`;
 }
 
-/** Keep the highest-ranked source for each same object+day (exc > calendar > page). */
+/**
+ * Keep the best event per same object+day (exc > calendar > page), but rank
+ * explicit evidence above source preference and keep the corroborating sources
+ * in `seenIn` instead of silently dropping them.
+ */
 export function preferCalendarEvents(events: CalendarEvent[]): CalendarEvent[] {
   const best = new Map<string, CalendarEvent>();
   for (const event of events) {
     const key = calendarEventDedupeKey(event);
     const prev = best.get(key);
-    if (!prev || CALENDAR_SOURCE_RANK[event.source] > CALENDAR_SOURCE_RANK[prev.source]) {
-      best.set(key, event);
+    if (!prev) {
+      best.set(key, { ...event, seenIn: [...new Set([...(event.seenIn ?? []), event.source])] });
+      continue;
     }
+    const winner = prefersConfidence(event, prev) ? event : prev;
+    best.set(key, {
+      ...winner,
+      seenIn: [...new Set([...(prev.seenIn ?? [prev.source]), ...(event.seenIn ?? [event.source]), event.source])],
+    });
   }
   return [...best.values()];
+}
+
+/** Explicit evidence beats inferred; when confidence ties, source rank decides. */
+function prefersConfidence(candidate: CalendarEvent, current: CalendarEvent): boolean {
+  if (candidate.confidence !== current.confidence) {
+    return candidate.confidence === "explicit";
+  }
+  return CALENDAR_SOURCE_RANK[candidate.source] > CALENDAR_SOURCE_RANK[current.source];
 }

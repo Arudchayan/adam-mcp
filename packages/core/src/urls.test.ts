@@ -102,6 +102,10 @@ describe("redaction", () => {
     assert.match(redactText("Cookie: ILIASSESSID=abc"), /\[redacted\]/);
     assert.match(redactText("PHPSESSID=abc"), /\[redacted\]/);
     assert.match(redactText("Authorization: Bearer super-secret"), /\[redacted\]/);
+    assert.match(redactText("Authorization: Basic dXNlcjpwYXNz"), /\[redacted\]/);
+    assert.match(redactText("SAMLResponse=PHNhbWw+Q29va2ll"), /\[redacted\]/);
+    assert.match(redactText("_shibsession_abc123=xyz"), /\[redacted\]/);
+    assert.match(redactUrl("https://adam.unibas.ch/login.php?SAMLRequest=abc"), /\[redacted\]/);
   });
 });
 
@@ -130,6 +134,13 @@ describe("object policy", () => {
       assert.match(error.message, /blocked/);
       return true;
     });
+  });
+
+  it("marks transient failures retryable and user-action failures not retryable", () => {
+    assert.equal(new AdamError("provider_unavailable", "chrome missing").retryable, true);
+    assert.equal(new AdamError("not_found", "gone").retryable, false);
+    assert.equal(new AdamError("unauthorized", "login").retryable, false);
+    assert.equal(new AdamError("not_found", "gone", true).retryable, true);
   });
 });
 

@@ -71,6 +71,28 @@ describe("AT6 preferCalendarEvents", () => {
     assert.equal(items[0]?.source, "exc");
   });
 
+  it("prefers explicit evidence over source rank and keeps corroborating sources", () => {
+    const items = preferCalendarEvents([
+      event({
+        title: "Inferred exc",
+        startsAt: "2026-09-22T21:59:00.000Z",
+        source: "exc",
+        confidence: "inferred",
+        objectRefId: "100021",
+      }),
+      event({
+        title: "Explicit calendar",
+        startsAt: "2026-09-22T08:00:00.000Z",
+        source: "calendar",
+        confidence: "explicit",
+        objectRefId: "100021",
+      }),
+    ]);
+    assert.equal(items.length, 1);
+    assert.equal(items[0]?.source, "calendar");
+    assert.deepEqual([...(items[0]?.seenIn ?? [])].sort(), ["calendar", "exc"]);
+  });
+
   it("keeps distinct undated page notes", () => {
     const items = preferCalendarEvents([
       event({ title: "room TBA", source: "page", confidence: "inferred", objectRefId: "100101" }),

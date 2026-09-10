@@ -46,10 +46,18 @@ describe("read-only MCP facade", () => {
     assert.notEqual(server, null);
   });
 
-  it("marks AdamError results as tool errors", () => {
+  it("marks more provider errors as tool errors", () => {
     const result = fail(new AdamError("not_found", "missing"));
     assert.equal(result.isError, true);
     assert.match(toolText(result), /^not_found:/);
+    assert.match(toolText(result), /retryable=false/);
+  });
+
+  it("surfaces retryability and run ids on failures", () => {
+    const transient = fail(new AdamError("provider_unavailable", "Chrome is not available."), "deadbeef");
+    assert.equal(transient.isError, true);
+    assert.match(toolText(transient), /retryable=true/);
+    assert.match(toolText(transient), /runId=deadbeef/);
   });
 
   it("returns JSON text and structuredContent for successful payloads", () => {

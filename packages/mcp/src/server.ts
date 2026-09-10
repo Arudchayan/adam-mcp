@@ -7,6 +7,7 @@ import {
   UntrustedContent,
   WalkProgress,
   runProvider,
+  runReadTool,
   sanitizeListingItems,
   sanitizeListingObject,
 } from "./results.ts";
@@ -63,7 +64,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async (args) => runProvider(async () => sanitizeListingItems(await provider.listCourses(args))),
+    async (args) => runReadTool(async () => sanitizeListingItems(await provider.listCourses(args)), "adam_list_courses"),
   );
 
   server.registerTool(
@@ -77,7 +78,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, type: objectType }) =>
-      runProvider(async () => sanitizeListingObject(await provider.getCourse(id, { type: objectType }))),
+      runReadTool(async () => sanitizeListingObject(await provider.getCourse(id, { type: objectType })), "adam_get_course"),
   );
 
   server.registerTool(
@@ -91,8 +92,10 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(async () =>
-        sanitizeListingItems(await provider.listChildren(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      runReadTool(
+        async () =>
+          sanitizeListingItems(await provider.listChildren(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+        "adam_list_children",
       ),
   );
 
@@ -108,7 +111,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async ({ refId: id, type: objectType, confirm }) => {
       ConfirmGate.requireTrue(confirm, "adam_read_page");
-      return runProvider(async () => UntrustedContent.wrap(await provider.readPage(id, { type: objectType })));
+      return runProvider(async () => UntrustedContent.wrap(await provider.readPage(id, { type: objectType })), "adam_read_page");
     },
   );
 
@@ -123,8 +126,10 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(async () =>
-        sanitizeListingItems(await provider.listFiles(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      runReadTool(
+        async () =>
+          sanitizeListingItems(await provider.listFiles(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+        "adam_list_files",
       ),
   );
 
@@ -138,7 +143,8 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: fileObjectOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType }) => runProvider(() => provider.getFile(id, { type: objectType })),
+    async ({ refId: id, type: objectType }) =>
+      runReadTool(async () => provider.getFile(id, { type: objectType }), "adam_get_file"),
   );
 
   server.registerTool(
@@ -153,14 +159,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async ({ refId: id, type: objectType, confirm, maxPages }, ctx) => {
       ConfirmGate.requireTrue(confirm, "adam_extract_file_text");
-      return runProvider(async () =>
-        UntrustedContent.wrap(
-          await provider.extractFileText(id, {
-            type: objectType,
-            maxPages,
-            onProgress: WalkProgress.fromContext(ctx),
-          }),
-        ),
+      return runProvider(
+        async () =>
+          UntrustedContent.wrap(
+            await provider.extractFileText(id, {
+              type: objectType,
+              maxPages,
+              onProgress: WalkProgress.fromContext(ctx),
+            }),
+          ),
+        "adam_extract_file_text",
       );
     },
   );
@@ -175,7 +183,8 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: exerciseOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType }) => runProvider(() => provider.getExercise(id, { type: objectType })),
+    async ({ refId: id, type: objectType }) =>
+      runReadTool(async () => provider.getExercise(id, { type: objectType }), "adam_get_exercise"),
   );
 
   server.registerTool(
@@ -193,14 +202,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ query, cursor: pageCursor, limit: pageLimit }, ctx) =>
-      runProvider(async () =>
-        sanitizeListingItems(
-          await provider.search(query, {
-            cursor: pageCursor,
-            limit: pageLimit,
-            onProgress: WalkProgress.fromContext(ctx),
-          }),
-        ),
+      runReadTool(
+        async () =>
+          sanitizeListingItems(
+            await provider.search(query, {
+              cursor: pageCursor,
+              limit: pageLimit,
+              onProgress: WalkProgress.fromContext(ctx),
+            }),
+          ),
+        "adam_search",
       ),
   );
 
@@ -220,11 +231,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async (args, ctx) =>
-      runProvider(() =>
-        provider.listCalendar({
-          ...args,
-          onProgress: WalkProgress.fromContext(ctx),
-        }),
+      runReadTool(
+        async () =>
+          provider.listCalendar({
+            ...args,
+            onProgress: WalkProgress.fromContext(ctx),
+          }),
+        "adam_list_calendar",
       ),
   );
 
@@ -243,11 +256,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async (args, ctx) =>
-      runProvider(() =>
-        provider.listNews({
-          ...args,
-          onProgress: WalkProgress.fromContext(ctx),
-        }),
+      runReadTool(
+        async () =>
+          provider.listNews({
+            ...args,
+            onProgress: WalkProgress.fromContext(ctx),
+          }),
+        "adam_list_news",
       ),
   );
 
@@ -276,7 +291,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
           openWorldHint: true,
         },
       },
-      async ({ timeoutMs }) => runProvider(() => session.login(timeoutMs)),
+      async ({ timeoutMs }) => runProvider(() => session.login(timeoutMs), "adam_login"),
     );
     server.registerTool(
       "adam_session_status",
@@ -288,7 +303,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         outputSchema: sessionStatusOutputSchema,
         annotations: READ_ONLY_ANNOTATIONS,
       },
-      async () => runProvider(() => session.status()),
+      async () => runProvider(() => session.status(), "adam_session_status"),
     );
   }
 

@@ -63,6 +63,22 @@ export function retainWalkPage(snapshot: PageSnapshot, catalog: ExtractedCatalog
   };
 }
 
+/** Result of an enrolled-tree walk; partial means skipped pages or the page cap. */
+export type WalkResult = {
+  pages: LivePage[];
+  partial: boolean;
+  skipped: number;
+};
+
+export const WALK_PARTIAL_NOTICE =
+  "Walk was partial: some pages were skipped or the page cap was reached. Results may be incomplete.";
+
+type WalkPaginated<T> = Paginated<T> & { partial?: boolean; skipped?: number; notice?: string };
+
+function withWalkState<T>(page: Paginated<T>, walk: WalkResult): WalkPaginated<T> {
+  return walk.partial ? { ...page, partial: true, skipped: walk.skipped, notice: WALK_PARTIAL_NOTICE } : page;
+}
+
 /** Byte-ish proxy for retained walk pages (JSON length). */
 export function walkRetentionByteProxy(page: LivePage): number {
   return Buffer.byteLength(JSON.stringify(page), "utf8");
@@ -80,8 +96,8 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly injected: boolean;
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
   /** PERF-1: shared enrolled walk memo; invalidated on close() (new provider = fresh). */
-  private livePagesMemo: LivePage[] | undefined;
-  private livePagesInflight: Promise<LivePage[]> | undefined;
+  private livePagesMemo: WalkResult | undefined;
+  private livePagesInflight: Promise<WalkResult> | undefined;
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -269,12 +285,12 @@ export class BrowserAdamProvider implements AdamProvider {
     };
   }
 
-  async search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>> {
+  async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {
     const needle = query.trim().toLowerCase();
-    const pages = await this.collectLivePages();
+    const walk = await this.collectLivePages();
     const titleMatches: AdamObject[] = [];
     const bodyMatches: AdamObject[] = [];
-    for (const { catalog } of pages) {
+    for (const { catalog } of walk.pages) {
       if (
         catalog.current &&
         !isDeniedObjectType(catalog.current.type) &&
@@ -294,15 +310,15 @@ export class BrowserAdamProvider implements AdamProvider {
       }
     }
     // AT3: title matches before page-body matches; enrolled walk only (collectLivePages).
-    return paginate(uniqueByRef([...titleMatches, ...bodyMatches]), options);
+    return withWalkState(paginate(uniqueByRef([...titleMatches, ...bodyMatches]), options), walk);
   }
 
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
-  ): Promise<Paginated<CalendarEvent>> {
-    const pages = await this.collectLivePages();
+  ): Promise<WalkPaginated<CalendarEvent>> {
+    const walk = await this.collectLivePages();
     const events: CalendarEvent[] = [];
-    for (const page of pages) {
+    for (const page of walk.pages) {
       const { catalog } = page;
       const provenance = catalog.current?.provenance ?? {
         sourceUrl: page.url,
@@ -343,22 +359,22 @@ export class BrowserAdamProvider implements AdamProvider {
       }
     }
     // AT6: same event prefers exc > calendar > page.
-    return paginate(preferCalendarEvents(filterRange(events, options?.from, options?.to)), options);
+    return withWalkState(paginate(preferCalendarEvents(filterRange(events, options?.from, options?.to)), options), walk);
   }
 
-  async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
+  async listNews(options?: { since?: string } & ListOptions): Promise<WalkPaginated<NewsItem>> {
     // A2-news-browser: long enrolled walk reports progress when onProgress is set (fixture parity).
-    const pages = await this.collectLivePages(options?.onProgress);
-    const items = uniqueNews(pages.flatMap((page) => page.catalog.news));
+    const walk = await this.collectLivePages(options?.onProgress);
+    const items = uniqueNews(walk.pages.flatMap((page) => page.catalog.news));
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     const filtered = items.filter((item) => {
       const stamp = Date.parse(item.updatedAt ?? item.createdAt ?? "");
       return Number.isFinite(stamp) ? stamp >= since : true;
     });
-    return paginate(filtered, options);
+    return withWalkState(paginate(filtered, options), walk);
   }
 
-  private async collectLivePages(onProgress?: ProgressReporter): Promise<LivePage[]> {
+  private async collectLivePages(onProgress?: ProgressReporter): Promise<WalkResult> {
     // PERF-1 memo: reuse enrolled walk across search / calendar / news.
     // Invalidation: close() (and a new provider instance). Memo hit emits no progress.
     if (this.livePagesMemo) {
@@ -378,7 +394,7 @@ export class BrowserAdamProvider implements AdamProvider {
     return this.livePagesInflight;
   }
 
-  private async walkLivePages(onProgress?: ProgressReporter): Promise<LivePage[]> {
+  private async walkLivePages(onProgress?: ProgressReporter): Promise<WalkResult> {
     const report = async (progress: number) => {
       if (!onProgress) {
         return;
@@ -424,6 +440,7 @@ export class BrowserAdamProvider implements AdamProvider {
       }
     }
 
+    let skipped = 0;
     while (queue.length > 0 && pages.length < MAX_LIVE_PAGES) {
       const next = queue.shift();
       if (!next) {
@@ -449,10 +466,15 @@ export class BrowserAdamProvider implements AdamProvider {
           }
         }
       } catch {
+        skipped += 1;
         continue;
       }
     }
-    return pages;
+    return {
+      pages,
+      partial: homeListing.state === "unknown" || skipped > 0 || queue.length > 0,
+      skipped,
+    };
   }
 
   private rememberTypes(catalog: ExtractedCatalog): void {

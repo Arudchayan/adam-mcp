@@ -118,6 +118,8 @@ export type CalendarEvent = {
   objectRefId?: RefId;
   url?: string;
   provenance: Provenance;
+  /** Corroborating sources merged into this event (AT6 dedup). */
+  seenIn?: Array<CalendarEvent["source"]>;
 };
 
 export type Paginated<T> = {

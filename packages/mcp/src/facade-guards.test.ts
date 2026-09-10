@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { InMemoryTransport, type McpServer } from "@modelcontextprotocol/server";
 import type { AdamObject, Paginated } from "adam-core";
 import { createFixtureProvider } from "adam-provider-fixture";
-import { sanitizeListingItems, sanitizeListingObject } from "./results.ts";
+import { sanitizeListingItems, sanitizeListingObject, UntrustedContent } from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
 
 const RPC_TIMEOUT_MS = 5_000;
@@ -242,6 +242,8 @@ describe("facade listing guards", () => {
       await rpc.request("tools/call", { name: "adam_list_children", arguments: { refId: "100001" } }),
     );
     const childItems = children.items as Array<Record<string, unknown>>;
+    assert.equal(children.untrusted, true);
+    assert.equal(children.notice, UntrustedContent.DATA_NOTICE);
     assert.equal(childItems.some((item) => item.type === "tst" || item.refId === "100099"), false);
     assert.ok(childItems.some((item) => item.refId === "100010"), "allowed children survive");
     const listedExercise = childItems.find((item) => item.refId === "100021");
