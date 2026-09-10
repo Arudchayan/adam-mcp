@@ -547,7 +547,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   /** Listing evidence from the main frame and same-origin content frames. */
   private async probeListing(page: Page): Promise<PageSnapshot["dom"] | undefined> {
-    type Probe = { itemRows: number; emptyCopy: boolean };
+    type Probe = { itemRows: number; emptyCopy: boolean; contentBlank: boolean };
     const probes: Probe[] = [];
     const main = (await page.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
     if (main) {
