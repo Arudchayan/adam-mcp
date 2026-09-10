@@ -10,6 +10,8 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Live pass (2026-09-10, ADR 0006 build):** all 13 tools exercised through the connected browser server (10 live, `get_file`/`extract_file_text`/`get_exercise` fixture-only because no live file/exc refIds are exposed). Immutable folder state: MM folds still `unknown`, `list_files` empty everywhere. First `adam_session_status` probe after cold start reported `loggedIn: false` from a leftover `login.php` tab while live calls already worked (fixed by ADR 0007 verify-then-report). ADR 0007 also adds ILIAS 10.11 empty-copy parity, frame-link merging, DOM-evidence classification, and `ADAM_DEBUG_CAPTURE=1` redacted captures (`scratch/`, gitignored) so the next live pass can record the unknown fold markup without committing student data.
 
+**Live verification (2026-09-10, ADR 0007 build):** reconnected server confirmed on the merged build. Read-only CDP inspection of MM folds (`2291290`, `2291292`): `tab_view_content` active, `#ilContentContainer > .row > #il_center_col` rendered with **no element children, no text, no rows, no empty copy, and no item-list network request** — ILIAS 10.11 renders an empty Content tab without a message. This is a blank content area, not a hydration failure; added `LISTING_BLANK_CONTENT_NOTICE` (state stays `unknown`; may be empty or not visible to this account). Cold-start first-probe `loggedIn: false` reproduced on the reconnected server; ADR 0007 now re-checks once when the probe lands on a login page.
+
 ## 1. Purpose
 
 Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. No writes until Security + academic-integrity review.
