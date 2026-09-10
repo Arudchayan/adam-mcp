@@ -205,7 +205,21 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           };
         }
       }
-      const page = await this.ensurePage();
+      const page = await this.ensurePage().catch((error: unknown) => {
+        if (error instanceof AdamError && error.code === "unauthorized") {
+          return undefined;
+        }
+        throw error;
+      });
+      if (!page) {
+        return {
+          loggedIn: false,
+          origin: this.origin,
+          reason: "login-required" as const,
+          message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
+          checkedAt: new Date().toISOString(),
+        };
+      }
       if (shouldProbeOrigin(page.url(), this.origin)) {
         assertUrlAllowed(this.origin);
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });

@@ -130,4 +130,18 @@ describe("headless session contract", () => {
       await rm(profileDir, { recursive: true, force: true });
     }
   });
+
+  it("reports login-required when the CDP endpoint is stale", async () => {
+    const profileDir = await tempProfile();
+    try {
+      await writeFile(join(profileDir, "DevToolsActivePort"), "9\n/devtools/browser/deadbeef", "utf8");
+      const session = createPlaywrightSession({ profileDir, origin: "https://adam.unibas.ch" });
+      const status = await session.status();
+      assert.equal(status.loggedIn, false);
+      assert.equal(status.reason, "login-required");
+      await session.close();
+    } finally {
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
 });
