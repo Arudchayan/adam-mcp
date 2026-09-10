@@ -8,6 +8,7 @@ import {
   WalkProgress,
   runProvider,
   sanitizeListingItems,
+  sanitizeListingObject,
 } from "./results.ts";
 import {
   adamObjectOutputSchema,
@@ -57,7 +58,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM courses",
       description:
-        "List courses visible to the current ADAM user. Returns canonical /go/crs/{ref_id} URLs, titles, and provenance. Does not include the public Magazin catalog.",
+        "List courses visible to the current ADAM user. Returns canonical /go/crs/{ref_id} URLs, titles, and provenance. Does not include the public Magazin catalog. Tests (tst) are omitted.",
       inputSchema: z.object({ cursor, limit }),
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
@@ -70,12 +71,13 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Get one ADAM course",
       description:
-        "Get one course by ref_id (metadata and child summary). For full page text use adam_read_page with confirm=true. Fails if the id is not a course or is not visible.",
+        "Get one course by ref_id (metadata and child summary). For full page text use adam_read_page with confirm=true. Fails if the id is not a course or is not visible. Tests (tst) are omitted.",
       inputSchema: z.object({ refId, type }),
       outputSchema: adamObjectOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType }) => runProvider(() => provider.getCourse(id, { type: objectType })),
+    async ({ refId: id, type: objectType }) =>
+      runProvider(async () => sanitizeListingObject(await provider.getCourse(id, { type: objectType }))),
   );
 
   server.registerTool(
@@ -115,13 +117,15 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "List ADAM files",
       description:
-        "List files under a course or folder. Pass type when known. Returns metadata and canonical URLs, not file bytes. Do not download PDFs into the model.",
+        "List files under a course or folder. Pass type when known. Returns metadata and canonical URLs, not file bytes. Do not download PDFs into the model. Tests (tst) are omitted.",
       inputSchema: z.object({ refId, type, cursor, limit }),
       outputSchema: paginatedFilesOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(() => provider.listFiles(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      runProvider(async () =>
+        sanitizeListingItems(await provider.listFiles(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      ),
   );
 
   server.registerTool(
@@ -179,7 +183,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Search visible ADAM titles",
       description:
-        "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Ranks title matches before page-body matches. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links.",
+        "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Ranks title matches before page-body matches. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links. Tests (tst) are omitted.",
       inputSchema: z.object({
         query: z.string().min(1).describe("Search string"),
         cursor,
@@ -322,7 +326,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const course = await provider.getCourse(id, { type: "crs" });
+      const course = sanitizeListingObject(await provider.getCourse(id, { type: "crs" }));
       return {
         contents: [
           {
