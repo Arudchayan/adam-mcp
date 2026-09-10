@@ -11,6 +11,11 @@ export type PageSnapshot = {
   html: string;
   text: string;
   links: SnapshotLink[];
+  /** Page-context listing evidence. Optional for fixtures/memory sessions. */
+  dom?: {
+    itemRows: number;
+    emptyCopy: boolean;
+  };
 };
 
 export type SessionStatus = {

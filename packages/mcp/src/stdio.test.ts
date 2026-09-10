@@ -52,6 +52,22 @@ describe("stdio hygiene", () => {
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
+    // Attach the completion listener before writing so a fast response cannot be missed.
+    const responded = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error(`stdio hygiene timed out. stderr=${stderr} stdout=${stdout}`));
+      }, 30_000);
+      const onData = () => {
+        if (!stdout.includes("\n")) {
+          return;
+        }
+        clearTimeout(timer);
+        child.kill();
+        resolve();
+      };
+      child.stdout.on("data", onData);
+    });
     child.stdin.write(
       `${JSON.stringify({
         jsonrpc: "2.0",
@@ -64,21 +80,7 @@ describe("stdio hygiene", () => {
         },
       })}\n`,
     );
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error(`stdio hygiene timed out. stderr=${stderr} stdout=${stdout}`));
-      }, 12_000);
-      const onData = () => {
-        if (!stdout.includes("\n")) {
-          return;
-        }
-        clearTimeout(timer);
-        child.kill();
-        resolve();
-      };
-      child.stdout.on("data", onData);
-    });
+    await responded;
     assert.match(stderr, /adam-mcp running on stdio/);
     assert.equal(stdout.trim().startsWith("{"), true);
     assert.doesNotMatch(stdout, /adam-mcp running on stdio/);

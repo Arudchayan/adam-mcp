@@ -3,21 +3,121 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { AdamError, MAX_EXTRACT_BYTES, redactUrl } from "adam-core";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
-import { assertUrlAllowed, urlAllowed } from "./allowlist.ts";
+import { assertUrlAllowed, sameOrigin, urlAllowed } from "./allowlist.ts";
 import { localCdpEndpoint, parseDevToolsActivePort } from "./cdp.ts";
 import {
+  debugCaptureEnabled,
   defaultOrigin,
   defaultProfileDir,
   headedByDefault,
 } from "./config.ts";
+import { buildDebugCapture, writeDebugCapture } from "./debug-capture.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
-import { MAX_HTML_BYTES, MAX_PAGE_TEXT, capText, isLoggedInSnapshot } from "./extract.ts";
+import {
+  EMPTY_CONTAINER_COPY,
+  MAX_HTML_BYTES,
+  MAX_PAGE_TEXT,
+  capText,
+  isLoggedInSnapshot,
+  isLoginSnapshot,
+  mergeFrameLinks,
+} from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
 import { injectableCookies } from "./session-handoff.ts";
 import { SerialQueue } from "./serial-queue.ts";
-import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
+import type { AdamBrowserSession, PageSnapshot, SessionStatus, SnapshotLink } from "./session-types.ts";
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
+
+const SESSION_SETTLED_SCRIPT = `(() => {
+  const text = (document.body ? document.body.innerText : "").toLowerCase();
+  return (
+    /bei adam anmelden|login mit switch edu-id/.test(text) ||
+    /abmelden|log out|logout|persönlicher schreibtisch|dashboard/.test(text)
+  );
+})()`;
+
+/** Listing readiness/evidence probe, shared by the wait and the DOM signals. */
+const LISTING_ITEM_SELECTOR =
+  ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']";
+
+const LISTING_PROBE_SCRIPT = `(() => {
+  const root =
+    document.querySelector("main #il_center_col") ??
+    document.querySelector("#il_center_col") ??
+    document.querySelector("main") ??
+    document.body;
+  const items = root ? root.querySelectorAll(${JSON.stringify(LISTING_ITEM_SELECTOR)}) : [];
+  const rows = new Set();
+  for (const item of items) {
+    rows.add(item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item);
+  }
+  const text = root ? root.innerText || "" : "";
+  const emptyCopy = (${EMPTY_CONTAINER_COPY.toString()}).test(text || "");
+  return { itemRows: rows.size, emptyCopy };
+})()`;
+
+const LISTING_READY_SCRIPT = `(() => {
+  const probe = ${LISTING_PROBE_SCRIPT};
+  return probe.itemRows > 0 || probe.emptyCopy;
+})()`;
+
+/** Runs in the page: text-free tag/class skeleton of the main content area (debug capture). */
+const DEBUG_SKELETON_SCRIPT = `(() => {
+  const out = [];
+  const root = document.querySelector("main") || document.body;
+  if (!root) return out;
+  const walk = (element, depth) => {
+    if (depth > 5 || out.length >= 250) return;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "script" || tag === "style" || tag === "svg") return;
+    const className = typeof element.className === "string" ? element.className : "";
+    const classes = className
+      .trim()
+      .split(/\\s+/)
+      .filter(Boolean)
+      .slice(0, 4)
+      .map((name) => name.replace(/\\d+/g, "{id}"));
+    const id = element.id ? "#" + element.id.replace(/\\d+/g, "{id}") : "";
+    out.push("  ".repeat(depth) + tag + id + (classes.length ? "." + classes.join(".") : ""));
+    for (const child of Array.from(element.children)) walk(child, depth + 1);
+  };
+  walk(root, 0);
+  return out;
+})()`;
+
+/**
+ * status() must not trust a leftover tab (for example a stale login.php page
+ * while the authenticated session lives in another tab). Probe the origin when
+ * the current URL is blank, off-origin, the origin root, or a login page.
+ */
+export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
+  if (!currentUrl || currentUrl === "about:blank") {
+    return true;
+  }
+  try {
+    const current = new URL(currentUrl);
+    const root = new URL(origin);
+    if (current.origin !== root.origin) {
+      return true;
+    }
+    return current.pathname === "/" || /login\.php/i.test(current.pathname);
+  } catch {
+    return true;
+  }
+}
+
+/** Pick the max row count across frame probes; empty copy only counts when no rows were seen. */
+export function mergeListingProbes(
+  probes: Array<{ itemRows: number; emptyCopy: boolean }>,
+): { itemRows: number; emptyCopy: boolean } | undefined {
+  if (probes.length === 0) {
+    return undefined;
+  }
+  const itemRows = Math.max(...probes.map((probe) => probe.itemRows));
+  const emptyCopy = itemRows === 0 && probes.some((probe) => probe.emptyCopy);
+  return { itemRows, emptyCopy };
+}
 
 const COLLECT_LINKS_SCRIPT = `(() => {
   return [...document.querySelectorAll("a[href]")].map((anchor) => {
@@ -67,11 +167,17 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   async status(): Promise<SessionStatus> {
     return this.serialize(async () => {
       const page = await this.ensurePage();
-      if (page.url() === "about:blank" || page.url() === "") {
+      if (shouldProbeOrigin(page.url(), this.origin)) {
         assertUrlAllowed(this.origin);
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
+        await this.waitForSessionSettled(page);
       }
-      const snapshot = await this.readSnapshot(page);
+      let snapshot = await this.readSnapshot(page);
+      if (!isLoggedInSnapshot(snapshot) && !isLoginSnapshot(snapshot)) {
+        // Transient redirect/loading page: one bounded retry before reporting a false negative.
+        await this.waitForSessionSettled(page);
+        snapshot = await this.readSnapshot(page);
+      }
       return this.toStatus(snapshot);
     });
   }
@@ -92,30 +198,14 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           .click({ timeout: 3_000 })
           .catch(() => undefined);
       }
-      await page
-        .waitForFunction(
-          `(() => {
-            const root =
-              document.querySelector("main #il_center_col") ??
-              document.querySelector("#il_center_col") ??
-              document.querySelector("main") ??
-              document;
-            const items = root.querySelectorAll(
-              ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']"
-            );
-            const text = root instanceof Document ? (root.body ? root.body.innerText : "") : root.innerText;
-            const empty =
-              /this folder is empty|dieser ordner ist leer|no items available|keine eintr[äa]ge vorhanden/i.test(
-                text || ""
-              );
-            return items.length > 0 || empty;
-          })()`,
-          undefined,
-          { timeout: 12_000 },
-        )
-        .catch(() => undefined);
+      await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 12_000 }).catch(() => undefined);
       await this.rejectIfBlocked(page);
-      return this.readSnapshot(page);
+      const dom = await this.probeListing(page);
+      const snapshot = await this.readSnapshot(page, dom);
+      if (debugCaptureEnabled()) {
+        await this.captureDebug(page, snapshot);
+      }
+      return snapshot;
     });
   }
 
@@ -381,19 +471,24 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     }
   }
 
-  private async readSnapshot(page: Page): Promise<PageSnapshot> {
+  private async readSnapshot(page: Page, dom?: PageSnapshot["dom"]): Promise<PageSnapshot> {
     await this.rejectIfBlocked(page);
     let html = capText(await page.content(), MAX_HTML_BYTES);
     let text = capText(await page.locator("body").innerText().catch(() => ""), MAX_PAGE_TEXT * 2);
     const title = await page.title();
-    // ADR 0005: frame links are not merged — without provenance they become false
-    // children. Frame text/html still merge for LM reads.
-    const links = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as PageSnapshot["links"];
+    const mainLinks = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as SnapshotLink[];
+    const frameLinks: SnapshotLink[] = [];
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) {
         continue;
       }
       try {
+        const frameUrl = frame.url();
+        // Only same-origin frames contribute object links; SWITCH/login frames stay out.
+        if (frameUrl && sameOrigin(frameUrl, this.origin)) {
+          const collected = (await frame.evaluate(COLLECT_LINKS_SCRIPT).catch(() => [])) as SnapshotLink[];
+          frameLinks.push(...collected);
+        }
         const frameText = await frame.locator("body").innerText().catch(() => "");
         if (frameText) {
           text = capText(`${text}\n${frameText}`, MAX_PAGE_TEXT * 2);
@@ -406,7 +501,74 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         continue;
       }
     }
-    return { url: page.url(), title, html, text, links };
+    return {
+      url: page.url(),
+      title,
+      html,
+      text,
+      links: mergeFrameLinks(mainLinks, frameLinks),
+      ...(dom ? { dom } : {}),
+    };
+  }
+
+  private async waitForSessionSettled(page: Page): Promise<void> {
+    await page.waitForFunction(SESSION_SETTLED_SCRIPT, undefined, { timeout: 5_000 }).catch(() => undefined);
+  }
+
+  /** Listing evidence from the main frame and same-origin content frames. */
+  private async probeListing(page: Page): Promise<PageSnapshot["dom"] | undefined> {
+    type Probe = { itemRows: number; emptyCopy: boolean };
+    const probes: Probe[] = [];
+    const main = (await page.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
+    if (main) {
+      probes.push(main);
+    }
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) {
+        continue;
+      }
+      try {
+        if (!sameOrigin(frame.url(), this.origin)) {
+          continue;
+        }
+        const probe = (await frame.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
+        if (probe) {
+          probes.push(probe);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return mergeListingProbes(probes);
+  }
+
+  private async captureDebug(page: Page, snapshot: PageSnapshot): Promise<void> {
+    try {
+      const frameOrigins = page
+        .frames()
+        .map((frame) => frame.url())
+        .filter((url) => Boolean(url) && url !== "about:blank")
+        .map((url) => {
+          try {
+            return new URL(url).origin;
+          } catch {
+            return "[unparseable]";
+          }
+        });
+      const skeleton = (await page.evaluate(DEBUG_SKELETON_SCRIPT).catch(() => [])) as string[];
+      const json = buildDebugCapture({
+        origin: this.origin,
+        url: snapshot.url,
+        titleLength: snapshot.title.length,
+        dom: snapshot.dom,
+        frameOrigins,
+        skeleton,
+        links: snapshot.links,
+      });
+      await writeDebugCapture("listing", json);
+    } catch {
+      // Debug capture must never break a live request.
+    }
   }
 
   private async rejectIfBlocked(page: Page): Promise<void> {
