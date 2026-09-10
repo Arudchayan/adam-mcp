@@ -194,6 +194,7 @@ describe("facade listing guards", () => {
       assert.ok(example);
       return {
         ...listed,
+        notice: "Listed successfully; no child objects.",
         items: [
           ...listed.items.map((item) => (item.refId === "100021" ? withUnits(item) : item)),
           withTst(example),
@@ -244,6 +245,7 @@ describe("facade listing guards", () => {
     const childItems = children.items as Array<Record<string, unknown>>;
     assert.equal(children.untrusted, true);
     assert.equal(children.notice, UntrustedContent.DATA_NOTICE);
+    assert.equal(children.listingNotice, "Listed successfully; no child objects.");
     assert.equal(childItems.some((item) => item.type === "tst" || item.refId === "100099"), false);
     assert.ok(childItems.some((item) => item.refId === "100010"), "allowed children survive");
     const listedExercise = childItems.find((item) => item.refId === "100021");

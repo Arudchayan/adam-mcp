@@ -81,6 +81,15 @@ describe("read-only MCP facade", () => {
     assert.doesNotMatch(toolText(result), /%PDF-/);
   });
 
+  it("keeps provider listing notices when wrapping untrusted content", () => {
+    const wrapped = UntrustedContent.wrap(
+      { items: [], notice: "Listed successfully; no files." },
+      UntrustedContent.DATA_NOTICE,
+    );
+    assert.equal(wrapped.notice, UntrustedContent.DATA_NOTICE);
+    assert.equal(wrapped.listingNotice, "Listed successfully; no files.");
+  });
+
   it("B4: ConfirmGate rejects omit/false; accepts literal true", () => {
     assert.throws(
       () => ConfirmGate.requireTrue(undefined, "adam_read_page"),
