@@ -220,5 +220,8 @@ export const sessionStatusOutputSchema = z
     origin: z.string().optional(),
     currentUrl: z.string().optional(),
     title: z.string().optional(),
+    reason: z.enum(["signed-in", "login-required", "unknown"]).optional(),
+    message: z.string().optional(),
+    checkedAt: z.string().optional(),
   })
   .passthrough();

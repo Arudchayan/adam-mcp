@@ -37,7 +37,7 @@ npm install -g adam-mcp
 adam-mcp
 ```
 
-Default without `--browser` is the synthetic fixture catalog. For live ADAM, pass `--browser` and keep a signed-in Chrome session (see [docs/setup.md](docs/setup.md)).
+Default without `--browser` is the synthetic fixture catalog. For live ADAM, pass `--browser` after running `npm run login` once; the session then runs headless (see [docs/setup.md](docs/setup.md)).
 
 ### Clone (setup helpers + host snippets)
 
@@ -51,7 +51,7 @@ npm run setup
 `npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client.
 
 - **Try it now** (synthetic catalog, no ADAM login): use the fixture snippet.
-- **Your real courses:** `npm run login`, sign in to ADAM in Chrome, and use the `--browser` snippet. Leave that Chrome window open.
+- **Your real courses:** `npm run login`, sign in to ADAM in Chrome, and use the `--browser` snippet. The window closes automatically; the session continues headless.
 
 Restart the client, then ask:
 

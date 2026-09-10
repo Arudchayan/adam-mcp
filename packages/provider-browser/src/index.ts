@@ -29,5 +29,15 @@ export type { LivePage } from "./browser-provider.ts";
 export { createMemorySession, snapshotFromHtml };
 export { createPlaywrightSession };
 export { runLoginCli } from "./login-cli.ts";
+export { runLogoutCli } from "./logout-cli.ts";
 export { runStatusCli } from "./status-cli.ts";
-export type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
+export {
+  clearHolderFiles,
+  holderStatus,
+  readHolderRecord,
+  runSessionHolder,
+  startSessionHolder,
+  stopSessionHolder,
+} from "./session-holder.ts";
+export type { HolderRecord, SessionSeed } from "./session-holder.ts";
+export type { AdamBrowserSession, PageSnapshot, SessionCookie, SessionStatus } from "./session-types.ts";

@@ -10,12 +10,14 @@ export function defaultOrigin(): string {
   return resolveAdamOrigin();
 }
 
+/**
+ * Debug escape hatch: when true, an interactive login keeps the headed browser
+ * in this process instead of handing off to the detached headless holder.
+ * Default false: login window closes and a headless holder keeps the session.
+ */
 export function headedByDefault(): boolean {
   const raw = process.env.ADAM_BROWSER_HEADED?.trim().toLowerCase();
-  if (raw === "0" || raw === "false" || raw === "no") {
-    return false;
-  }
-  return true;
+  return raw === "1" || raw === "true" || raw === "yes";
 }
 
 /**

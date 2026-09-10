@@ -1,23 +1,30 @@
-import { createPlaywrightSession } from "./playwright-session.ts";
-import { isLoggedInSnapshot, isLoginSnapshot } from "./extract.ts";
 import { defaultOrigin, defaultProfileDir } from "./config.ts";
 import { isNamedCliEntry } from "./is-main.ts";
+import { createPlaywrightSession } from "./playwright-session.ts";
+import { holderStatus } from "./session-holder.ts";
+import type { AdamBrowserSession } from "./session-types.ts";
 
-export async function runStatusCli(): Promise<void> {
-  const session = createPlaywrightSession({ headed: true });
+/** Holder-aware status: never opens a browser window (ADR 0009). */
+export async function runStatusCli(
+  createSession: () => AdamBrowserSession = () => createPlaywrightSession(),
+): Promise<void> {
+  const session = createSession();
   try {
-    const snapshot = await session.open(defaultOrigin());
-    const url = new URL(snapshot.url);
+    const status = await session.status();
+    const holder = await holderStatus(defaultProfileDir());
     const report = {
-      loggedIn: isLoggedInSnapshot(snapshot),
-      loginPage: isLoginSnapshot(snapshot),
-      host: url.hostname,
-      path: url.pathname,
-      title: snapshot.title,
+      loggedIn: status.loggedIn,
+      reason: status.reason ?? (status.loggedIn ? "signed-in" : "login-required"),
+      ...(status.message ? { message: status.message } : {}),
+      origin: defaultOrigin(),
+      currentUrl: status.currentUrl,
+      title: status.title,
+      checkedAt: status.checkedAt,
+      holder: holder.running ? { pid: holder.record?.pid, startedAt: holder.record?.startedAt } : null,
       profileDir: defaultProfileDir(),
     };
     console.log(JSON.stringify(report, null, 2));
-    process.exitCode = report.loggedIn ? 0 : 1;
+    process.exitCode = status.loggedIn ? 0 : 1;
   } finally {
     await session.close();
   }

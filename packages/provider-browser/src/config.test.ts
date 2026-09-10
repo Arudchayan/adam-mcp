@@ -37,14 +37,14 @@ afterEach(() => {
 });
 
 describe("browser environment bounds", () => {
-  it("defaults to headed and honors explicit negatives", () => {
+  it("defaults to the headless handoff and honors the headed debug override", () => {
     delete process.env.ADAM_BROWSER_HEADED;
-    assert.equal(headedByDefault(), true);
-    for (const value of ["1", "yes", "true"]) {
+    assert.equal(headedByDefault(), false);
+    for (const value of ["1", "true", " YES "]) {
       process.env.ADAM_BROWSER_HEADED = value;
       assert.equal(headedByDefault(), true);
     }
-    for (const value of ["0", "false", "no", " FALSE "]) {
+    for (const value of ["0", "false", "no", ""]) {
       process.env.ADAM_BROWSER_HEADED = value;
       assert.equal(headedByDefault(), false);
     }
