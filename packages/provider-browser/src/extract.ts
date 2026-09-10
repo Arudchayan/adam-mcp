@@ -449,6 +449,8 @@ export const LISTING_UNKNOWN_NOTICE =
   "Folder page opened but the object list did not load. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
 export const LISTING_ROWS_UNPARSED_NOTICE =
   "Object rows are visible on this page, but no parseable ADAM links were found. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
+export const LISTING_BLANK_CONTENT_NOTICE =
+  "The folder view rendered a blank content area: no items and no empty message. It may be empty, or its contents may not be visible to this account. Do not claim it is empty or that nothing exists; open the ADAM URL to check.";
 
 /** ADR 0005: classify from DOM signals in extract, not from waits. First match wins. */
 export function classifyListing(
@@ -476,6 +478,13 @@ export function classifyListing(
       state: "empty",
       signals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
       notice: LISTING_EMPTY_NOTICE,
+    };
+  }
+  if (snapshot.dom?.contentBlank === true) {
+    return {
+      state: "unknown",
+      signals: { contentItemCount: 0, emptyCopy: false, chromeOnly: false },
+      notice: LISTING_BLANK_CONTENT_NOTICE,
     };
   }
   return {

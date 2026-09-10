@@ -15,6 +15,8 @@ export type PageSnapshot = {
   dom?: {
     itemRows: number;
     emptyCopy: boolean;
+    /** Content container rendered but has no items and no text at all. */
+    contentBlank?: boolean;
   };
 };
 

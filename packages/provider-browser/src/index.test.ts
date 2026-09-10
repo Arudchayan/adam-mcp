@@ -9,7 +9,7 @@ import {
   fullSnapshotByteProxy,
 } from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
-import { shouldProbeOrigin, mergeListingProbes } from "./playwright-session.ts";
+import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
 const dashboardHtml = `
@@ -178,6 +178,16 @@ describe("listing classification", () => {
     assert.equal(classified.signals.emptyCopy, false);
     assert.equal(classified.signals.chromeOnly, false);
   });
+
+  it("uses the blank-content notice when the content container rendered empty", () => {
+    const classified = classifyListing(
+      { ...base, dom: { itemRows: 0, emptyCopy: false, contentBlank: true } },
+      0,
+    );
+    assert.equal(classified.state, "unknown");
+    assert.match(classified.notice ?? "", /blank content area/i);
+    assert.equal(classified.signals.chromeOnly, false);
+  });
 });
 
 describe("mergeListingProbes", () => {
@@ -185,25 +195,63 @@ describe("mergeListingProbes", () => {
     assert.equal(mergeListingProbes([]), undefined);
     assert.deepEqual(
       mergeListingProbes([
-        { itemRows: 0, emptyCopy: true },
-        { itemRows: 3, emptyCopy: false },
+        { itemRows: 0, emptyCopy: true, contentBlank: false },
+        { itemRows: 3, emptyCopy: false, contentBlank: false },
       ]),
       { itemRows: 3, emptyCopy: false },
     );
     assert.deepEqual(
       mergeListingProbes([
-        { itemRows: 0, emptyCopy: false },
-        { itemRows: 0, emptyCopy: true },
+        { itemRows: 0, emptyCopy: false, contentBlank: false },
+        { itemRows: 0, emptyCopy: true, contentBlank: false },
       ]),
-      { itemRows: 0, emptyCopy: true },
+      { itemRows: 0, emptyCopy: true, contentBlank: false },
     );
     assert.deepEqual(
       mergeListingProbes([
-        { itemRows: 0, emptyCopy: true },
-        { itemRows: 2, emptyCopy: true },
+        { itemRows: 0, emptyCopy: true, contentBlank: false },
+        { itemRows: 2, emptyCopy: true, contentBlank: false },
       ]),
       { itemRows: 2, emptyCopy: false },
     );
+  });
+
+  it("reports blank content only when no probe saw rows or copy", () => {
+    assert.deepEqual(
+      mergeListingProbes([
+        { itemRows: 0, emptyCopy: false, contentBlank: false },
+        { itemRows: 0, emptyCopy: false, contentBlank: true },
+      ]),
+      { itemRows: 0, emptyCopy: false, contentBlank: true },
+    );
+    assert.deepEqual(
+      mergeListingProbes([
+        { itemRows: 0, emptyCopy: true, contentBlank: true },
+        { itemRows: 0, emptyCopy: false, contentBlank: false },
+      ]),
+      { itemRows: 0, emptyCopy: true, contentBlank: true },
+    );
+  });
+});
+
+describe("classifyStatus", () => {
+  it("distinguishes dashboard, login page, and transient pages", () => {
+    const dashboard = snapshotFromHtml(
+      "https://adam.unibas.ch/ilias.php?baseClass=ilDashboardGUI&cmd=jumpToSelectedItems",
+      "Dashboard: ADAM",
+      "<main><p>Persönlicher Schreibtisch Abmelden</p></main>",
+      "Persönlicher Schreibtisch Abmelden",
+    );
+    const login = snapshotFromHtml(
+      "https://adam.unibas.ch/login.php",
+      "Bei ADAM anmelden: ADAM",
+      loginHtml,
+      "Bei ADAM anmelden Login mit Switch edu-ID",
+    );
+    const transient = snapshotFromHtml("https://adam.unibas.ch/", "ADAM", "<main></main>", "");
+    assert.equal(classifyStatus(dashboard), "logged-in");
+    assert.equal(classifyStatus(login), "login");
+    assert.equal(classifyStatus(transient), "transient");
   });
 });
 

@@ -23,13 +23,15 @@ courses, so no live `file` / `exc` object was reachable. Investigation found:
 1. **Empty-copy parity.** `EMPTY_CONTAINER_COPY` (extract) is the single pattern used
    by both `isAdamEmptyContainerPage` and the session wait probe, covering the ILIAS
    10 EN/DE list and card copy.
-2. **DOM evidence.** `PageSnapshot.dom?: { itemRows, emptyCopy }` merges the main
-   frame and same-origin content frames: the probe that saw the most distinct rows
-   wins, and empty copy only counts when that probe saw zero rows. `classifyListing`
-   reports `empty` only when no rows are visible and empty copy is present; visible
-   rows with no parseable ADAM links report `unknown` with
+2. **DOM evidence.** `PageSnapshot.dom?: { itemRows, emptyCopy, contentBlank }` merges the
+   main frame and same-origin content frames: the probe that saw the most distinct rows
+   wins, and empty copy / blank content only count when no probe saw rows.
+   `classifyListing` reports `empty` only when no rows are visible and empty copy is
+   present; blank content with no message reports `unknown` with
+   `LISTING_BLANK_CONTENT_NOTICE` (it may be empty or not visible to this account);
+   visible rows with no parseable ADAM links report `unknown` with
    `LISTING_ROWS_UNPARSED_NOTICE` (never `empty`, never invented items), and
-   `chromeOnly` is false whenever rows exist.
+   `chromeOnly` is false whenever rows or blank content are detected.
 3. **Frame links.** Anchors from same-origin frames (strict origin equality, not a
    prefix match) merge into `snapshot.links` with dedupe by href+text; external and
    SWITCH/login frames are excluded. Chrome/breadcrumb flags are computed inside the
@@ -38,9 +40,12 @@ courses, so no live `file` / `exc` object was reachable. Investigation found:
    wrong probe no longer poisons later opens.
 5. **Status verify-then-report.** `status()` probes the origin when the current tab
    is blank, off-origin, the origin root, or a login page; it waits a bounded time for
-   dashboard/login markers and retries once when the page is neither. This removes
-   the observed leftover-tab false negative; a page that stays transient can still
-   report false, so the retry reduces rather than eliminates the failure mode.
+   dashboard/login markers and retries once when the page is neither. When the probe
+   still lands on a login page, it re-checks once after a short bounded delay
+   (cold-start bootstrap: the first request after a fresh Chrome launch can render
+   `login.php` even though later requests are authenticated). This removes the
+   observed leftover-tab false negative and the first-request race; a genuinely
+   logged-out session still reports false.
 6. **Redacted debug capture.** `ADAM_DEBUG_CAPTURE=1` (dir `ADAM_DEBUG_CAPTURE_DIR`,
    default `./scratch`, gitignored) writes structure-only JSON: patternized hrefs,
    tag/class skeleton with numeric ids masked, DOM counts, frame origins, title
@@ -51,6 +56,9 @@ courses, so no live `file` / `exc` object was reachable. Investigation found:
 ## Consequences
 
 - Empty folders classify as honest `empty` and no longer burn the full readiness wait.
+- A folder whose Content tab renders blank without a message reports the dedicated
+  blank-content notice (possibly empty, possibly not visible to this account) instead
+  of the misleading "list did not load".
 - Content in frames or async lists can now yield objects; otherwise the notice is
   "rows are visible but unparsed" instead of a misleading "list did not load".
 - `status()` may navigate the current tab once — one DCL navigation on a cold,

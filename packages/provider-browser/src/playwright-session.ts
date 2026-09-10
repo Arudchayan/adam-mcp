@@ -54,7 +54,10 @@ const LISTING_PROBE_SCRIPT = `(() => {
   }
   const text = root ? root.innerText || "" : "";
   const emptyCopy = (${EMPTY_CONTAINER_COPY.toString()}).test(text || "");
-  return { itemRows: rows.size, emptyCopy };
+  const content =
+    document.querySelector("#il_center_col") ?? document.querySelector("#ilContentContainer");
+  const contentBlank = Boolean(content) && content.childElementCount === 0 && (content.innerText || "").trim().length === 0;
+  return { itemRows: rows.size, emptyCopy, contentBlank };
 })()`;
 
 const LISTING_READY_SCRIPT = `(() => {
@@ -107,16 +110,33 @@ export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
   }
 }
 
-/** Pick the max row count across frame probes; empty copy only counts when no rows were seen. */
+/** Pick the max row count across frame probes; empty copy and blank content only count with no rows. */
 export function mergeListingProbes(
-  probes: Array<{ itemRows: number; emptyCopy: boolean }>,
-): { itemRows: number; emptyCopy: boolean } | undefined {
+  probes: Array<{ itemRows: number; emptyCopy: boolean; contentBlank: boolean }>,
+): PageSnapshot["dom"] | undefined {
   if (probes.length === 0) {
     return undefined;
   }
   const itemRows = Math.max(...probes.map((probe) => probe.itemRows));
-  const emptyCopy = itemRows === 0 && probes.some((probe) => probe.emptyCopy);
-  return { itemRows, emptyCopy };
+  if (itemRows > 0) {
+    return { itemRows, emptyCopy: false };
+  }
+  return {
+    itemRows: 0,
+    emptyCopy: probes.some((probe) => probe.emptyCopy),
+    contentBlank: probes.some((probe) => probe.contentBlank),
+  };
+}
+
+/** Outcome of a status snapshot: signed-in, login form, or neither (transient). */
+export function classifyStatus(snapshot: PageSnapshot): "logged-in" | "login" | "transient" {
+  if (isLoggedInSnapshot(snapshot)) {
+    return "logged-in";
+  }
+  if (isLoginSnapshot(snapshot)) {
+    return "login";
+  }
+  return "transient";
 }
 
 const COLLECT_LINKS_SCRIPT = `(() => {
@@ -173,7 +193,17 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         await this.waitForSessionSettled(page);
       }
       let snapshot = await this.readSnapshot(page);
-      if (!isLoggedInSnapshot(snapshot) && !isLoginSnapshot(snapshot)) {
+      const kind = classifyStatus(snapshot);
+      if (kind === "login") {
+        // Cold-start bootstrap: the first request after a fresh Chrome launch can
+        // land on login.php even though the session is valid. One bounded re-probe.
+        await delay(750);
+        await page
+          .goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 })
+          .catch(() => undefined);
+        await this.waitForSessionSettled(page);
+        snapshot = await this.readSnapshot(page);
+      } else if (kind === "transient") {
         // Transient redirect/loading page: one bounded retry before reporting a false negative.
         await this.waitForSessionSettled(page);
         snapshot = await this.readSnapshot(page);
@@ -517,7 +547,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   /** Listing evidence from the main frame and same-origin content frames. */
   private async probeListing(page: Page): Promise<PageSnapshot["dom"] | undefined> {
-    type Probe = { itemRows: number; emptyCopy: boolean };
+    type Probe = { itemRows: number; emptyCopy: boolean; contentBlank: boolean };
     const probes: Probe[] = [];
     const main = (await page.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
     if (main) {
