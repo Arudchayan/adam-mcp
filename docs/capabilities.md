@@ -14,6 +14,8 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Design review (2026-09-10, 22-agent fleet):** independent protocol, session, security, reliability, testing, performance, modeling, UX, OSS, alternatives, and compliance reviews. Convergent gaps: narrow untrusted envelope, frame content merged across origins, prose-only errors without retryability, silent partial walks, login lifecycle (foreground process, headed default), test realism (no captured replay corpus), and consent/retention/i18n gaps. ADR 0008 implements the trust/telemetry/partial/date fixes; ADR 0009 replaces the foreground login with a detached headless session holder (`npm run login` returns, window closes, server restarts are free, `npm run logout` stops it).
 
+**Replay corpus (2026-09-10, W5):** five scrubbed captures of live ILIAS 10.11 pages (dashboard, two courses — one contentful, one blank, two blank folders) live under `packages/provider-browser/fixtures/live/`. Regenerate with `npm run capture:fixtures` against a running holder; the script strips scripts/styles/svg, remaps every ref_id to a stable fake id, keeps only UI/empty-copy text, and keeps `id/class/role/href/aria-label` structure. `live-replay.test.ts` replays them through the memory session; the HTML link parser now detects ILIAS 10 chrome positionally (links outside `<main>`, footer, mainbar nav, breadcrumbs), which is what made blank pages replay identically to live.
+
 ## 1. Purpose
 
 Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. No writes until Security + academic-integrity review.
