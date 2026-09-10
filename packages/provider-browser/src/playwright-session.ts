@@ -514,11 +514,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       }
       try {
         const frameUrl = frame.url();
-        // Only same-origin frames contribute object links; SWITCH/login frames stay out.
-        if (frameUrl && sameOrigin(frameUrl, this.origin)) {
-          const collected = (await frame.evaluate(COLLECT_LINKS_SCRIPT).catch(() => [])) as SnapshotLink[];
-          frameLinks.push(...collected);
+        // ADR 0009: only same-origin frames contribute links, text, or HTML.
+        if (!frameUrl || !sameOrigin(frameUrl, this.origin)) {
+          continue;
         }
+        const collected = (await frame.evaluate(COLLECT_LINKS_SCRIPT).catch(() => [])) as SnapshotLink[];
+        frameLinks.push(...collected);
         const frameText = await frame.locator("body").innerText().catch(() => "");
         if (frameText) {
           text = capText(`${text}\n${frameText}`, MAX_PAGE_TEXT * 2);

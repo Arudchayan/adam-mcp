@@ -52,16 +52,36 @@ const MONTHS: Record<string, number> = {
   october: 9,
   november: 10,
   december: 11,
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  sept: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
   januar: 0,
   februar: 1,
   marz: 2,
   märz: 2,
+  mär: 2,
   mai: 4,
   juni: 5,
   juli: 6,
   oktober: 9,
+  okt: 9,
   dezember: 11,
+  dez: 11,
 };
+
+/** Longest-first so "September" wins over "Sep". */
+const MONTH_PATTERN = Object.keys(MONTHS)
+  .sort((a, b) => b.length - a.length)
+  .join("|");
 
 export type ExtractedCatalog = {
   current?: AdamObject;
@@ -184,11 +204,16 @@ export function inferDates(text: string): InferredDate[] {
     const iso = toIso(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
     push(match[0], iso, "explicit");
   }
-  for (const match of text.matchAll(
-    /\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Januar|Februar|März|Marz|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember)\s+(\d{4})\b/gi,
-  )) {
+  const dayFirst = new RegExp(`\\b(\\d{1,2})\\.?\\s+(${MONTH_PATTERN})\\.?\\s+(\\d{4})\\b`, "gi");
+  for (const match of text.matchAll(dayFirst)) {
     const month = MONTHS[match[2].toLowerCase().replace("ä", "a")];
     const iso = month === undefined ? undefined : toIso(Number(match[3]), month, Number(match[1]));
+    push(match[0], iso, iso ? "explicit" : "inferred");
+  }
+  const monthFirst = new RegExp(`\\b(${MONTH_PATTERN})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})\\b`, "gi");
+  for (const match of text.matchAll(monthFirst)) {
+    const month = MONTHS[match[1].toLowerCase().replace("ä", "a")];
+    const iso = month === undefined ? undefined : toIso(Number(match[3]), month, Number(match[2]));
     push(match[0], iso, iso ? "explicit" : "inferred");
   }
 
@@ -201,7 +226,7 @@ export function inferDates(text: string): InferredDate[] {
  */
 export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
   const labeled = [
-    ...text.matchAll(/(?:deadline|abgabetermin|abgabe|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
+    ...text.matchAll(/(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
   ];
   if (labeled.length === 0) {
     return undefined;

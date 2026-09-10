@@ -7,6 +7,7 @@ import {
   retainWalkPage,
   walkRetentionByteProxy,
   fullSnapshotByteProxy,
+  WALK_PARTIAL_NOTICE,
 } from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
@@ -287,6 +288,45 @@ describe("shouldProbeOrigin", () => {
       false,
     );
     assert.equal(shouldProbeOrigin("https://adam.unibas.ch/go/crs/2207365", origin), false);
+  });
+});
+
+describe("partial walks", () => {
+  it("flags skipped pages and keeps the partial notice across memoized calls", async () => {
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        home: snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardHtml,
+          "Schreibtisch 00000-01 Written exam: 12 January 2027 Abmelden",
+        ),
+      }),
+    });
+    const found = await provider.search("Synthetic");
+    assert.equal(found.partial, true);
+    assert.ok((found.skipped ?? 0) >= 1);
+    assert.equal(found.notice, WALK_PARTIAL_NOTICE);
+    const news = await provider.listNews({});
+    assert.equal(news.partial, true);
+    assert.equal(news.notice, WALK_PARTIAL_NOTICE);
+  });
+});
+
+describe("date parsing", () => {
+  it("parses DE and EN month formats explicitly", () => {
+    const dates = inferDates("Abgabe 22. September 2026, Erinnerung 22. Sep 2026, Due September 22, 2026.");
+    const raws = dates.map((date) => date.raw);
+    assert.ok(raws.includes("22. September 2026"), "day. month name year");
+    assert.ok(raws.includes("22. Sep 2026"), "abbreviated month");
+    assert.ok(raws.includes("September 22, 2026"), "month-first EN");
+    assert.equal(dates.every((date) => date.iso !== undefined), true);
+  });
+
+  it("recognizes Abgabefrist and Frist deadline labels", () => {
+    assert.equal(exerciseDeadlineFromPage("Abgabefrist: 22.09.2026"), "2026-09-22T00:00:00.000Z");
+    assert.equal(exerciseDeadlineFromPage("Frist: 22.09.2026"), "2026-09-22T00:00:00.000Z");
   });
 });
 
