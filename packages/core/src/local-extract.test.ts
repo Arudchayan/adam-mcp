@@ -52,6 +52,20 @@ describe("extractLocalFileText", () => {
 
   it("detects HTML so callers can skip login pages", () => {
     assert.equal(looksLikeHtml(Buffer.from("<!DOCTYPE html><html></html>"), "text/html"), true);
+    assert.equal(looksLikeHtml(Buffer.from("  <form action='/login'>Sign in</form>"), "text/plain"), true);
+    assert.equal(looksLikeHtml(Buffer.from("<?xml version='1.0'?>")), true);
+    assert.equal(looksLikeHtml(Buffer.from("<html lang='de'></html>")), true);
+    assert.equal(looksLikeHtml(Buffer.from("<script>alert(1)</script>")), true);
+    assert.equal(looksLikeHtml(Buffer.from(`${"x".repeat(200)}<form action='/login'>`)), true);
+    assert.equal(looksLikeHtml(Buffer.from(`${"x".repeat(1_100)}<form action='/login'>`)), false);
+    assert.equal(looksLikeHtml(Buffer.from("%PDF-1.4"), undefined), false);
     assert.equal(looksLikeHtml(syntheticPdfWithText("x"), "application/pdf"), false);
+  });
+
+  it("rejects a malformed PDF payload", async () => {
+    await assert.rejects(
+      () => extractLocalFileText(file, Buffer.from("%PDF-not-a-real-document"), "application/pdf"),
+      (error: unknown) => error instanceof AdamError && error.code === "unsupported_type",
+    );
   });
 });

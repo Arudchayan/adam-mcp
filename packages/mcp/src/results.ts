@@ -1,11 +1,13 @@
 import {
   AdamError,
   isAdamError,
+  isDeniedObjectType,
   isResourceHandleType,
   parseAdamRef,
   redactText,
   resourceUri,
   type AdamProvider,
+  type Paginated,
   type ProgressReporter,
   type ProgressUpdate,
 } from "adam-core";
@@ -59,6 +61,61 @@ export class ConfirmGate {
       );
     }
   }
+}
+
+/** Minimal shape of a model-facing listing row (AdamObject and friends). */
+type ListingItem = { type: string; units?: unknown; children?: ListingItem[] };
+
+/**
+ * B10 defense in depth: listing surfaces never carry denied object types (tst)
+ * or exercise units, including nested course child summaries. Provider-reported
+ * counts are intentionally left untouched: the facade cannot know whether a
+ * leaky provider counted the withheld rows (ADR 0006).
+ */
+export function sanitizeListingItems<T extends ListingItem>(page: Paginated<T>): Paginated<T> {
+  const items: T[] = [];
+  let dropped = 0;
+  let changed = false;
+  for (const item of page.items) {
+    if (isDeniedObjectType(item.type)) {
+      dropped += 1;
+      continue;
+    }
+    const clean = sanitizeListingObject(item);
+    if (clean !== item) {
+      changed = true;
+    }
+    items.push(clean);
+  }
+  if (dropped === 0 && !changed) {
+    return page;
+  }
+  return { ...page, items };
+}
+
+/** Strip units and denied nested children recursively from one listing row. */
+export function sanitizeListingObject<T extends ListingItem>(item: T): T {
+  const rawChildren = Array.isArray(item.children) ? item.children : undefined;
+  let childrenChanged = false;
+  const children = rawChildren?.flatMap((child) => {
+    if (isDeniedObjectType(child.type)) {
+      childrenChanged = true;
+      return [];
+    }
+    const clean = sanitizeListingObject(child);
+    if (clean !== child) {
+      childrenChanged = true;
+    }
+    return [clean];
+  });
+  if (!("units" in item) && !childrenChanged) {
+    return item;
+  }
+  const { units: _units, ...rest } = item;
+  return {
+    ...rest,
+    ...(children !== undefined ? { children } : {}),
+  } as T;
 }
 
 /**

@@ -108,6 +108,24 @@ describe("FixtureAdamProvider", () => {
     await assert.rejects(() => provider.getCourse(GOLDEN_TST_REF_ID), deny);
     await assert.rejects(() => provider.getExercise(GOLDEN_TST_REF_ID), deny);
   });
+
+  it("keeps exercise units in getExercise only, not in listings or search", async () => {
+    const children = await provider.listChildren("100001");
+    const listed = children.items.find((item) => item.refId === "100021");
+    assert.ok(listed);
+    assert.equal("units" in listed, false);
+    assert.doesNotMatch(JSON.stringify(listed), /cannot submit|instructionText/);
+
+    const found = await provider.search("Retrieval summary");
+    const hit = found.items.find((item) => item.refId === "100021");
+    assert.ok(hit);
+    assert.equal("units" in hit, false);
+    assert.doesNotMatch(JSON.stringify(hit), /cannot submit|instructionText/);
+
+    const full = await provider.getExercise("100021");
+    assert.equal(full.units.length > 0, true);
+    assert.equal("instructionText" in full.units[0]!, true);
+  });
 });
 
 describe("A2 LongWalkStub progress", () => {

@@ -22,8 +22,13 @@ export function looksLikeHtml(bytes: Uint8Array, contentType?: string): boolean 
   if (contentType?.toLowerCase().includes("html")) {
     return true;
   }
-  const head = Buffer.from(bytes.slice(0, 80)).toString("utf8").trimStart().toLowerCase();
-  return head.startsWith("<!doctype") || head.startsWith("<html") || head.startsWith("<?xml");
+  const head = Buffer.from(bytes.slice(0, 1024)).toString("utf8").trimStart().toLowerCase();
+  return (
+    head.startsWith("<!doctype") ||
+    head.startsWith("<html") ||
+    head.startsWith("<?xml") ||
+    /<(?:body|form|script|meta)\b/i.test(head)
+  );
 }
 
 function isPdf(bytes: Uint8Array, mimeType?: string): boolean {

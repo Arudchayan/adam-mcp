@@ -57,6 +57,9 @@ describe("read-only MCP facade", () => {
     assert.equal(result.isError, undefined);
     assert.match(toolText(result), /"refId": "100001"/);
     assert.equal(result.structuredContent?.refId, "100001");
+    assert.deepEqual(ok(null).structuredContent, { value: null });
+    assert.deepEqual(ok(1).structuredContent, { value: 1 });
+    assert.deepEqual(ok(true).structuredContent, { value: true });
   });
 
   it("extracts fixture file text without bytes in the MCP payload", async () => {

@@ -41,10 +41,16 @@ function requireRecord(refId: RefId) {
   return record;
 }
 
+/** Listing rows are summaries: exercise units are getExercise-only. */
+function childSummary(object: AdamObject): AdamObject {
+  const { units: _units, ...summary } = object as AdamObject & { units?: unknown };
+  return summary;
+}
+
 function resolveChildren(refId: RefId): AdamObject[] {
   const record = requireRecord(refId);
   return record.children
-    .map((childId) => requireRecord(childId).object)
+    .map((childId) => childSummary(requireRecord(childId).object))
     .filter((child) => !isDeniedObjectType(child.type));
 }
 
@@ -253,7 +259,7 @@ function rankEnrolledSearch(needle: string): AdamObject[] {
     }
     return a.object.refId.localeCompare(b.object.refId, "en");
   });
-  return matches.map((entry) => entry.object);
+  return matches.map((entry) => childSummary(entry.object));
 }
 
 /** AT1/AT2/AT6: cross-course deadlines from calendar SoT + page dates + exc units. */
