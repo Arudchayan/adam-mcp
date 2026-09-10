@@ -44,10 +44,27 @@ describe("canonicalUrl and parseAdamRef", () => {
       ),
       { type: "unknown", refId: "2291904" },
     );
+    assert.deepEqual(
+      parseAdamRef("https://adam.unibas.ch/ilias.php?cmdClass=ilobjfoldergui&ref_id=10"),
+      { type: "fold", refId: "10" },
+    );
+    assert.deepEqual(
+      parseAdamRef("https://adam.unibas.ch/ilias.php?cmdClass=ilobjfilegui&ref_id=11"),
+      { type: "file", refId: "11" },
+    );
+    assert.deepEqual(
+      parseAdamRef("https://adam.unibas.ch/ilias.php?cmdClass=ilobjbloggui&ref_id=12"),
+      { type: "blog", refId: "12" },
+    );
+    assert.deepEqual(
+      parseAdamRef("https://adam.unibas.ch/ilias.php?cmdClass=iltestplayergui&ref_id=13"),
+      { type: "tst", refId: "13" },
+    );
   });
 
   it("treats a bare numeric id as unknown type until a provider resolves it", () => {
     assert.deepEqual(parseAdamRef("65"), { type: "unknown", refId: "65" });
+    assert.equal(parseAdamRef("http://["), undefined);
   });
 
   it("parses ADAM goto permalinks", () => {
@@ -83,6 +100,7 @@ describe("redaction", () => {
     assert.equal(redactText("write student@unibas.ch"), "write [redacted-email]");
     assert.match(redactUrl("https://adam.unibas.ch/go/file/1?token=secret"), /\[redacted\]/);
     assert.match(redactText("Cookie: ILIASSESSID=abc"), /\[redacted\]/);
+    assert.match(redactText("PHPSESSID=abc"), /\[redacted\]/);
     assert.match(redactText("Authorization: Bearer super-secret"), /\[redacted\]/);
   });
 });
@@ -106,6 +124,12 @@ describe("object policy", () => {
       return true;
     });
     assert.doesNotThrow(() => assertReadableObjectType("crs", "1"));
+    assert.throws(() => assertReadableObjectType("tst"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.message.includes("(undefined)"), false);
+      assert.match(error.message, /blocked/);
+      return true;
+    });
   });
 });
 

@@ -7,6 +7,7 @@ import {
   UntrustedContent,
   WalkProgress,
   runProvider,
+  sanitizeListingItems,
 } from "./results.ts";
 import {
   adamObjectOutputSchema,
@@ -61,7 +62,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: paginatedObjectsOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async (args) => runProvider(() => provider.listCourses(args)),
+    async (args) => runProvider(async () => sanitizeListingItems(await provider.listCourses(args))),
   );
 
   server.registerTool(
@@ -88,7 +89,9 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ refId: id, type: objectType, cursor: pageCursor, limit: pageLimit }) =>
-      runProvider(() => provider.listChildren(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      runProvider(async () =>
+        sanitizeListingItems(await provider.listChildren(id, { type: objectType, cursor: pageCursor, limit: pageLimit })),
+      ),
   );
 
   server.registerTool(
@@ -186,12 +189,14 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       annotations: READ_ONLY_ANNOTATIONS,
     },
     async ({ query, cursor: pageCursor, limit: pageLimit }, ctx) =>
-      runProvider(() =>
-        provider.search(query, {
-          cursor: pageCursor,
-          limit: pageLimit,
-          onProgress: WalkProgress.fromContext(ctx),
-        }),
+      runProvider(async () =>
+        sanitizeListingItems(
+          await provider.search(query, {
+            cursor: pageCursor,
+            limit: pageLimit,
+            onProgress: WalkProgress.fromContext(ctx),
+          }),
+        ),
       ),
   );
 
@@ -292,7 +297,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       mimeType: "application/json",
     },
     async (uri) => {
-      const listed = await provider.listCourses();
+      const listed = sanitizeListingItems(await provider.listCourses());
       return {
         contents: [
           {
@@ -342,7 +347,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     },
     async (uri, variables) => {
       const id = String(variables.refId ?? "");
-      const listed = await provider.listChildren(id, { type: "fold" });
+      const listed = sanitizeListingItems(await provider.listChildren(id, { type: "fold" }));
       return {
         contents: [
           {

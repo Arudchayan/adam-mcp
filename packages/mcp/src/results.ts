@@ -1,11 +1,13 @@
 import {
   AdamError,
   isAdamError,
+  isDeniedObjectType,
   isResourceHandleType,
   parseAdamRef,
   redactText,
   resourceUri,
   type AdamProvider,
+  type Paginated,
   type ProgressReporter,
   type ProgressUpdate,
 } from "adam-core";
@@ -59,6 +61,53 @@ export class ConfirmGate {
       );
     }
   }
+}
+
+/**
+ * B10 defense in depth: listing surfaces never carry denied object types (tst)
+ * or exercise units, even if a provider leaks them. Listing honesty counts stay
+ * consistent when denied rows are dropped.
+ */
+export function sanitizeListingItems<T extends { type: string }>(page: Paginated<T>): Paginated<T> {
+  const items: T[] = [];
+  let dropped = 0;
+  let strippedUnits = false;
+  for (const item of page.items) {
+    if (isDeniedObjectType(item.type)) {
+      dropped += 1;
+      continue;
+    }
+    const clean = withoutUnits(item);
+    if (clean !== item) {
+      strippedUnits = true;
+    }
+    items.push(clean);
+  }
+  if (dropped === 0 && !strippedUnits) {
+    return page;
+  }
+  const next: Paginated<T> = { ...page, items };
+  if (dropped > 0) {
+    if (typeof page.totalHint === "number") {
+      next.totalHint = Math.max(0, page.totalHint - dropped);
+    }
+    if (page.listingSignals) {
+      next.listingSignals = {
+        ...page.listingSignals,
+        contentItemCount: Math.max(0, page.listingSignals.contentItemCount - dropped),
+      };
+    }
+  }
+  return next;
+}
+
+/** Exercise units are getExercise-only; listing rows are summaries. */
+function withoutUnits<T extends { type: string }>(item: T): T {
+  if (!("units" in item)) {
+    return item;
+  }
+  const { units: _units, ...rest } = item as T & { units?: unknown };
+  return rest as T;
 }
 
 /**
