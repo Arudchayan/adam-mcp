@@ -250,23 +250,48 @@ export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDa
 }
 
 export function collectLinksFromHtml(html: string): SnapshotLink[] {
-  const chromeHrefs = new Set(hrefsIn(html, /<nav[^>]*aria-label=["']Hauptnavigationsleiste["'][^>]*>[\s\S]*?<\/nav>/i));
-  const breadcrumbHrefs = new Set(
-    hrefsIn(html, /<nav[^>]*aria-label=["'](?:Brotkrumen|Breadcrumb)["'][^>]*>[\s\S]*?<\/nav>/i),
+  const mainStart = html.search(/<main\b/i);
+  const mainEnd = html.search(/<\/main>/i);
+  const inMain = (index: number) =>
+    mainStart >= 0 && index >= mainStart && (mainEnd < 0 || index <= mainEnd);
+  // ILIAS 10 chrome: header/slates/metabar live before <main>; footer and the
+  // mainbar nav are explicit blocks; breadcrumbs are a labelled nav.
+  const chromeRanges = [
+    ...matchRanges(html, /<header\b[\s\S]*?<\/header>/gi),
+    ...matchRanges(html, /<footer\b[\s\S]*?<\/footer>/gi),
+    ...matchRanges(html, /<nav[^>]*aria-label=["']Hauptnavigationsleiste["'][^>]*>[\s\S]*?<\/nav>/gi),
+    ...matchRanges(html, /<nav[^>]*class=["'][^"']*\bil-mainbar\b[^"']*["'][^>]*>[\s\S]*?<\/nav>/gi),
+  ];
+  const breadcrumbRanges = matchRanges(
+    html,
+    /<nav[^>]*aria-label=["'](?:Brotkrumen|Breadcrumbs?)["'][^>]*>[\s\S]*?<\/nav>/gi,
   );
   const links: SnapshotLink[] = [];
   const pattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   for (const match of html.matchAll(pattern)) {
     const href = match[1];
     const text = cleanTitle(stripTags(match[2]));
+    const index = match.index ?? 0;
+    const chromeByPosition = mainStart >= 0 && !inMain(index);
     links.push({
       href,
       text,
-      inChrome: chromeHrefs.has(href),
-      inBreadcrumb: breadcrumbHrefs.has(href),
+      inChrome: chromeByPosition || inRanges(index, chromeRanges),
+      inBreadcrumb: inRanges(index, breadcrumbRanges),
     });
   }
   return links;
+}
+
+function matchRanges(html: string, pattern: RegExp): Array<[number, number]> {
+  return [...html.matchAll(pattern)].map((match) => {
+    const start = match.index ?? 0;
+    return [start, start + match[0].length];
+  });
+}
+
+function inRanges(index: number, ranges: Array<[number, number]>): boolean {
+  return ranges.some(([start, end]) => index >= start && index < end);
 }
 
 /** Merge main-frame links with links collected inside content frames (dedupe by href+text). */
@@ -282,11 +307,6 @@ export function mergeFrameLinks(mainLinks: SnapshotLink[], frameLinks: SnapshotL
     merged.push(link);
   }
   return merged;
-}
-
-function hrefsIn(html: string, section: RegExp): string[] {
-  const block = html.match(section)?.[0] ?? "";
-  return [...block.matchAll(/href=["']([^"']+)["']/gi)].map((match) => match[1]);
 }
 
 function extractNews(
