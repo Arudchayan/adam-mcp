@@ -9,6 +9,7 @@
   },
   "scripts": {
     "login": "tsx src/login-cli.ts",
+    "logout": "tsx src/logout-cli.ts",
     "status": "tsx src/status-cli.ts",
     "test": "node ../../scripts/run-tests.mjs",
     "typecheck": "tsc -p tsconfig.json"

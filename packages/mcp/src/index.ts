@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { runLoginCli, runStatusCli } from "adam-provider-browser";
+import { runLoginCli, runLogoutCli, runSessionHolder, runStatusCli } from "adam-provider-browser";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
 
@@ -21,7 +21,7 @@ function isMainModule(): boolean {
   return fileURLToPath(import.meta.url).toLowerCase() === resolve(entry).toLowerCase();
 }
 
-function commandFromArgv(argv: string[]): "login" | "status" | "help" | "mcp" {
+function commandFromArgv(argv: string[]): "login" | "status" | "logout" | "session-holder" | "help" | "mcp" {
   if (argv.includes("--help") || argv.includes("-h")) {
     return "help";
   }
@@ -36,6 +36,12 @@ function commandFromArgv(argv: string[]): "login" | "status" | "help" | "mcp" {
   if (command === "status") {
     return "status";
   }
+  if (command === "logout") {
+    return "logout";
+  }
+  if (command === "session-holder") {
+    return "session-holder";
+  }
   return "mcp";
 }
 
@@ -44,9 +50,10 @@ function printHelp(): void {
 
 Usage:
   adam-mcp              Fixture catalog
-  adam-mcp --browser    Local Chrome ADAM session
-  adam-mcp login        Sign in to ADAM in Chrome
-  adam-mcp status       Check the local Chrome session`);
+  adam-mcp --browser    Live ADAM via a headless session (run login first)
+  adam-mcp login        Sign in to ADAM in Chrome, then close it
+  adam-mcp status       Check the headless ADAM session
+  adam-mcp logout       Stop the headless session (--purge removes the profile)`);
 }
 
 async function runStdio(): Promise<void> {
@@ -54,7 +61,7 @@ async function runStdio(): Promise<void> {
   const name = detectProviderName();
   console.error(`adam-mcp running on stdio (${name} provider)`);
   if (name === "browser") {
-    console.error("Live ADAM: adam_login or `adam-mcp login`, then sign in in Chrome.");
+    console.error("Live ADAM: run `adam-mcp login` once, then the session runs headless.");
   }
   const shutdown = () => {
     void closeConfiguredProvider(configured).finally(() => process.exit(0));
@@ -76,6 +83,18 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     case "status":
       await runStatusCli();
       return;
+    case "logout":
+      await runLogoutCli(argv);
+      return;
+    case "session-holder": {
+      const seedIndex = argv.indexOf("session-holder");
+      const seedFile = argv[seedIndex + 1];
+      if (!seedFile) {
+        throw new Error("session-holder requires a seed file path.");
+      }
+      await runSessionHolder(seedFile);
+      return;
+    }
     case "mcp":
       await runStdio();
       return;

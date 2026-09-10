@@ -20,6 +20,7 @@
     "start": "npm run start -w adam-mcp",
     "start:browser": "npm run start -w adam-mcp -- --browser",
     "login": "npm run login -w adam-provider-browser",
+    "logout": "npm run logout -w adam-provider-browser",
     "status": "npm run status -w adam-provider-browser",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",

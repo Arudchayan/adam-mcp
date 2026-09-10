@@ -1,12 +1,19 @@
-import { createPlaywrightSession } from "./playwright-session.ts";
 import { defaultProfileDir } from "./config.ts";
 import { isNamedCliEntry } from "./is-main.ts";
+import { createPlaywrightSession } from "./playwright-session.ts";
+import type { AdamBrowserSession } from "./session-types.ts";
 
-export async function runLoginCli(): Promise<void> {
-  const session = createPlaywrightSession({ headed: true });
+/**
+ * ADR 0009: open Chrome for the interactive SWITCH sign-in, then hand the
+ * session to a detached headless holder and return control to the terminal.
+ */
+export async function runLoginCli(
+  createSession: () => AdamBrowserSession = () => createPlaywrightSession({ headed: true }),
+): Promise<void> {
+  const session = createSession();
   console.error("Opening Chrome for ADAM.");
   console.error(`Profile: ${defaultProfileDir()}`);
-  console.error("Sign in in that window.");
+  console.error("Sign in in that window. It closes automatically when sign-in completes.");
   const status = await session.loginInteractively();
   if (!status.loggedIn) {
     console.error("Login did not complete.");
@@ -14,14 +21,8 @@ export async function runLoginCli(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  console.error("Signed in. The window should close; a background Chrome keeps the session.");
-  console.error("Enable the adam MCP server in your client, then list courses.");
-  console.error("Ctrl+C closes Chrome and ends the session.");
-  await new Promise<void>((resolve) => {
-    const stop = () => resolve();
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
-  });
+  console.error("Signed in. The browser window is closed; the ADAM session runs headless.");
+  console.error("Check: adam-mcp status    Stop: adam-mcp logout");
   await session.close();
 }
 

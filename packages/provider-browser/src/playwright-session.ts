@@ -23,9 +23,15 @@ import {
   mergeFrameLinks,
 } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
-import { injectableCookies } from "./session-handoff.ts";
+import { holderStatus, startSessionHolder } from "./session-holder.ts";
 import { SerialQueue } from "./serial-queue.ts";
-import type { AdamBrowserSession, PageSnapshot, SessionStatus, SnapshotLink } from "./session-types.ts";
+import type {
+  AdamBrowserSession,
+  PageSnapshot,
+  SessionCookie,
+  SessionStatus,
+  SnapshotLink,
+} from "./session-types.ts";
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -186,7 +192,34 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   async status(): Promise<SessionStatus> {
     return this.serialize(async () => {
-      const page = await this.ensurePage();
+      const holder = await holderStatus(this.profileDir);
+      if (!holder.running && !this.page && !this.context) {
+        const endpoint = await readLocalCdpEndpoint(this.profileDir);
+        if (!endpoint) {
+          return {
+            loggedIn: false,
+            origin: this.origin,
+            reason: "login-required" as const,
+            message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
+            checkedAt: new Date().toISOString(),
+          };
+        }
+      }
+      const page = await this.ensurePage().catch((error: unknown) => {
+        if (error instanceof AdamError && error.code === "unauthorized") {
+          return undefined;
+        }
+        throw error;
+      });
+      if (!page) {
+        return {
+          loggedIn: false,
+          origin: this.origin,
+          reason: "login-required" as const,
+          message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
+          checkedAt: new Date().toISOString(),
+        };
+      }
       if (shouldProbeOrigin(page.url(), this.origin)) {
         assertUrlAllowed(this.origin);
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
@@ -210,6 +243,21 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       }
       return this.toStatus(snapshot);
     });
+  }
+
+  /** Cookie jar for the headless session holder (ADR 0009). */
+  async exportSessionState(): Promise<{ cookies: SessionCookie[]; userAgent?: string } | undefined> {
+    if (!this.context) {
+      return undefined;
+    }
+    const state = await this.context.storageState();
+    let userAgent: string | undefined;
+    try {
+      userAgent = this.page ? String(await this.page.evaluate("navigator.userAgent")) : undefined;
+    } catch {
+      userAgent = undefined;
+    }
+    return { cookies: state.cookies as SessionCookie[], userAgent };
   }
 
   async open(url: string): Promise<PageSnapshot> {
@@ -242,36 +290,33 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   async loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS): Promise<SessionStatus> {
     return this.serialize(async () => {
       this.headed = true;
-      let page = await this.ensurePage();
+      let page = await this.ensurePage({ allowLaunch: true });
       try {
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
       } catch {
         await this.closeContext();
-        page = await this.ensurePage();
+        page = await this.ensurePage({ allowLaunch: true });
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
       }
       await this.rejectIfBlocked(page);
       let snapshot: PageSnapshot | undefined = await this.readSnapshot(page);
-      if (isLoggedInSnapshot(snapshot)) {
-        await this.announceLogin(page, "success");
-        await this.continueHeadlessIfOwned(page);
-        return this.toStatus(await this.readSnapshot(await this.ensurePage()));
-      }
-      await this.clickSwitchIfPresent(page);
-      console.error(
-        "Complete SWITCH edu-ID in the Chrome window. Do not paste the password into the terminal or into chat.",
-      );
-      const deadline = Date.now() + timeoutMs;
-      snapshot = undefined;
-      while (Date.now() < deadline) {
-        await delay(1_000);
-        try {
-          snapshot = await this.readSnapshot(page);
-        } catch {
-          continue;
-        }
-        if (snapshot && isLoggedInSnapshot(snapshot)) {
-          break;
+      if (!isLoggedInSnapshot(snapshot)) {
+        await this.clickSwitchIfPresent(page);
+        console.error(
+          "Complete SWITCH edu-ID in the Chrome window. Do not paste the password into the terminal or into chat.",
+        );
+        const deadline = Date.now() + timeoutMs;
+        snapshot = undefined;
+        while (Date.now() < deadline) {
+          await delay(1_000);
+          try {
+            snapshot = await this.readSnapshot(page);
+          } catch {
+            continue;
+          }
+          if (snapshot && isLoggedInSnapshot(snapshot)) {
+            break;
+          }
         }
       }
       if (!snapshot || !isLoggedInSnapshot(snapshot)) {
@@ -282,8 +327,34 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         );
       }
       await this.announceLogin(page, "success");
-      await this.continueHeadlessIfOwned(page);
-      return this.toStatus(await this.readSnapshot(await this.ensurePage()));
+      if (!headedByDefault()) {
+        // ADR 0009: transfer the cookie jar to a detached headless holder and
+        // close the interactive window; the login command can now return.
+        const seed = await this.exportSessionState();
+        await this.closeContext();
+        if (!seed || seed.cookies.length === 0) {
+          throw new AdamError(
+            "unauthorized",
+            "Signed in, but no session cookies were captured. Run adam-mcp login again.",
+          );
+        }
+        await startSessionHolder({ profileDir: this.profileDir, origin: this.origin, seed });
+        const attached = await this.tryAttachCdp();
+        if (!attached || !this.context) {
+          throw new AdamError(
+            "provider_unavailable",
+            "The headless session started but could not be attached. Retry adam-mcp login.",
+          );
+        }
+        this.page = this.context.pages()[0] ?? (await this.context.newPage());
+        attachDownloadGuard(this.page);
+        return this.toStatus(await this.readSnapshot(this.page));
+      }
+      // Debug escape hatch (ADAM_BROWSER_HEADED=1): keep the headed browser in-process.
+      if (this.hideWindowAfterFeedback) {
+        await minimizeChromeWindow(page);
+      }
+      return this.toStatus(await this.readSnapshot(page));
     });
   }
 
@@ -321,11 +392,14 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   }
 
   private toStatus(snapshot: PageSnapshot): SessionStatus {
+    const loggedIn = isLoggedInSnapshot(snapshot);
     return {
-      loggedIn: isLoggedInSnapshot(snapshot),
+      loggedIn,
       origin: this.origin,
       currentUrl: redactUrl(snapshot.url),
       title: snapshot.title,
+      reason: loggedIn ? "signed-in" : "login-required",
+      checkedAt: new Date().toISOString(),
     };
   }
 
@@ -350,82 +424,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     });
   }
 
-  private async continueHeadlessIfOwned(page: Page): Promise<void> {
-    if (!this.ownsChrome || !this.context) {
-      if (this.hideWindowAfterFeedback) {
-        await minimizeChromeWindow(page);
-      }
-      return;
-    }
-    let userAgent = "Mozilla/5.0";
-    try {
-      userAgent = String(await page.evaluate("navigator.userAgent"));
-    } catch {
-      // Keep a generic UA; verification below fail-closes if ADAM rejects it.
-    }
-    const state = await this.context.storageState();
-    const jar = injectableCookies(state.cookies);
-    await this.closeContext();
-    this.headed = false;
-    await mkdir(this.profileDir, { recursive: true });
-    let launched: BrowserContext | undefined;
-    let lastError: unknown;
-    for (let attempt = 0; attempt < 8; attempt++) {
-      try {
-        launched = await chromium.launchPersistentContext(this.profileDir, {
-          channel: "chrome",
-          headless: true,
-          acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
-          viewport: { width: 1280, height: 900 },
-          locale: "de-CH",
-          userAgent,
-          args: chromeLaunchArgs(),
-        });
-        lastError = undefined;
-        break;
-      } catch (error) {
-        lastError = error;
-        await delay(250 * (attempt + 1));
-      }
-    }
-    if (!launched) {
-      const detail = lastError instanceof Error ? lastError.message : "unknown error";
-      throw new AdamError(
-        "provider_unavailable",
-        `Could not continue the ADAM session in the background. ${detail}`,
-      );
-    }
-    this.context = launched;
-    this.ownsChrome = true;
-    this.context.on("page", (opened) => {
-      attachDownloadGuard(opened);
-    });
-    try {
-      await this.context.addCookies(jar);
-      this.page = this.context.pages()[0] ?? (await this.context.newPage());
-      attachDownloadGuard(this.page);
-      assertUrlAllowed(this.origin);
-      await this.page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
-      const snapshot = await this.readSnapshot(this.page);
-      if (!isLoggedInSnapshot(snapshot)) {
-        throw new AdamError(
-          "unauthorized",
-          "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
-        );
-      }
-    } catch (error) {
-      await this.closeContext();
-      if (error instanceof AdamError) {
-        throw error;
-      }
-      throw new AdamError(
-        "unauthorized",
-        "ADAM did not accept the background session. Run adam_login again and complete SWITCH in Chrome.",
-      );
-    }
-  }
-
-  private async ensurePage(): Promise<Page> {
+  private async ensurePage(options: { allowLaunch?: boolean } = {}): Promise<Page> {
     if (this.page && this.context && !this.page.isClosed()) {
       return this.page;
     }
@@ -450,6 +449,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
     const attached = await this.tryAttachCdp();
     if (!attached) {
+      if (!options.allowLaunch) {
+        throw new AdamError(
+          "unauthorized",
+          "No ADAM session is running. Run `adam-mcp login` (or the adam_login tool) to sign in, then retry. Do not paste credentials into chat.",
+        );
+      }
       await mkdir(this.profileDir, { recursive: true });
       try {
         this.context = await chromium.launchPersistentContext(this.profileDir, {

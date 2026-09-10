@@ -273,7 +273,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       {
         title: "Open SWITCH login in Chrome",
         description:
-        "Open Chrome for the local ADAM session and wait until you finish signing in.",
+        "Open Chrome for the local ADAM session and wait until you finish signing in. The window closes on success and the session continues headless; other tools need no open browser.",
         inputSchema: z.object({
           timeoutMs: z
             .number()
