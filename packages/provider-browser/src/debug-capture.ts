@@ -6,19 +6,20 @@ import type { SnapshotLink } from "./session-types.ts";
 /**
  * Redacted, privacy-safe debug capture for live listing troubleshooting.
  * Records structure only: patternized hrefs, tag/class skeleton, DOM counts.
- * Never records page text, cookies, storage state, or file bytes.
+ * Never records page text, titles, cookies, storage state, or file bytes.
  */
 export type DebugCaptureInput = {
   origin: string;
   url: string;
-  title: string;
+  /** Title length only; the title itself can contain student content. */
+  titleLength: number;
   dom?: { itemRows: number; emptyCopy: boolean };
   frameOrigins: string[];
   skeleton: string[];
   links: SnapshotLink[];
 };
 
-/** Patternize an href: same-origin path + ref_id/item_ref_id/cmdClass/baseClass, numeric ids masked. */
+/** Patternize an href: same-origin path + structural params only, ids/names masked. */
 export function patternizeHref(href: string, origin: string): string {
   try {
     const base = new URL(origin);
@@ -29,11 +30,34 @@ export function patternizeHref(href: string, origin: string): string {
     const kept: string[] = [];
     for (const key of ["ref_id", "item_ref_id", "cmdClass", "baseClass", "target"]) {
       const value = url.searchParams.get(key);
-      if (value) {
-        kept.push(`${key}=${value.replace(/\d+/g, "{id}")}`);
+      if (!value) {
+        continue;
       }
+      if ((key === "cmdClass" || key === "baseClass") && /^[a-z0-9_]{1,40}$/i.test(value)) {
+        kept.push(`${key}=${value.toLowerCase()}`);
+        continue;
+      }
+      if (key === "ref_id" || key === "item_ref_id") {
+        kept.push(`${key}=${value.replace(/\d+/g, "{id}")}`);
+        continue;
+      }
+      const target = /^([a-z]+)_\d+$/i.exec(value);
+      if (target) {
+        kept.push(`${key}=${target[1]!.toLowerCase()}_{id}`);
+        continue;
+      }
+      kept.push(`${key}={value}`);
     }
-    const path = url.pathname.replace(/\d+/g, "{id}");
+    const path = url.pathname
+      .split("/")
+      .map((segment) => {
+        const masked = segment.replace(/\d+/g, "{id}");
+        if (/\.(?:php|html?)$/i.test(masked) || !masked.includes(".")) {
+          return masked;
+        }
+        return "{file}";
+      })
+      .join("/");
     return kept.length > 0 ? `${path}?${kept.join("&")}` : path;
   } catch {
     return "[unparseable]";
@@ -53,12 +77,12 @@ export function buildDebugCapture(input: DebugCaptureInput, capturedAt = new Dat
     capturedAt,
     origin: input.origin,
     url: patternizeHref(input.url, input.origin),
-    title: input.title,
+    titleLength: input.titleLength,
     dom: input.dom ?? null,
     frameOrigins: [...new Set(input.frameOrigins)],
     skeleton: input.skeleton,
     linkPatterns,
-    note: "Redacted debug capture. No page text, cookies, or storage state.",
+    note: "Redacted debug capture. No page text, titles, cookies, or storage state.",
   };
   return JSON.stringify(payload, null, 2);
 }

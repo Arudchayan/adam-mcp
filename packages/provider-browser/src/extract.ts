@@ -463,18 +463,19 @@ export function classifyListing(
       signals: { contentItemCount: keptCount, emptyCopy, chromeOnly: false },
     };
   }
+  // Visible rows beat empty copy: a stray empty widget or frame must never hide content.
+  if (domRows > 0) {
+    return {
+      state: "unknown",
+      signals: { contentItemCount: domRows, emptyCopy: false, chromeOnly: false },
+      notice: LISTING_ROWS_UNPARSED_NOTICE,
+    };
+  }
   if (emptyCopy) {
     return {
       state: "empty",
       signals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
       notice: LISTING_EMPTY_NOTICE,
-    };
-  }
-  if (domRows > 0) {
-    return {
-      state: "unknown",
-      signals: { contentItemCount: domRows, emptyCopy: false, chromeOnly: true },
-      notice: LISTING_ROWS_UNPARSED_NOTICE,
     };
   }
   return {

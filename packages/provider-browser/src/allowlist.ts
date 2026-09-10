@@ -33,6 +33,15 @@ export function urlAllowed(raw: string): boolean {
   }
 }
 
+/** Strict same-origin comparison. Prefix lookalikes (adam.unibas.ch.evil) are rejected. */
+export function sameOrigin(raw: string, origin: string): boolean {
+  try {
+    return new URL(raw).origin === new URL(origin).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function assertUrlAllowed(raw: string): URL {
   if (!urlAllowed(raw)) {
     throw new AdamError(

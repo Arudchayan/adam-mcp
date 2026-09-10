@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError, syntheticPdfWithText } from "adam-core";
-import { hostnameAllowed, urlAllowed } from "./allowlist.ts";
+import { hostnameAllowed, sameOrigin, urlAllowed } from "./allowlist.ts";
 import {
   createBrowserProvider,
   retainWalkPage,
@@ -9,7 +9,7 @@ import {
   fullSnapshotByteProxy,
 } from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
-import { shouldProbeOrigin } from "./playwright-session.ts";
+import { shouldProbeOrigin, mergeListingProbes } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
 const dashboardHtml = `
@@ -107,6 +107,13 @@ describe("allowlist", () => {
     assert.equal(urlAllowed("http://adam.unibas.ch/go/crs/1"), false);
     assert.equal(hostnameAllowed("evil.adam.unibas.ch"), false);
   });
+
+  it("rejects prefix-lookalike origins", () => {
+    assert.equal(sameOrigin("https://adam.unibas.ch/go/crs/1", "https://adam.unibas.ch"), true);
+    assert.equal(sameOrigin("https://adam.unibas.ch.evil.example/go/crs/1", "https://adam.unibas.ch"), false);
+    assert.equal(sameOrigin("https://adam.unibas.ch@evil.example/go/crs/1", "https://adam.unibas.ch"), false);
+    assert.equal(sameOrigin("http://[", "https://adam.unibas.ch"), false);
+  });
 });
 
 describe("extractCatalog", () => {
@@ -159,6 +166,44 @@ describe("listing classification", () => {
     assert.equal(classified.state, "unknown");
     assert.equal(classified.signals.contentItemCount, 0);
     assert.match(classified.notice ?? "", /did not load/i);
+  });
+
+  it("never reports empty when rows are visible, even with empty copy on the page", () => {
+    const classified = classifyListing(
+      { ...base, text: "Keine Einträge", dom: { itemRows: 3, emptyCopy: true } },
+      0,
+    );
+    assert.equal(classified.state, "unknown");
+    assert.equal(classified.signals.contentItemCount, 3);
+    assert.equal(classified.signals.emptyCopy, false);
+    assert.equal(classified.signals.chromeOnly, false);
+  });
+});
+
+describe("mergeListingProbes", () => {
+  it("picks the probe with the most rows and only trusts empty copy with zero rows", () => {
+    assert.equal(mergeListingProbes([]), undefined);
+    assert.deepEqual(
+      mergeListingProbes([
+        { itemRows: 0, emptyCopy: true },
+        { itemRows: 3, emptyCopy: false },
+      ]),
+      { itemRows: 3, emptyCopy: false },
+    );
+    assert.deepEqual(
+      mergeListingProbes([
+        { itemRows: 0, emptyCopy: false },
+        { itemRows: 0, emptyCopy: true },
+      ]),
+      { itemRows: 0, emptyCopy: true },
+    );
+    assert.deepEqual(
+      mergeListingProbes([
+        { itemRows: 0, emptyCopy: true },
+        { itemRows: 2, emptyCopy: true },
+      ]),
+      { itemRows: 2, emptyCopy: false },
+    );
   });
 });
 

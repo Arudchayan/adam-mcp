@@ -23,21 +23,30 @@ courses, so no live `file` / `exc` object was reachable. Investigation found:
 1. **Empty-copy parity.** `EMPTY_CONTAINER_COPY` (extract) is the single pattern used
    by both `isAdamEmptyContainerPage` and the session wait probe, covering the ILIAS
    10 EN/DE list and card copy.
-2. **DOM evidence.** `PageSnapshot.dom?: { itemRows, emptyCopy }` is probed in the
-   main frame and same-origin content frames. `classifyListing` reports `empty` on
-   empty copy, and when DOM rows exist but no ADAM links parsed it reports `unknown`
-   with `LISTING_ROWS_UNPARSED_NOTICE` (never `empty`, never invented items).
-3. **Frame links.** Same-origin frame anchors merge into `snapshot.links` with
-   dedupe by href+text; external/SWITCH frames are excluded.
+2. **DOM evidence.** `PageSnapshot.dom?: { itemRows, emptyCopy }` merges the main
+   frame and same-origin content frames: the probe that saw the most distinct rows
+   wins, and empty copy only counts when that probe saw zero rows. `classifyListing`
+   reports `empty` only when no rows are visible and empty copy is present; visible
+   rows with no parseable ADAM links report `unknown` with
+   `LISTING_ROWS_UNPARSED_NOTICE` (never `empty`, never invented items), and
+   `chromeOnly` is false whenever rows exist.
+3. **Frame links.** Anchors from same-origin frames (strict origin equality, not a
+   prefix match) merge into `snapshot.links` with dedupe by href+text; external and
+   SWITCH/login frames are excluded. Chrome/breadcrumb flags are computed inside the
+   frame, so frame nav that matches the chrome selectors stays filtered.
 4. **Probe type cache.** An unknown landing URL never confirms the probed type, so a
    wrong probe no longer poisons later opens.
 5. **Status verify-then-report.** `status()` probes the origin when the current tab
-   is blank, off-origin, the origin root, or a login page; it waits a bounded time
-   for dashboard/login markers and retries once when the page is neither.
+   is blank, off-origin, the origin root, or a login page; it waits a bounded time for
+   dashboard/login markers and retries once when the page is neither. This removes
+   the observed leftover-tab false negative; a page that stays transient can still
+   report false, so the retry reduces rather than eliminates the failure mode.
 6. **Redacted debug capture.** `ADAM_DEBUG_CAPTURE=1` (dir `ADAM_DEBUG_CAPTURE_DIR`,
    default `./scratch`, gitignored) writes structure-only JSON: patternized hrefs,
-   tag/class skeleton, DOM counts, frame origins. No page text, cookies, storage
-   state, or bytes. Best-effort: capture never breaks a live request.
+   tag/class skeleton with numeric ids masked, DOM counts, frame origins, title
+   **length** (never the title). Non-structural parameter values and filename-like
+   path segments are masked. No page text, titles, cookies, storage state, or bytes.
+   Best-effort: capture never breaks a live request.
 
 ## Consequences
 
@@ -45,7 +54,7 @@ courses, so no live `file` / `exc` object was reachable. Investigation found:
 - Content in frames or async lists can now yield objects; otherwise the notice is
   "rows are visible but unparsed" instead of a misleading "list did not load".
 - `status()` may navigate the current tab once — one DCL navigation on a cold,
-  foreign, or login tab — and never fabricates a negative on a transient page.
+  foreign, or login tab — and retries transient pages before reporting a negative.
 - Debug captures stay local. Do not commit them; strip real ref_ids before sharing.
 - No new tools, no writes; read-only annotations unchanged. Async hydration
   (`waitForResponse` on the ILIAS item-list request) stays open until a capture

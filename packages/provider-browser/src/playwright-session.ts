@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { AdamError, MAX_EXTRACT_BYTES, redactUrl } from "adam-core";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
-import { assertUrlAllowed, urlAllowed } from "./allowlist.ts";
+import { assertUrlAllowed, sameOrigin, urlAllowed } from "./allowlist.ts";
 import { localCdpEndpoint, parseDevToolsActivePort } from "./cdp.ts";
 import {
   debugCaptureEnabled,
@@ -48,9 +48,13 @@ const LISTING_PROBE_SCRIPT = `(() => {
     document.querySelector("main") ??
     document.body;
   const items = root ? root.querySelectorAll(${JSON.stringify(LISTING_ITEM_SELECTOR)}) : [];
+  const rows = new Set();
+  for (const item of items) {
+    rows.add(item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item);
+  }
   const text = root ? root.innerText || "" : "";
   const emptyCopy = (${EMPTY_CONTAINER_COPY.toString()}).test(text || "");
-  return { itemRows: items.length, emptyCopy };
+  return { itemRows: rows.size, emptyCopy };
 })()`;
 
 const LISTING_READY_SCRIPT = `(() => {
@@ -68,8 +72,13 @@ const DEBUG_SKELETON_SCRIPT = `(() => {
     const tag = element.tagName.toLowerCase();
     if (tag === "script" || tag === "style" || tag === "svg") return;
     const className = typeof element.className === "string" ? element.className : "";
-    const classes = className.trim().split(/\\s+/).filter(Boolean).slice(0, 4);
-    const id = element.id ? "#" + element.id : "";
+    const classes = className
+      .trim()
+      .split(/\\s+/)
+      .filter(Boolean)
+      .slice(0, 4)
+      .map((name) => name.replace(/\\d+/g, "{id}"));
+    const id = element.id ? "#" + element.id.replace(/\\d+/g, "{id}") : "";
     out.push("  ".repeat(depth) + tag + id + (classes.length ? "." + classes.join(".") : ""));
     for (const child of Array.from(element.children)) walk(child, depth + 1);
   };
@@ -96,6 +105,18 @@ export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
   } catch {
     return true;
   }
+}
+
+/** Pick the max row count across frame probes; empty copy only counts when no rows were seen. */
+export function mergeListingProbes(
+  probes: Array<{ itemRows: number; emptyCopy: boolean }>,
+): { itemRows: number; emptyCopy: boolean } | undefined {
+  if (probes.length === 0) {
+    return undefined;
+  }
+  const itemRows = Math.max(...probes.map((probe) => probe.itemRows));
+  const emptyCopy = itemRows === 0 && probes.some((probe) => probe.emptyCopy);
+  return { itemRows, emptyCopy };
 }
 
 const COLLECT_LINKS_SCRIPT = `(() => {
@@ -457,7 +478,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     const title = await page.title();
     const mainLinks = (await page.evaluate(COLLECT_LINKS_SCRIPT)) as SnapshotLink[];
     const frameLinks: SnapshotLink[] = [];
-    const adamOrigin = new URL(this.origin).origin;
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) {
         continue;
@@ -465,7 +485,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       try {
         const frameUrl = frame.url();
         // Only same-origin frames contribute object links; SWITCH/login frames stay out.
-        if (frameUrl && frameUrl.startsWith(adamOrigin)) {
+        if (frameUrl && sameOrigin(frameUrl, this.origin)) {
           const collected = (await frame.evaluate(COLLECT_LINKS_SCRIPT).catch(() => [])) as SnapshotLink[];
           frameLinks.push(...collected);
         }
@@ -503,13 +523,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     if (main) {
       probes.push(main);
     }
-    const adamOrigin = new URL(this.origin).origin;
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) {
         continue;
       }
       try {
-        if (!frame.url().startsWith(adamOrigin)) {
+        if (!sameOrigin(frame.url(), this.origin)) {
           continue;
         }
         const probe = (await frame.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
@@ -520,13 +539,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         continue;
       }
     }
-    if (probes.length === 0) {
-      return undefined;
-    }
-    return {
-      itemRows: Math.max(...probes.map((probe) => probe.itemRows)),
-      emptyCopy: probes.some((probe) => probe.emptyCopy),
-    };
+    return mergeListingProbes(probes);
   }
 
   private async captureDebug(page: Page, snapshot: PageSnapshot): Promise<void> {
@@ -546,7 +559,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const json = buildDebugCapture({
         origin: this.origin,
         url: snapshot.url,
-        title: snapshot.title,
+        titleLength: snapshot.title.length,
         dom: snapshot.dom,
         frameOrigins,
         skeleton,
