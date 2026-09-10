@@ -8,7 +8,8 @@ import {
   walkRetentionByteProxy,
   fullSnapshotByteProxy,
 } from "./browser-provider.ts";
-import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot } from "./extract.ts";
+import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
+import { shouldProbeOrigin } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
 const dashboardHtml = `
@@ -120,6 +121,79 @@ describe("extractCatalog", () => {
     assert.equal(catalog.objects.some((item) => item.refId === "100001"), true);
     assert.equal(inferDates(catalog.text).length > 0, true);
     assert.equal(catalog.news.some((item) => item.url.includes("/go/file/100011")), true);
+  });
+});
+
+describe("listing classification", () => {
+  const base = snapshotFromHtml(
+    "https://adam.unibas.ch/go/fold/100020",
+    "04 - Exercises",
+    "<main><h1>04 - Exercises</h1></main>",
+    "",
+  );
+
+  it("classifies real ILIAS 10 EN/DE empty copy as empty", () => {
+    for (const copy of [
+      "This folder is empty.",
+      "This object is empty and contains no items.",
+      "No Materials Available",
+      "Keine Einträge",
+      "Keine Objekte gefunden",
+      "No items available",
+    ]) {
+      const classified = classifyListing({ ...base, text: copy }, 0);
+      assert.equal(classified.state, "empty", copy);
+      assert.equal(classified.signals.emptyCopy, true);
+    }
+  });
+
+  it("classifies visible rows with no parseable links as unknown, not empty", () => {
+    const classified = classifyListing({ ...base, text: "04 - Exercises", dom: { itemRows: 3, emptyCopy: false } }, 0);
+    assert.equal(classified.state, "unknown");
+    assert.equal(classified.signals.contentItemCount, 3);
+    assert.match(classified.notice ?? "", /rows are visible/i);
+  });
+
+  it("still reports plain unknown when there are no rows and no empty copy", () => {
+    const classified = classifyListing(base, 0);
+    assert.equal(classified.state, "unknown");
+    assert.equal(classified.signals.contentItemCount, 0);
+    assert.match(classified.notice ?? "", /did not load/i);
+  });
+});
+
+describe("mergeFrameLinks", () => {
+  it("dedupes frame links by href and text and keeps main-frame order", () => {
+    const main = [
+      { href: "https://adam.unibas.ch/go/fold/100010", text: "Notes", inChrome: false, inBreadcrumb: false },
+    ];
+    const frames = [
+      { href: "https://adam.unibas.ch/go/fold/100010", text: "Notes", inChrome: false, inBreadcrumb: false },
+      { href: "https://adam.unibas.ch/go/file/100011", text: "00_Overview.pdf", inChrome: false, inBreadcrumb: false },
+    ];
+    const merged = mergeFrameLinks(main, frames);
+    assert.deepEqual(merged.map((link) => link.text), ["Notes", "00_Overview.pdf"]);
+  });
+});
+
+describe("shouldProbeOrigin", () => {
+  const origin = "https://adam.unibas.ch";
+
+  it("probes blank, foreign, root, and login URLs", () => {
+    assert.equal(shouldProbeOrigin("about:blank", origin), true);
+    assert.equal(shouldProbeOrigin("", origin), true);
+    assert.equal(shouldProbeOrigin("https://adam.unibas.ch/", origin), true);
+    assert.equal(shouldProbeOrigin("https://adam.unibas.ch/login.php", origin), true);
+    assert.equal(shouldProbeOrigin("https://login.switch.ch/idp", origin), true);
+    assert.equal(shouldProbeOrigin("http://[", origin), true);
+  });
+
+  it("trusts a signed-in dashboard or object page", () => {
+    assert.equal(
+      shouldProbeOrigin("https://adam.unibas.ch/ilias.php?baseClass=ilDashboardGUI&cmd=jumpToSelectedItems", origin),
+      false,
+    );
+    assert.equal(shouldProbeOrigin("https://adam.unibas.ch/go/crs/2207365", origin), false);
   });
 });
 
@@ -944,5 +1018,37 @@ describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
     const page = await provider.readPage("100010", { type: "fold" });
     assert.match(page.text, /Course/);
     assert.equal(opens.length, 1);
+  });
+});
+
+describe("probe type caching", () => {
+  it("does not cache the probed type when the landing URL is unknown", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        {
+          "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+            "https://adam.unibas.ch/ilias.php?ref_id=100010&item_ref_id=0",
+            "03 - Course & Notes",
+            folderHtml,
+            "03 - Course & Notes 00_Overview.pdf Abmelden",
+          ),
+        },
+        { onOpen: (url) => opens.push(url) },
+      ),
+    });
+
+    const first = await provider.listChildren("100010");
+    assert.equal(first.items.some((item) => item.refId === "100011"), true);
+    assert.ok(opens.length >= 1);
+
+    opens.length = 0;
+    await provider.listChildren("100010");
+    assert.deepEqual(
+      opens.map((url) => new URL(url).pathname),
+      ["/go/crs/100010", "/go/fold/100010"],
+      "an unknown landing must not confirm the fold probe; crs is probed again",
+    );
   });
 });

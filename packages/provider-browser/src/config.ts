@@ -17,3 +17,16 @@ export function headedByDefault(): boolean {
   }
   return true;
 }
+
+/**
+ * Opt-in redacted debug capture for live listing troubleshooting.
+ * Writes to `ADAM_DEBUG_CAPTURE_DIR` (default `./scratch`), never to git.
+ */
+export function debugCaptureEnabled(): boolean {
+  const raw = process.env.ADAM_DEBUG_CAPTURE?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+export function debugCaptureDir(): string {
+  return process.env.ADAM_DEBUG_CAPTURE_DIR?.trim() || join(process.cwd(), "scratch");
+}

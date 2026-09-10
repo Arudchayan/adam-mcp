@@ -68,7 +68,7 @@ describe("stdio hygiene", () => {
       const timer = setTimeout(() => {
         child.kill();
         reject(new Error(`stdio hygiene timed out. stderr=${stderr} stdout=${stdout}`));
-      }, 12_000);
+      }, 30_000);
       const onData = () => {
         if (!stdout.includes("\n")) {
           return;

@@ -495,10 +495,10 @@ export class BrowserAdamProvider implements AdamProvider {
         // Only cache when the landed object is the requested one (ADR 0005).
         // Folder GUIs render as ilias.php?ref_id=PARENT&item_ref_id=CHILD, which
         // now parses as unknown/CHILD — never cache that as the parent's type.
+        // An unknown landing never confirms the probed type either: caching the
+        // guess would poison later opens.
         if (landed && landed.type !== "unknown" && landed.refId === refId && !isDeniedObjectType(landed.type)) {
           this.typeByRefId.set(refId, landed.type);
-        } else if (!landed || landed.type === "unknown") {
-          this.typeByRefId.set(refId, type);
         }
         return snapshot;
       } catch (error) {

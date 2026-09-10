@@ -244,6 +244,21 @@ export function collectLinksFromHtml(html: string): SnapshotLink[] {
   return links;
 }
 
+/** Merge main-frame links with links collected inside content frames (dedupe by href+text). */
+export function mergeFrameLinks(mainLinks: SnapshotLink[], frameLinks: SnapshotLink[]): SnapshotLink[] {
+  const merged = [...mainLinks];
+  const seen = new Set(mainLinks.map((link) => `${link.href}\n${link.text}`));
+  for (const link of frameLinks) {
+    const key = `${link.href}\n${link.text}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push(link);
+  }
+  return merged;
+}
+
 function hrefsIn(html: string, section: RegExp): string[] {
   const block = html.match(section)?.[0] ?? "";
   return [...block.matchAll(/href=["']([^"']+)["']/gi)].map((match) => match[1]);
@@ -414,11 +429,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Live ADAM EN/DE empty-container copy (ILIAS 10). Absence of copy must not mean empty. */
+/** ILIAS 10 EN/DE empty-container copy, list and card markup. Absence of copy must not mean empty. */
+export const EMPTY_CONTAINER_COPY =
+  /this (?:folder|object) is empty(?: and contains no items)?|dieser ordner ist leer|no items available|no materials available|keine eintr[äa]ge(?: vorhanden)?|keine objekte gefunden/i;
+
 export function isAdamEmptyContainerPage(snapshot: Pick<PageSnapshot, "text">): boolean {
-  return /this folder is empty|dieser ordner ist leer|no items available|keine eintr[äa]ge vorhanden/i.test(
-    snapshot.text ?? "",
-  );
+  return EMPTY_CONTAINER_COPY.test(snapshot.text ?? "");
 }
 
 export type ListingClassification = {
@@ -431,13 +447,16 @@ export const LISTING_EMPTY_NOTICE =
   "Listed successfully; this folder has no child objects. Not a failure. Not 'no deadlines'.";
 export const LISTING_UNKNOWN_NOTICE =
   "Folder page opened but the object list did not load. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
+export const LISTING_ROWS_UNPARSED_NOTICE =
+  "Object rows are visible on this page, but no parseable ADAM links were found. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
 
 /** ADR 0005: classify from DOM signals in extract, not from waits. First match wins. */
 export function classifyListing(
   snapshot: PageSnapshot,
   keptCount: number,
 ): ListingClassification {
-  const emptyCopy = isAdamEmptyContainerPage(snapshot);
+  const domRows = snapshot.dom?.itemRows ?? 0;
+  const emptyCopy = isAdamEmptyContainerPage(snapshot) || snapshot.dom?.emptyCopy === true;
   if (keptCount > 0) {
     return {
       state: "ok",
@@ -449,6 +468,13 @@ export function classifyListing(
       state: "empty",
       signals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
       notice: LISTING_EMPTY_NOTICE,
+    };
+  }
+  if (domRows > 0) {
+    return {
+      state: "unknown",
+      signals: { contentItemCount: domRows, emptyCopy: false, chromeOnly: true },
+      notice: LISTING_ROWS_UNPARSED_NOTICE,
     };
   }
   return {
