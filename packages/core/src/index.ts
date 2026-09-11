@@ -4,7 +4,7 @@ export {
   calendarEventDedupeKey,
   preferCalendarEvents,
 } from "./calendar.ts";
-export { AdamError, isAdamError } from "./errors.ts";
+export { AdamError, isAdamError, throwIfCancelled } from "./errors.ts";
 export {
   DEFAULT_EXTRACT_PAGES,
   extractLocalFileText,
@@ -26,6 +26,7 @@ export {
   ADAM_ERROR_CODES,
   ADAM_OBJECT_TYPES,
   DEFAULT_ADAM_ORIGIN,
+  MAX_PAGE_CHARS,
   type AdamErrorCode,
   type AdamObject,
   type AdamObjectType,

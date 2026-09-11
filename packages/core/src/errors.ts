@@ -18,3 +18,10 @@ export class AdamError extends Error {
 export function isAdamError(error: unknown): error is AdamError {
   return error instanceof AdamError;
 }
+
+/** Cooperative cancellation shared by all providers (ADR 0011). */
+export function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new AdamError("cancelled", "Request was cancelled by the client.", false);
+  }
+}

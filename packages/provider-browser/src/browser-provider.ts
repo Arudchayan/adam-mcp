@@ -4,10 +4,12 @@ import {
   extractLocalFileText,
   isDeniedObjectType,
   looksLikeHtml,
+  MAX_PAGE_CHARS,
   objectUrl,
   paginate,
   preferCalendarEvents,
   parseAdamRef,
+  throwIfCancelled,
   withListingState,
   type AdamObject,
   type AdamObjectType,
@@ -122,6 +124,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openAuthorized(this.origin);
     const catalog = extractCatalog(snapshot, now());
     const courses = uniqueByRef(catalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type)));
@@ -131,6 +134,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openObject(refId, options?.type ?? "crs");
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -145,6 +149,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -155,6 +160,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openObject(refId, options?.type);
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -170,10 +176,12 @@ export class BrowserAdamProvider implements AdamProvider {
       ...object,
       text: catalog.text,
       inferredDates: catalog.inferredDates,
+      truncated: snapshot.text.length > MAX_PAGE_CHARS,
     };
   }
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -190,6 +198,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
+    throwIfCancelled(options?.signal);
     try {
       const snapshot = await this.openObject(refId, options?.type ?? "file");
       const catalog = extractCatalog(snapshot, now());
@@ -227,6 +236,7 @@ export class BrowserAdamProvider implements AdamProvider {
     refId: RefId,
     options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract> {
+    throwIfCancelled(options?.signal);
     const file = await this.getFile(refId, options);
     const origin = this.origin.replace(/\/$/, "");
     const candidates = uniqueUrls([`${origin}/goto_adam_file_${refId}_download.html`, file.url]);
@@ -258,6 +268,7 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
+    throwIfCancelled(options?.signal);
     const snapshot = await this.openObject(refId, options?.type ?? "exc");
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -286,8 +297,9 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     const needle = query.trim().toLowerCase();
-    const walk = await this.collectLivePages();
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const titleMatches: AdamObject[] = [];
     const bodyMatches: AdamObject[] = [];
     for (const { catalog } of walk.pages) {
@@ -316,7 +328,8 @@ export class BrowserAdamProvider implements AdamProvider {
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<WalkPaginated<CalendarEvent>> {
-    const walk = await this.collectLivePages();
+    throwIfCancelled(options?.signal);
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const events: CalendarEvent[] = [];
     for (const page of walk.pages) {
       const { catalog } = page;
@@ -363,8 +376,9 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<WalkPaginated<NewsItem>> {
+    throwIfCancelled(options?.signal);
     // A2-news-browser: long enrolled walk reports progress when onProgress is set (fixture parity).
-    const walk = await this.collectLivePages(options?.onProgress);
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const items = uniqueNews(walk.pages.flatMap((page) => page.catalog.news));
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     const filtered = items.filter((item) => {
@@ -374,16 +388,19 @@ export class BrowserAdamProvider implements AdamProvider {
     return withWalkState(paginate(filtered, options), walk);
   }
 
-  private async collectLivePages(onProgress?: ProgressReporter): Promise<WalkResult> {
+  private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
+    throwIfCancelled(signal);
     // PERF-1 memo: reuse enrolled walk across search / calendar / news.
     // Invalidation: close() (and a new provider instance). Memo hit emits no progress.
+    // Cancelled walks are never memoized (ADR 0011).
     if (this.livePagesMemo) {
+      throwIfCancelled(signal);
       return this.livePagesMemo;
     }
     if (this.livePagesInflight) {
       return this.livePagesInflight;
     }
-    this.livePagesInflight = this.walkLivePages(onProgress)
+    this.livePagesInflight = this.walkLivePages(onProgress, signal)
       .then((pages) => {
         this.livePagesMemo = pages;
         return pages;
@@ -394,7 +411,7 @@ export class BrowserAdamProvider implements AdamProvider {
     return this.livePagesInflight;
   }
 
-  private async walkLivePages(onProgress?: ProgressReporter): Promise<WalkResult> {
+  private async walkLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
     const report = async (progress: number) => {
       if (!onProgress) {
         return;
@@ -442,6 +459,7 @@ export class BrowserAdamProvider implements AdamProvider {
 
     let skipped = 0;
     while (queue.length > 0 && pages.length < MAX_LIVE_PAGES) {
+      throwIfCancelled(signal);
       const next = queue.shift();
       if (!next) {
         break;
@@ -452,6 +470,7 @@ export class BrowserAdamProvider implements AdamProvider {
         this.rememberTypes(catalog);
         pages.push(retainWalkPage(snapshot, catalog));
         await report(pages.length);
+        throwIfCancelled(signal);
         const childCount = catalog.objects.filter(
           (item) => item.refId !== catalog.current?.refId && !isDeniedObjectType(item.type),
         ).length;
@@ -465,7 +484,10 @@ export class BrowserAdamProvider implements AdamProvider {
             enqueue(child.type, child.refId);
           }
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof AdamError && error.code === "cancelled") {
+          throw error;
+        }
         skipped += 1;
         continue;
       }

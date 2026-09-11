@@ -1,5 +1,8 @@
 export const DEFAULT_ADAM_ORIGIN = "https://adam.unibas.ch";
 
+/** ADR 0011: page-text cap shared by fixture and browser (browser extract already used 50k). */
+export const MAX_PAGE_CHARS = 50_000;
+
 export const ADAM_OBJECT_TYPES = [
   "root",
   "cat",
@@ -60,6 +63,8 @@ export type InferredDate = {
 export type PageContent = AdamObject & {
   text: string;
   inferredDates: InferredDate[];
+  /** True when page text was capped at MAX_PAGE_CHARS (ADR 0011). */
+  truncated?: boolean;
 };
 
 export type FileObject = AdamObject & {
@@ -155,6 +160,8 @@ export type ProgressReporter = (update: ProgressUpdate) => void | Promise<void>;
 /** Optional type from a prior listing so providers open /go/{type}/{id}. */
 export type ObjectOpenOptions = {
   type?: AdamObjectType;
+  /** Cooperative cancellation for long walks (notifications/cancelled). */
+  signal?: AbortSignal;
 };
 
 export type ListOptions = {
@@ -171,6 +178,7 @@ export const ADAM_ERROR_CODES = [
   "unsupported_type",
   "provider_unavailable",
   "confirmation_required",
+  "cancelled",
 ] as const;
 
 export type AdamErrorCode = (typeof ADAM_ERROR_CODES)[number];

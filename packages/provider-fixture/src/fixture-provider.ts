@@ -3,8 +3,10 @@ import {
   assertReadableObjectType,
   extractLocalFileText,
   isDeniedObjectType,
+  MAX_PAGE_CHARS,
   paginate,
   syntheticPdfWithText,
+  throwIfCancelled,
   withListingState,
   type AdamObject,
   type AdamProvider,
@@ -58,6 +60,7 @@ export class FixtureAdamProvider implements AdamProvider {
   readonly id = "fixture" as const;
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     const courses = enrolledCourseIds.map((id) => requireRecord(id).object);
     const page = paginate(courses, options);
     return withListingState(page, courses.length > 0 ? "ok" : "empty", {
@@ -67,7 +70,8 @@ export class FixtureAdamProvider implements AdamProvider {
     });
   }
 
-  async getCourse(refId: RefId): Promise<AdamObject> {
+  async getCourse(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<AdamObject> {
+    throwIfCancelled(options?.signal);
     const record = requireRecord(refId);
     assertReadableObjectType(record.object.type, refId);
     if (record.object.type !== "crs") {
@@ -77,6 +81,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     const children = resolveChildren(refId);
     const page = paginate(children, options);
     // Fixture catalog is complete data: zero children is honest empty (100020).
@@ -87,7 +92,8 @@ export class FixtureAdamProvider implements AdamProvider {
     });
   }
 
-  async readPage(refId: RefId): Promise<PageContent> {
+  async readPage(refId: RefId, options?: { type?: PageContent["type"]; signal?: AbortSignal }): Promise<PageContent> {
+    throwIfCancelled(options?.signal);
     const record = requireRecord(refId);
     assertReadableObjectType(record.object.type, refId);
     if (!record.page) {
@@ -96,10 +102,15 @@ export class FixtureAdamProvider implements AdamProvider {
         `ref_id ${refId} has no page text in the fixture catalog.`,
       );
     }
-    return record.page;
+    // ADR 0011: bound fixture page text like the browser path (MAX_PAGE_CHARS).
+    if (record.page.text.length > MAX_PAGE_CHARS) {
+      return { ...record.page, text: record.page.text.slice(0, MAX_PAGE_CHARS), truncated: true };
+    }
+    return { ...record.page, truncated: false };
   }
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
+    throwIfCancelled(options?.signal);
     const files = resolveChildren(refId).filter((child): child is FileObject => child.type === "file");
     const nested = files.length > 0
       ? files
@@ -127,7 +138,8 @@ export class FixtureAdamProvider implements AdamProvider {
     );
   }
 
-  async getFile(refId: RefId): Promise<FileObject> {
+  async getFile(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<FileObject> {
+    throwIfCancelled(options?.signal);
     const record = requireRecord(refId);
     assertReadableObjectType(record.object.type, refId);
     if (!record.file) {
@@ -138,8 +150,9 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async extractFileText(
     refId: RefId,
-    options?: { maxPages?: number; onProgress?: ProgressReporter },
+    options?: { maxPages?: number; onProgress?: ProgressReporter; signal?: AbortSignal },
   ): Promise<FileExtract> {
+    throwIfCancelled(options?.signal);
     await LongWalkStub.emit("extract", options?.onProgress);
     const file = await this.getFile(refId);
     if (file.refId !== "100011") {
@@ -148,7 +161,8 @@ export class FixtureAdamProvider implements AdamProvider {
     return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages);
   }
 
-  async getExercise(refId: RefId): Promise<ExerciseObject> {
+  async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {
+    throwIfCancelled(options?.signal);
     const record = requireRecord(refId);
     assertReadableObjectType(record.object.type, refId);
     if (record.object.type !== "exc") {
@@ -172,6 +186,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>> {
+    throwIfCancelled(options?.signal);
     await LongWalkStub.emit("search", options?.onProgress);
     const needle = query.trim().toLowerCase();
     if (!needle) {
@@ -184,6 +199,7 @@ export class FixtureAdamProvider implements AdamProvider {
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<Paginated<CalendarEvent>> {
+    throwIfCancelled(options?.signal);
     await LongWalkStub.emit("calendar", options?.onProgress);
     const events = aggregateFixtureDeadlines();
     const from = options?.from ? Date.parse(options.from) : Number.NEGATIVE_INFINITY;
@@ -200,6 +216,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
+    throwIfCancelled(options?.signal);
     await LongWalkStub.emit("news", options?.onProgress);
     // AT4: enrolled + News-enabled courses only. Never invent activity for news-off / Magazin.
     const enrolled = new Set(enrolledCourseIds);
