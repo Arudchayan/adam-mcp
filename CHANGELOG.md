@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ADR 0010 protocol correctness: strict digits-only cursor (`InvalidParams`), resource `not_found` → `ResourceNotFoundError`, structured-output validation against advertised schemas, server `instructions`
+- ADR 0011 bounds/cancellation: `MAX_PAGE_CHARS` + `PageContent.truncated`, cooperative `AbortSignal` on all providers (cancelled walks never memoized), `retryable=false` for unknown bugs, password/api_key/matriculation redaction + URL-aware `deepRedact`
+- Bounded live re-verify guide (`docs/live-reverify.md`) for the post-population ADAM pass; no premature type expansion (`sess/htlm/wiki/grp` still gated on live sighting)
+
 ## [0.1.0] - 2026-09-07
 
 ### Added
