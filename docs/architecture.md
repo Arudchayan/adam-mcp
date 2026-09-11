@@ -38,3 +38,16 @@ Bump the pin in this file when changing the server dependency major or the negot
 
 Real confirms and future writes → MCP **elicitation** when the host supports MRTR. Until then, keep the schema gate; do not document `confirm` or annotations as elicitation.
 
+## SOTA hardening (ADR 0010 / 0011)
+
+- **Instructions:** `McpServer(serverInfo, { instructions })` carries the read-only contract (handles vs live URLs, `confirm:true`, `empty` vs `unknown`, `tst` deny).
+- **Cursors:** `cursorSchema` is digits-only; garbage yields `InvalidParams (-32602)` at the SDK layer. Providers keep lenient `decodeCursor` internally.
+- **Resources:** `not_found` maps to `ResourceNotFoundError`; `unauthorized` stays distinct.
+- **Structured output:** `ok(data, outputSchema)` validates redacted `structuredContent`; mismatch is `provider_unavailable` non-retryable (shape bug).
+- **Bounds:** `MAX_PAGE_CHARS=50_000` (`adam-core`); `PageContent.truncated` + `untrustedPageOutputSchema.truncated?`; truncate after `inferDates`.
+- **Cancellation:** `ObjectOpenOptions.signal` + `throwIfCancelled(signal)` (`cancelled`, non-retryable). MCP extracts via `signalFromContext(ctx)` and threads to every provider; browser walks check per iteration and never memoize cancelled walks.
+- **Retryability:** unknown bugs and `cancelled` are `retryable=false`; only `provider_unavailable` defaults true.
+- **Redaction:** `password/api_key/secret`/matriculation in text; `password/api_key/secret` query keys in URLs; `deepRedact` uses `redactUrl` for `*url` fields.
+
+Bounded live re-verify (no code): [live-reverify.md](live-reverify.md).
+
