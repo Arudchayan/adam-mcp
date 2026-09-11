@@ -5,6 +5,7 @@ import {
   isResourceHandleType,
   parseAdamRef,
   redactText,
+  redactUrl,
   resourceUri,
   type AdamProvider,
   type Paginated,
@@ -288,9 +289,19 @@ export function asStructured(data: unknown): Record<string, unknown> {
   return { value: data };
 }
 
-export function ok(data: unknown): ToolResponse {
+export function ok(data: unknown, schema?: { safeParse: (value: unknown) => { success: boolean; error?: unknown } }): ToolResponse {
   const enriched = ResourceLinks.enrich(data);
   const structuredContent = asStructured(deepRedact(enriched));
+  if (schema) {
+    const parsed = schema.safeParse(structuredContent);
+    if (!parsed.success) {
+      throw new AdamError(
+        "provider_unavailable",
+        "Provider returned a shape that does not match the advertised output schema.",
+        false,
+      );
+    }
+  }
   const links = ResourceLinks.contentBlocks(structuredContent);
   return {
     content: [
@@ -302,8 +313,12 @@ export function ok(data: unknown): ToolResponse {
 }
 
 /** Redact secrets inside structured payloads, not just the text block (T4). */
-function deepRedact(value: unknown): unknown {
+function deepRedact(value: unknown, keyHint?: string): unknown {
   if (typeof value === "string") {
+    // URL-shaped fields get query-aware redaction; everything else gets text redaction.
+    if (keyHint && /url$/i.test(keyHint)) {
+      return redactUrl(value);
+    }
     return redactText(value);
   }
   if (Array.isArray(value)) {
@@ -312,7 +327,7 @@ function deepRedact(value: unknown): unknown {
   if (value !== null && typeof value === "object") {
     const next: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
-      next[key] = deepRedact(entry);
+      next[key] = deepRedact(entry, key);
     }
     return next;
   }
@@ -334,28 +349,58 @@ export function fail(error: unknown, runId?: string): ToolResponse {
   }
   const message = error instanceof Error ? error.message : "Unexpected provider error.";
   return {
-    content: [{ type: "text", text: `${redactText(message)} (retryable=true)${suffix}` }],
+    content: [{ type: "text", text: `${redactText(message)} (retryable=false)${suffix}` }],
     isError: true,
   };
 }
 
+/** Cooperative cancellation: throws AdamError(cancelled, retryable=false) when aborted. */
+export function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new AdamError("cancelled", "Request was cancelled by the client.", false);
+  }
+}
+
+/** Best-effort AbortSignal extraction across SDK handler extra shapes. */
+export function signalFromContext(ctx: unknown): AbortSignal | undefined {
+  if (!ctx || typeof ctx !== "object") {
+    return undefined;
+  }
+  const record = ctx as Record<string, unknown>;
+  // SDK v2 handler extra may carry signal directly or nested under mcpReq.
+  if (record.signal instanceof AbortSignal) {
+    return record.signal;
+  }
+  const nested = record.mcpReq as Record<string, unknown> | undefined;
+  if (nested?.signal instanceof AbortSignal) {
+    return nested.signal;
+  }
+  return undefined;
+}
+
 /** Read-only ADAM data: wrap in the untrusted envelope and log the call. */
-export function runReadTool<T extends object>(operation: () => Promise<T>, tool?: string): Promise<ToolResponse> {
+export function runReadTool<T extends object>(
+  operation: () => Promise<T>,
+  tool?: string,
+  schema?: { safeParse: (value: unknown) => { success: boolean; error?: unknown } },
+): Promise<ToolResponse> {
   return runProvider(
     async () => UntrustedContent.wrap(await operation(), UntrustedContent.DATA_NOTICE),
     tool,
+    schema,
   );
 }
 
 export async function runProvider<T>(
   operation: () => Promise<T>,
   tool = "adam",
+  schema?: { safeParse: (value: unknown) => { success: boolean; error?: unknown } },
 ): Promise<ToolResponse> {
   const runId = createRunId();
   const started = Date.now();
   try {
     const data = await operation();
-    const response = ok(data);
+    const response = ok(data, schema);
     logToolCall({
       ts: new Date().toISOString(),
       runId,
@@ -367,7 +412,7 @@ export async function runProvider<T>(
     return response;
   } catch (error) {
     const code = isAdamError(error) || error instanceof AdamError ? error.code : "unexpected";
-    const retryable = isAdamError(error) || error instanceof AdamError ? error.retryable : true;
+    const retryable = isAdamError(error) || error instanceof AdamError ? error.retryable : false;
     logToolCall({
       ts: new Date().toISOString(),
       runId,

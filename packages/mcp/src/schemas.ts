@@ -2,7 +2,11 @@ import { ADAM_OBJECT_TYPES } from "adam-core";
 import * as z from "zod/v4";
 
 export const refIdSchema = z.string().regex(/^\d+$/).describe("ILIAS ref_id, digits only");
-export const cursorSchema = z.string().optional().describe("Opaque pagination cursor from a previous listing");
+export const cursorSchema = z
+  .string()
+  .regex(/^\d+$/, "Cursor must be an opaque decimal offset from a previous listing")
+  .optional()
+  .describe("Opaque pagination cursor from a previous listing");
 export const limitSchema = z.number().int().min(1).max(100).optional().describe("Page size, default 20, max 100");
 export const confirmReadSchema = z
   .literal(true)
@@ -118,6 +122,7 @@ export const untrustedPageOutputSchema = adamObjectOutputSchema.extend({
   untrusted: z.literal(true),
   notice: z.string(),
   text: z.string(),
+  truncated: z.boolean().optional().describe("True when page text was capped at MAX_PAGE_CHARS"),
   inferredDates: z.array(
     z
       .object({
