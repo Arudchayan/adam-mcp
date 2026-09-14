@@ -68,6 +68,7 @@ Source of truth: packages/mcp/src/server.ts; schemas in packages/mcp/src/schemas
 | adam_list_files | — | read-only | refId, cursor?, limit? | paginatedFiles | listFiles |
 | adam_get_file | — | read-only | refId, cursor?, limit? | fileObject | getFile |
 | adam_extract_file_text | confirm:true; maxPages 1-20 | read-only + untrusted | refId, confirm, maxPages? | untrustedExtract | extractFileText |
+| adam_get_forum | confirm:true when threadId (post bodies) | read-only + untrusted | refId, threadId?, confirm? | forum | getForum |
 | adam_get_exercise | no submit; tst denied elsewhere | read-only | refId | exercise | getExercise |
 | adam_search | enrolled walk, not global GUI | read-only | query, cursor?, limit? | paginatedObjects | search |
 | adam_list_calendar | inferred dates, not calendar GUI | read-only | from?, to?, cursor?, limit? | paginatedCalendar | listCalendar |
@@ -75,7 +76,7 @@ Source of truth: packages/mcp/src/server.ts; schemas in packages/mcp/src/schemas
 | adam_login | browser only | readOnlyHint false, openWorld | timeoutMs? | sessionStatus | session.login |
 | adam_session_status | browser only | read-only | {} | sessionStatus | session.status |
 
-READ_ONLY_TOOLS (11) and SESSION_TOOLS (adam_login, adam_session_status) in results.ts. Object type tst denied in packages/core/src/policy.ts. No write/submit tools.
+READ_ONLY_TOOLS (12, includes adam_get_forum) and SESSION_TOOLS (adam_login, adam_session_status) in results.ts. Object type tst denied in packages/core/src/policy.ts. No write/submit tools.
 
 ### 2.2 Resources
 
@@ -86,6 +87,7 @@ READ_ONLY_TOOLS (11) and SESSION_TOOLS (adam_login, adam_session_status) in resu
 | adam-folder | adam://fold/{refId} | JSON | listChildren |
 | adam-file | adam://file/{refId} | JSON | getFile metadata |
 | adam-exercise | adam://exc/{refId} | JSON | getExercise |
+| adam-forum | adam://frm/{refId} | JSON | getForum (meta + thread summaries) |
 
 adam:// handles are MCP resources; live citations use https://adam.unibas.ch/go/... (docs/architecture.md, docs/scope.md).
 
