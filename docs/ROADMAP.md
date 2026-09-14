@@ -16,7 +16,7 @@ Living sequencing for University of Basel ADAM coverage. Community project — n
 | **Unknown** | May exist on ADAM; no live sighting yet — **actively hunting** via deep walks, in-ADAM search, Magazin/public cats, ADAMtools (not “impossible”) |
 | **Wait-for-inventory** | Empty re-verify of enrolled courses found none; **parked** — not actively hunting; unlock when inventory/sighting appears |
 
-We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work. Some types (`frm` / `sess` / `webr`) are **wait-for-inventory** after empty enrolled re-verify rather than active hunt.
+We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work. `sess` / `webr` remain **wait-for-inventory** after empty enrolled re-verify. `frm` is **Known/live** 2026-09-14 (tip 5099529).
 
 ## Phase A — Harden shipped reads (fixture-first)
 
@@ -50,11 +50,11 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 
 After **live sighting** of each type (or honest synthetic fixture). Prefer resources for read-by-id; keep tool count tight.
 
-`frm` / `sess` / `webr`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting; wait for inventory.
+`sess` / `webr`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting; wait for inventory.
 
 | Item | Confidence | Gate |
 | --- | --- | --- |
-| Forum thread read (`frm`) | Wait-for-inventory | Live `frm` (parked; not hunting) |
+| Forum thread read (`frm`) | Known + live | Live `frm` Domain 2026-09-14 tip 5099529 `list_children`; unlock read implementation |
 | Session / timetable (`sess`) | Wait-for-inventory | Live `sess` (parked; not hunting) |
 | Web links (`webr`) | Wait-for-inventory | Live `webr`; no generic fetch (parked; not hunting) |
 | HTML / LM modules | Unknown → hunting | Live presence |

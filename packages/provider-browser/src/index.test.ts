@@ -1185,3 +1185,26 @@ describe("probe type caching", () => {
     );
   });
 });
+
+
+describe("Phase B getForum browser fail-closed", () => {
+  it("rejects non-frm types without coercion", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          "<main><h1>04 - Exercises</h1><p>This folder is empty</p><a href=\"/logout.php\">Abmelden</a></main>",
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => hardened.getForum("100020"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /fold/i);
+      return true;
+    });
+  });
+});

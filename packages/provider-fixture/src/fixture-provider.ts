@@ -13,6 +13,7 @@ import {
   preferCalendarEvents,
   type CalendarEvent,
   type ExerciseObject,
+  type ForumObject,
   type FileExtract,
   type FileObject,
   type ListOptions,
@@ -28,7 +29,9 @@ import {
   fixtureCatalog,
   fixtureNews,
   newsEnabledCourseIds,
+  fixtureForumPostsByThread,
 } from "./catalog.ts";
+// forum posts map imported below with catalog symbols
 import { LongWalkStub } from "./long-walk.ts";
 
 const OVERVIEW_PDF_BYTES = syntheticPdfWithText(
@@ -45,7 +48,16 @@ function requireRecord(refId: RefId) {
 
 /** Listing rows are summaries: exercise units are getExercise-only. */
 function childSummary(object: AdamObject): AdamObject {
-  const { units: _units, ...summary } = object as AdamObject & { units?: unknown };
+  const {
+    units: _units,
+    threads: _threads,
+    selectedThread: _selectedThread,
+    ...summary
+  } = object as AdamObject & {
+    units?: unknown;
+    threads?: unknown;
+    selectedThread?: unknown;
+  };
   return summary;
 }
 
@@ -182,6 +194,44 @@ export class FixtureAdamProvider implements AdamProvider {
           ownStatus: "unknown",
         },
       ],
+    };
+  }
+
+  async getForum(
+    refId: RefId,
+    options?: { type?: AdamObject["type"]; threadId?: string; signal?: AbortSignal },
+  ): Promise<ForumObject> {
+    throwIfCancelled(options?.signal);
+    const record = requireRecord(refId);
+    assertReadableObjectType(record.object.type, refId);
+    if (record.object.type !== "frm") {
+      throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a forum.`);
+    }
+    const object = record.object as ForumObject;
+    const summaries = (object.threads ?? []).map(({ threadId, title, author, createdAt, updatedAt, postCount }) => ({
+      threadId,
+      title,
+      ...(author ? { author } : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(updatedAt ? { updatedAt } : {}),
+      ...(postCount !== undefined ? { postCount } : {}),
+    }));
+    if (!options?.threadId) {
+      return { ...object, type: "frm", threads: summaries };
+    }
+    const thread = fixtureForumPostsByThread[options.threadId];
+    if (!thread) {
+      throw new AdamError("not_found", `No forum thread ${options.threadId} on ref_id ${refId}.`);
+    }
+    return {
+      ...object,
+      type: "frm",
+      threads: summaries.filter((t) => t.threadId === options.threadId),
+      selectedThread: {
+        threadId: options.threadId,
+        title: thread.title,
+        posts: thread.posts,
+      },
     };
   }
 

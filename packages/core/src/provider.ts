@@ -2,6 +2,7 @@ import type {
   AdamObject,
   CalendarEvent,
   ExerciseObject,
+  ForumObject,
   FileExtract,
   FileObject,
   ListOptions,
@@ -27,6 +28,10 @@ export type AdamProvider = {
     options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract>;
   getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject>;
+  getForum(
+    refId: RefId,
+    options?: ObjectOpenOptions & { threadId?: string },
+  ): Promise<ForumObject>;
   search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>>;
   listCalendar(options?: { from?: string; to?: string } & ListOptions): Promise<Paginated<CalendarEvent>>;
   listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>>;

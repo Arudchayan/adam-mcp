@@ -140,7 +140,7 @@ export function objectUrl(
 }
 
 /** Object types that have registered MCP resource templates (A6/A1). */
-export const RESOURCE_HANDLE_TYPES = ["crs", "fold", "file", "exc"] as const;
+export const RESOURCE_HANDLE_TYPES = ["crs", "fold", "file", "exc", "frm"] as const;
 export type ResourceHandleType = (typeof RESOURCE_HANDLE_TYPES)[number];
 
 export function isResourceHandleType(value: string): value is ResourceHandleType {

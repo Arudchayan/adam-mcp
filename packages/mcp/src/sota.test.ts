@@ -63,7 +63,7 @@ describe("SOTA P0: resource miss mapping (ADR 0010)", () => {
     // mapResourceError is closure-scoped; assert the server exposes the four templates
     // and that the SDK error type is available for the mapping.
     const templates = Object.keys(server["_registeredResourceTemplates"] as Record<string, unknown>).sort();
-    assert.deepEqual(templates, ["adam-course", "adam-exercise", "adam-file", "adam-folder"]);
+    assert.deepEqual(templates, ["adam-course", "adam-exercise", "adam-file", "adam-folder", "adam-forum"]);
     assert.equal(typeof ResourceNotFoundError, "function");
   });
 });

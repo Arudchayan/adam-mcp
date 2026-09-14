@@ -16,6 +16,10 @@ describe("HtmlAdamProvider", () => {
       assert.equal(error.code, "provider_unavailable");
       return true;
     });
+    await assert.rejects(() => provider.getForum("1"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      return true;
+    });
     await assert.rejects(() => provider.getExercise("1"), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "provider_unavailable");

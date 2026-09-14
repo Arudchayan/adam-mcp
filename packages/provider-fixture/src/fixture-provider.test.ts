@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
+// AdamError used in forum fail-closed tests
 import {
   CATALOG_ONLY_COURSE_ID,
   fixtureCatalog,
@@ -80,7 +81,7 @@ describe("FixtureAdamProvider", () => {
     const courseChildren = await provider.listChildren("100001");
     assert.deepEqual(
       courseChildren.items.map((item) => item.refId),
-      ["100010", "100020", "100021"],
+      ["100010", "100020", "100021", "100040"],
     );
     assert.equal(courseChildren.items.some((item) => item.type === "tst"), false);
 
@@ -428,3 +429,47 @@ describe("Fixture populated folder", () => {
   });
 });
 
+
+
+describe("Phase B adam forum read (labeled synthetic frm)", () => {
+  const provider = createFixtureProvider();
+
+  it("listChildren surfaces type frm for labeled synthetic 100040", async () => {
+    const children = await provider.listChildren("100001");
+    const forum = children.items.find((item) => item.refId === "100040");
+    assert.ok(forum);
+    assert.equal(forum.type, "frm");
+    assert.equal("threads" in forum, false);
+    assert.equal("selectedThread" in forum, false);
+  });
+
+  it("getForum without threadId returns summaries only (no post bodies)", async () => {
+    const forum = await provider.getForum("100040");
+    assert.equal(forum.type, "frm");
+    assert.ok(forum.threads.length >= 1);
+    assert.equal(forum.selectedThread, undefined);
+    assert.match(forum.title, /SYNTHETIC/i);
+    assert.equal(forum.threads.some((t) => "posts" in t), false);
+  });
+
+  it("getForum with threadId returns posts", async () => {
+    const forum = await provider.getForum("100040", { threadId: "200001" });
+    assert.equal(forum.selectedThread?.threadId, "200001");
+    assert.ok((forum.selectedThread?.posts.length ?? 0) >= 1);
+    assert.match(forum.selectedThread?.posts[0]?.body ?? "", /SYNTHETIC/i);
+  });
+
+  it("getForum fail-closes on wrong type (AT5 mirror)", async () => {
+    await assert.rejects(() => provider.getForum("100020"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /fold/i);
+      return true;
+    });
+    await assert.rejects(() => provider.getForum("100021"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      return true;
+    });
+  });
+});

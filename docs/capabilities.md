@@ -16,6 +16,8 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Replay corpus (2026-09-10, W5):** five scrubbed captures of live ILIAS 10.11 pages (dashboard, two courses — one contentful, one blank, two blank folders) live under `packages/provider-browser/fixtures/live/`. Regenerate with `npm run capture:fixtures` against a running holder; the script strips scripts/styles/svg, remaps every ref_id to a stable fake id, keeps only UI/empty-copy text, and keeps `id/class/role/href/aria-label` structure. `live-replay.test.ts` replays them through the memory session; the HTML link parser now detects ILIAS 10 chrome positionally (links outside `<main>`, footer, mainbar nav, breadcrumbs), which is what made blank pages replay identically to live.
 
+**Live pass (2026-09-14, tip 5099529, deep enrolled walk):** 8 courses; `list_children`/`list_files` sighted live `file`×37 and `frm`×1; `get_file` ok; extract confirm (one over 8MiB, one truncated empty); `search(pdf|PDF|.pdf)` → crs/fold only (0 typed file hits); news×5 no refs; calendar×8; course-root rescan `exc`/`sess`/`webr`/`htlm`=0; some folds still unknown+blank (not empty); prior narrow 0-file probe superseded (incomplete, not parse-miss). Recording under `scratch/recordings/` gitignored.
+
 ## 1. Purpose
 
 Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. No writes until Security + academic-integrity review.
@@ -42,7 +44,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today |
 | --- | --- | --- |
-| Forum read | Lecturer Q&A threads | no — **wait-for-inventory** until live `frm` (not hunting) |
+| Forum read | Lecturer Q&A threads | **partial** — **live-seen** 2026-09-14; thread read still Phase B |
 | Groups / ADAMtools | Study groups, surveys (discover) | no |
 | Wiki/blog/Etherpad read | Collab surfaces | no |
 | Learning progress (own) | Completion if course enables LP | no |
@@ -60,12 +62,12 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `fold` Private | Tutor-only | n/a to members | confirm invisible |
 | `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | blocked — not observed |
 | page / course page | Announcements, dates | yes | smoke + date parse |
-| `file` | PDFs/slides | partial (meta + extract) | **done** metadata (2026-09-06) |
+| `file` | PDFs/slides | partial (meta + extract) | **re-confirmed** live metadata 2026-09-14 tip 5099529 (file×37); extract confirm exercised |
 | `exc` | Instructions, deadline, status | tool + resource (`adam_get_exercise` + `adam://exc/{refId}`) | labeled synthetic `100021` (AT5); live still unverified |
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `webr` | External links | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
-| `frm` | Forums | no | wait-for-inventory — empty enrolled re-verify; not hunting |
+| `frm` | Forums | **partial** (list via `list_children`) | **live-seen** 2026-09-14 tip 5099529 |
 | `wiki` / `blog` / Etherpad | Collab | no | blocked — not observed |
 | `grp` / `svy` / ADAMtools | Groups, surveys | no | discoverability |
 | news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
@@ -83,7 +85,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — PR #13 / `ed40c2c`; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
 3. **News / what-changed reliability** when News is enabled (AT4 — PR #12 / `b3bb0c0`)  
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
-5. **Forum thread read** before any write (**wait-for-inventory** until live `frm`; not actively hunting)
+5. **Forum thread read** — gate **open** (live `frm` 2026-09-14 tip 5099529); read-only next; **no write**
 
 Principle: deepen P0 reliability before new object types; forum read before any write; deep-link submit until gated write review.
 

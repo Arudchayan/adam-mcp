@@ -150,6 +150,7 @@ describe("resourceUri", () => {
     assert.equal(resourceUri("fold", "100020"), "adam://fold/100020");
     assert.equal(resourceUri("file", "100011"), "adam://file/100011");
     assert.equal(resourceUri("exc", "100021"), "adam://exc/100021");
+    assert.equal(resourceUri("frm", "100040"), "adam://frm/100040");
     assert.equal(resourceUri("tst", "100030"), undefined);
     assert.equal(resourceUri("cat", "1"), undefined);
   });
