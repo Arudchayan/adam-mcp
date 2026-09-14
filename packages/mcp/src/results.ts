@@ -23,6 +23,7 @@ export const READ_ONLY_TOOLS = [
   "adam_get_file",
   "adam_extract_file_text",
   "adam_get_exercise",
+  "adam_get_forum",
   "adam_search",
   "adam_list_calendar",
   "adam_list_news",
@@ -76,7 +77,14 @@ export class ConfirmGate {
 }
 
 /** Minimal shape of a model-facing listing row (AdamObject and friends). */
-type ListingItem = { type: string; units?: unknown; children?: ListingItem[] };
+type ListingItem = {
+  type: string;
+  units?: unknown;
+  threads?: unknown;
+  selectedThread?: unknown;
+  posts?: unknown;
+  children?: ListingItem[];
+};
 
 /**
  * B10 defense in depth: listing surfaces never carry denied object types (tst)
@@ -120,10 +128,17 @@ export function sanitizeListingObject<T extends ListingItem>(item: T): T {
     }
     return [clean];
   });
-  if (!("units" in item) && !childrenChanged) {
+  const hasForumExtras = "threads" in item || "selectedThread" in item || "posts" in item;
+  if (!("units" in item) && !hasForumExtras && !childrenChanged) {
     return item;
   }
-  const { units: _units, ...rest } = item;
+  const {
+    units: _units,
+    threads: _threads,
+    selectedThread: _selectedThread,
+    posts: _posts,
+    ...rest
+  } = item;
   return {
     ...rest,
     ...(children !== undefined ? { children } : {}),

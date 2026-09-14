@@ -32,6 +32,7 @@ describe("read-only MCP facade", () => {
       "adam_get_file",
       "adam_extract_file_text",
       "adam_get_exercise",
+      "adam_get_forum",
       "adam_search",
       "adam_list_calendar",
       "adam_list_news",
@@ -177,7 +178,7 @@ describe("read-only MCP facade", () => {
     const children = await provider.listChildren("100001");
     assert.deepEqual(
       children.items.map((item) => item.refId),
-      ["100010", "100020", "100021"],
+      ["100010", "100020", "100021", "100040"],
     );
     assert.equal(children.items.some((item) => item.type === "tst"), false);
     const search = await provider.search("BLOCKED EXAM CONTENT");
@@ -252,12 +253,17 @@ describe("A6 resources for read-by-id", () => {
     const server = createAdamMcpServer({ provider: createFixtureProvider() });
     const toolNames = Object.keys(server["_registeredTools"] as Record<string, unknown>);
     const getById = toolNames.filter((name) => /^adam_get_/.test(name));
-    assert.deepEqual(getById.sort(), ["adam_get_course", "adam_get_exercise", "adam_get_file"]);
+    assert.deepEqual(getById.sort(), [
+      "adam_get_course",
+      "adam_get_exercise",
+      "adam_get_file",
+      "adam_get_forum",
+    ]);
     assert.equal(toolNames.some((name) => /adam_get_folder|adam_get_page|adam_get_by_id/.test(name)), false);
 
     const resources = Object.keys(server["_registeredResources"] as Record<string, unknown>);
     assert.equal(resources.includes("adam://me/courses"), true);
     const templates = Object.keys(server["_registeredResourceTemplates"] as Record<string, unknown>).sort();
-    assert.deepEqual(templates, ["adam-course", "adam-exercise", "adam-file", "adam-folder"]);
+    assert.deepEqual(templates, ["adam-course", "adam-exercise", "adam-file", "adam-folder", "adam-forum"]);
   });
 });

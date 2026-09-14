@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Phase B read-only forum: `adam_get_forum` + `adam://frm/{refId}` (ADR 0012); post bodies require `confirm:true`
+
+### Added
+
 - ADR 0010 protocol correctness: strict digits-only cursor (`InvalidParams`), resource `not_found` → `ResourceNotFoundError`, structured-output validation against advertised schemas, server `instructions`
 - ADR 0011 bounds/cancellation: `MAX_PAGE_CHARS` + `PageContent.truncated`, cooperative `AbortSignal` on all providers (cancelled walks never memoized), `retryable=false` for unknown bugs, password/api_key/matriculation redaction + URL-aware `deepRedact`
 - Bounded live re-verify guide (`docs/live-reverify.md`) for the post-population ADAM pass; no premature type expansion (`sess/htlm/wiki/grp` still gated on live sighting)

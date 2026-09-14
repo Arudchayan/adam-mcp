@@ -35,6 +35,10 @@ export class HtmlAdamProvider implements AdamProvider {
   async getExercise(_refId: string) {
     return disabled();
   }
+
+  async getForum(_refId: string) {
+    return disabled();
+  }
   async search() {
     return disabled();
   }

@@ -44,6 +44,10 @@ export class SoapAdamProvider implements AdamProvider {
     return disabled();
   }
 
+  async getForum(_refId: string) {
+    return disabled();
+  }
+
   async search() {
     return disabled();
   }

@@ -6,6 +6,8 @@ import {
   type Breadcrumb,
   type CalendarEvent,
   type ExerciseObject,
+  type ForumObject,
+  type ForumPost,
   type FileObject,
   type NewsItem,
   type PageContent,
@@ -124,6 +126,75 @@ const exercise: ExerciseObject = {
     },
   ],
 };
+
+/** Labeled synthetic frm for CI (AT5 style). Not live ADAM; freshness=synthetic. */
+const forum: ForumObject = {
+  ...obj(
+    "frm",
+    "100040",
+    "[SYNTHETIC] Course forum – Q&A (labeled fixture, not live)",
+    [...courseBreadcrumb, crumb("crs", "100001", course.title)],
+    {
+      accessClass: "Authenticated Users",
+      updatedAt: "2026-09-01T11:00:00.000Z",
+    },
+  ),
+  type: "frm",
+  threads: [
+    {
+      threadId: "200001",
+      title: "[SYNTHETIC] Welcome thread (summary only without confirm)",
+      author: "Fixture Lecturer",
+      createdAt: "2026-09-01T11:00:00.000Z",
+      updatedAt: "2026-09-02T08:00:00.000Z",
+      postCount: 2,
+    },
+    {
+      threadId: "200002",
+      title: "[SYNTHETIC] Office hours thread",
+      author: "Fixture Lecturer",
+      createdAt: "2026-09-03T09:00:00.000Z",
+      postCount: 1,
+    },
+  ],
+};
+
+/** Post bodies for synthetic threads — getForum(threadId) only; never in list_children. */
+export const fixtureForumPostsByThread: Record<string, { title: string; posts: ForumPost[] }> = {
+  "200001": {
+    title: "[SYNTHETIC] Welcome thread (summary only without confirm)",
+    posts: [
+      {
+        postId: "300001",
+        author: "Fixture Lecturer",
+        createdAt: "2026-09-01T11:00:00.000Z",
+        subject: "Welcome",
+        body: "[SYNTHETIC] Ask course questions here. This connector cannot post replies.",
+      },
+      {
+        postId: "300002",
+        author: "Fixture Student",
+        createdAt: "2026-09-02T08:00:00.000Z",
+        subject: "Re: Welcome",
+        body: "[SYNTHETIC] Thanks — where is the reading list?",
+      },
+    ],
+  },
+  "200002": {
+    title: "[SYNTHETIC] Office hours thread",
+    posts: [
+      {
+        postId: "300003",
+        author: "Fixture Lecturer",
+        createdAt: "2026-09-03T09:00:00.000Z",
+        subject: "Office hours",
+        body: "[SYNTHETIC] Office hours are Thursdays 14:00–15:00.",
+      },
+    ],
+  },
+};
+
+
 
 const overviewFile: FileObject = {
   ...obj("file", "100011", "00_Overview.pdf", [
@@ -373,12 +444,13 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "900165": { object: department, children: ["100001", "100101", "100201"] },
   "100001": {
     object: course,
-    children: ["100010", "100020", "100021"],
+    children: ["100010", "100020", "100021", "100040"],
     page: coursePage,
   },
   "100010": { object: notes, children: ["100011"] },
   "100020": { object: exercises, children: [] },
   "100021": { object: exercise, children: [], page: exercisePage },
+  "100040": { object: forum, children: [] },
   "100011": { object: overviewFile, children: [], file: overviewFile },
   "100030": { object: quiz, children: [], page: quizPage },
   "100101": {

@@ -100,6 +100,35 @@ export type ExerciseObject = AdamObject & {
   units: ExerciseUnit[];
 };
 
+export type ForumPost = {
+  postId: string;
+  author?: string;
+  createdAt?: string;
+  subject?: string;
+  body: string;
+};
+
+export type ForumThreadSummary = {
+  threadId: string;
+  title: string;
+  author?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  postCount?: number;
+};
+
+export type ForumObject = AdamObject & {
+  type: "frm";
+  /** Thread summaries only — never includes post bodies. */
+  threads: ForumThreadSummary[];
+  /** Present only when threadId was requested and confirm gate passed. */
+  selectedThread?: {
+    threadId: string;
+    title: string;
+    posts: ForumPost[];
+  };
+};
+
 export type NewsItem = {
   title: string;
   summary: string;

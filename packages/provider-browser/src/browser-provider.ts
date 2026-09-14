@@ -16,6 +16,7 @@ import {
   type AdamProvider,
   type CalendarEvent,
   type ExerciseObject,
+  type ForumObject,
   type FileExtract,
   type FileObject,
   type ListOptions,
@@ -294,6 +295,39 @@ export class BrowserAdamProvider implements AdamProvider {
         },
       ],
     };
+  }
+
+  async getForum(
+    refId: RefId,
+    options?: ObjectOpenOptions & { threadId?: string },
+  ): Promise<ForumObject> {
+    throwIfCancelled(options?.signal);
+    const snapshot = await this.openObject(refId, options?.type ?? "frm");
+    const catalog = extractCatalog(snapshot, now());
+    this.rememberTypes(catalog);
+    const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
+    if (!object) {
+      throw new AdamError("not_found", `No forum could be read for ref_id ${refId}.`);
+    }
+    assertReadableObjectType(object.type, object.refId);
+    // Fail-closed: type===frm — never coerce unknown/other types into forums (AT5 mirror).
+    if (object.type !== "frm") {
+      throw new AdamError("unsupported_type", `ref_id ${refId} is ${object.type}, not a forum.`);
+    }
+    // Live thread/post HTML parse is intentionally thin: meta + empty summaries until a
+    // dedicated parser lands. Callers needing bodies use threadId + confirm on MCP.
+    const forum: ForumObject = {
+      ...object,
+      type: "frm",
+      threads: [],
+    };
+    if (options?.threadId) {
+      throw new AdamError(
+        "unsupported_type",
+        `Browser forum thread body parse is not implemented for thread ${options.threadId}; use a labeled fixture or wait for parser coverage.`,
+      );
+    }
+    return forum;
   }
 
   async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {

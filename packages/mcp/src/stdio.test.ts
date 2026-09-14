@@ -531,7 +531,7 @@ describe("B10 tst deny fail-closed", () => {
       const listed = items as Array<{ refId?: string; type?: string; title?: string }>;
       assert.deepEqual(
         listed.map((item) => item.refId),
-        ["100010", "100020", "100021"],
+        ["100010", "100020", "100021", "100040"],
       );
       assert.equal(listed.some((item) => item.type === "tst"), false);
 
@@ -633,7 +633,7 @@ describe("B12 no MCP OAuth on stdio", () => {
       const items = children.result?.structuredContent?.items as Array<{ refId?: string }> | undefined;
       assert.deepEqual(
         (items ?? []).map((item) => item.refId),
-        ["100010", "100020", "100021"],
+        ["100010", "100020", "100021", "100040"],
       );
       const emptyFold = await rpc(child, {
         jsonrpc: "2.0",
@@ -855,7 +855,7 @@ describe("A6 resources for read-by-id", () => {
       const names = (tools.result?.tools ?? []).map((tool) => tool.name).sort();
       assert.deepEqual(
         names.filter((name) => name.startsWith("adam_get_")),
-        ["adam_get_course", "adam_get_exercise", "adam_get_file"],
+        ["adam_get_course", "adam_get_exercise", "adam_get_file", "adam_get_forum"],
       );
 
       const course = await rpc(child, {
@@ -1416,6 +1416,135 @@ describe("AT5 adam_get_exercise harden", () => {
         params: { name: "adam_read_page", arguments: { refId: GOLDEN_TST_REF_ID, confirm: true } },
       });
       assert.equal(denied.result?.isError, true);
+    } finally {
+      child.kill();
+    }
+  });
+});
+
+
+describe("Phase B adam_get_forum + adam://frm", () => {
+  it("lists frm child, reads summaries, gates post bodies on confirm, fail-closes wrong type, no write tools", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "phase-b-forum", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+      const names = (tools.result?.tools ?? []).map((tool) => tool.name);
+      assert.equal(names.includes("adam_get_forum"), true);
+      assert.equal(
+        names.some((name) => /adam_.*(?:post|reply|submit)|adam_write/i.test(name)),
+        false,
+      );
+
+      const templates = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/templates/list",
+        params: {},
+      });
+      const uris = (templates.result?.resourceTemplates ?? []).map((t) => t.uriTemplate);
+      assert.equal(uris.includes("adam://frm/{refId}"), true);
+
+      const children = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100001" } },
+      });
+      const items =
+        (children.result?.structuredContent as { items?: Array<{ refId?: string; type?: string }> } | undefined)
+          ?.items ?? [];
+      assert.equal(
+        items.some((item) => item.refId === "100040" && item.type === "frm"),
+        true,
+      );
+
+      const summary = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "adam_get_forum", arguments: { refId: "100040" } },
+      });
+      assert.equal(summary.error, undefined, summary.error?.message);
+      assert.equal(summary.result?.isError, undefined);
+      const structured = summary.result?.structuredContent as {
+        type?: string;
+        threads?: unknown[];
+        selectedThread?: unknown;
+        untrusted?: boolean;
+        resourceUri?: string;
+      };
+      assert.equal(structured?.type, "frm");
+      assert.ok((structured?.threads?.length ?? 0) >= 1);
+      assert.equal(structured?.selectedThread, undefined);
+      assert.equal(structured?.untrusted, true);
+      assert.equal(structured?.resourceUri, "adam://frm/100040");
+
+      const resource = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "resources/read",
+        params: { uri: "adam://frm/100040" },
+      });
+      assert.equal(resource.error, undefined, resource.error?.message);
+      const body =
+        (resource.result as { contents?: Array<{ text?: string }> } | undefined)?.contents?.[0]?.text ?? "";
+      assert.match(body, /"type": "frm"/);
+      assert.equal(/"body":/.test(body), false);
+
+      const denied = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: {
+          name: "adam_get_forum",
+          arguments: { refId: "100040", threadId: "200001" },
+        },
+      });
+      assert.equal(denied.result?.isError, true);
+      assert.match(denied.result?.content?.[0]?.text ?? "", /confirm|confirmation/i);
+
+      const posts = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 8,
+        method: "tools/call",
+        params: {
+          name: "adam_get_forum",
+          arguments: { refId: "100040", threadId: "200001", confirm: true },
+        },
+      });
+      assert.equal(posts.error, undefined, posts.error?.message);
+      assert.equal(posts.result?.isError, undefined);
+      const withPosts = posts.result?.structuredContent as {
+        untrusted?: boolean;
+        selectedThread?: { posts?: Array<{ body?: string }> };
+      };
+      assert.equal(withPosts?.untrusted, true);
+      assert.ok((withPosts?.selectedThread?.posts?.length ?? 0) >= 1);
+      assert.match(withPosts?.selectedThread?.posts?.[0]?.body ?? "", /SYNTHETIC/i);
+
+      const wrong = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: { name: "adam_get_forum", arguments: { refId: "100020" } },
+      });
+      assert.equal(wrong.result?.isError, true);
+      assert.match(wrong.result?.content?.[0]?.text ?? "", /unsupported_type|fold/i);
     } finally {
       child.kill();
     }
