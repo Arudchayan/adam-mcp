@@ -1,11 +1,14 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFileSync, readlinkSync } from "node:fs";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { AdamError } from "adam-core";
-import { chromium } from "playwright-core";
+import { chromium, type BrowserContext } from "playwright-core";
 import { assertUrlAllowed } from "./allowlist.ts";
+import { localCdpEndpoint, parseDevToolsActivePort } from "./cdp.ts";
 import { defaultOrigin, defaultProfileDir } from "./config.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { isLoggedInSnapshot } from "./extract.ts";
@@ -17,16 +20,40 @@ import type { PageSnapshot, SessionCookie } from "./session-types.ts";
  */
 export const HOLDER_RECORD_FILE = "session-holder.json";
 export const HOLDER_SEED_FILE = "session-seed.json";
-const HOLDER_RECORD_VERSION = 1;
+export const DEVTOOLS_ACTIVE_PORT_FILE = "DevToolsActivePort";
+const HOLDER_RECORD_VERSION = 2;
+
+/** SIGTERM grace before escalating to SIGKILL. */
+const STOP_TERM_GRACE_MS = 2_000;
+/** Total wait for holder/browser/CDP/DevToolsActivePort to die. */
+const STOP_DEADLINE_MS = 15_000;
+const STOP_POLL_MS = 100;
 
 export type SessionSeed = {
   cookies: SessionCookie[];
   userAgent?: string;
+  /** Written by startSessionHolder; required for a verified handoff record. */
+  generation?: string;
+};
+
+export type ProcessIdentity = {
+  pid: number;
+  startTime: string;
+  exe: string;
 };
 
 export type HolderRecord = {
   version: typeof HOLDER_RECORD_VERSION;
   pid: number;
+  generation: string;
+  /** Process start token (Linux starttime, ps lstart, or Win CreationDate). */
+  pidStartTime: string;
+  /** Executable path/command at record write — binds the PID against reuse. */
+  exe: string;
+  /** Chrome child PID when known; also identity-bound when present. */
+  browserPid?: number;
+  browserPidStartTime?: string;
+  browserExe?: string;
   startedAt: string;
   verifiedAt: string;
   origin: string;
@@ -40,6 +67,10 @@ export function holderSeedPath(profileDir = defaultProfileDir()): string {
   return join(profileDir, HOLDER_SEED_FILE);
 }
 
+export function devToolsActivePortPath(profileDir = defaultProfileDir()): string {
+  return join(profileDir, DEVTOOLS_ACTIVE_PORT_FILE);
+}
+
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -49,20 +80,212 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
+/** Linux /proc identity for a live PID; undefined if the PID is gone or unreadable. */
+/**
+ * Cross-platform process identity for PID bind.
+ * Prefer Linux /proc starttime+exe; on Unix use `ps`; on Windows skip `ps`
+ * (Git's ps rejects `-o`) and use WMIC / PowerShell Get-Process.
+ * Never invent a bind that would match a reused stranger PID.
+ */
+export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
+  if (!isProcessAlive(pid)) {
+    return undefined;
+  }
+  const linux = readLinuxProcIdentity(pid);
+  if (linux) {
+    return linux;
+  }
+  // Windows runners often ship a non-BSD `ps` that errors on `-o` and burns time.
+  if (process.platform === "win32") {
+    return readWindowsIdentity(pid);
+  }
+  return readPsIdentity(pid) ?? readWindowsIdentity(pid);
+}
+
+function readLinuxProcIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    const exe = readlinkSync(`/proc/${pid}/exe`);
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    const closeParen = stat.lastIndexOf(")");
+    if (closeParen < 0) {
+      return undefined;
+    }
+    const startTime = stat.slice(closeParen + 2).split(" ")[19];
+    if (!startTime) {
+      return undefined;
+    }
+    return { pid, startTime, exe };
+  } catch {
+    return undefined;
+  }
+}
+
+/** macOS / BSD / Unix: `ps -o lstart= -o args=`. */
+function readPsIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "lstart=", "-o", "args="], {
+      encoding: "utf8",
+      timeout: 2_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    if (!out) {
+      return undefined;
+    }
+    // lstart: "Tue Sep 15 16:13:01 2026" then the args/command.
+    const match = /^(\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.+)$/.exec(out);
+    if (!match) {
+      return undefined;
+    }
+    return { pid, startTime: match[1]!, exe: match[2]! };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Windows: WMIC (fast) then PowerShell Get-Process StartTime/Path. */
+function readWindowsIdentity(pid: number): ProcessIdentity | undefined {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+  // One quick retry: freshly spawned processes can lag in WMIC/Get-Process.
+  return (
+    readWindowsWmicIdentity(pid) ??
+    readWindowsPowerShellIdentity(pid) ??
+    readWindowsWmicIdentity(pid) ??
+    readWindowsPowerShellIdentity(pid)
+  );
+}
+
+function readWindowsWmicIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    const out = execFileSync(
+      "wmic",
+      [
+        "process",
+        "where",
+        `ProcessId=${pid}`,
+        "get",
+        "CreationDate,ExecutablePath",
+        "/VALUE",
+      ],
+      { encoding: "utf8", timeout: 5_000, windowsHide: true },
+    );
+    let startTime = "";
+    let exe = "";
+    for (const rawLine of out.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (line.startsWith("CreationDate=")) {
+        startTime = line.slice("CreationDate=".length).trim();
+      } else if (line.startsWith("ExecutablePath=")) {
+        exe = line.slice("ExecutablePath=".length).trim();
+      }
+    }
+    // ExecutablePath can be empty for some processes; fall back to a stable token.
+    if (!startTime) {
+      return undefined;
+    }
+    if (!exe) {
+      exe = `pid:${pid}`;
+    }
+    return { pid, startTime, exe };
+  } catch {
+    return undefined;
+  }
+}
+
+function readWindowsPowerShellIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    // Single-line pipe-delimited output avoids multi-line DateTime formatting issues.
+    // Get-Process is faster/more reliable than Get-CimInstance on GHA windows-latest.
+    const script =
+      `$p = Get-Process -Id ${pid} -ErrorAction Stop;` +
+      `$exe = if ($p.Path) { $p.Path } else { $p.ProcessName };` +
+      `Write-Output ($p.StartTime.ToUniversalTime().ToString("o") + "|" + $exe)`;
+    const out = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { encoding: "utf8", timeout: 15_000, windowsHide: true },
+    ).trim();
+    const sep = out.indexOf("|");
+    if (sep <= 0 || sep >= out.length - 1) {
+      return undefined;
+    }
+    const startTime = out.slice(0, sep).trim();
+    const exe = out.slice(sep + 1).trim();
+    if (!startTime || !exe) {
+      return undefined;
+    }
+    return { pid, startTime, exe };
+  } catch {
+    return undefined;
+  }
+}
+
+export function matchesProcessIdentity(
+  pid: number,
+  expected: { startTime: string; exe: string },
+): boolean {
+  const current = readProcessIdentity(pid);
+  if (!current) {
+    return false;
+  }
+  return current.startTime === expected.startTime && current.exe === expected.exe;
+}
+
+/** True only when the recorded PID is still the same process (start time + exe). */
+export function isBoundHolderAlive(record: HolderRecord): boolean {
+  return matchesProcessIdentity(record.pid, {
+    startTime: record.pidStartTime,
+    exe: record.exe,
+  });
+}
+
+export function isBoundBrowserAlive(record: HolderRecord): boolean {
+  if (
+    typeof record.browserPid !== "number" ||
+    typeof record.browserPidStartTime !== "string" ||
+    typeof record.browserExe !== "string"
+  ) {
+    return false;
+  }
+  return matchesProcessIdentity(record.browserPid, {
+    startTime: record.browserPidStartTime,
+    exe: record.browserExe,
+  });
+}
+
+function isValidHolderRecord(parsed: Partial<HolderRecord>): parsed is HolderRecord {
+  return (
+    parsed?.version === HOLDER_RECORD_VERSION &&
+    typeof parsed.pid === "number" &&
+    typeof parsed.generation === "string" &&
+    parsed.generation.length > 0 &&
+    typeof parsed.pidStartTime === "string" &&
+    typeof parsed.exe === "string" &&
+    typeof parsed.startedAt === "string" &&
+    typeof parsed.verifiedAt === "string" &&
+    typeof parsed.origin === "string"
+  );
+}
+
 export async function readHolderRecord(profileDir = defaultProfileDir()): Promise<HolderRecord | undefined> {
   try {
     const parsed = JSON.parse(await readFile(holderRecordPath(profileDir), "utf8")) as Partial<HolderRecord>;
-    if (
-      parsed?.version === HOLDER_RECORD_VERSION &&
-      typeof parsed.pid === "number" &&
-      typeof parsed.verifiedAt === "string" &&
-      typeof parsed.origin === "string"
-    ) {
-      return parsed as HolderRecord;
+    if (isValidHolderRecord(parsed)) {
+      return parsed;
     }
     return undefined;
   } catch {
     return undefined;
+  }
+}
+
+async function holderRecordFilePresent(profileDir: string): Promise<boolean> {
+  try {
+    await access(holderRecordPath(profileDir));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -71,35 +294,179 @@ export async function clearHolderFiles(profileDir = defaultProfileDir()): Promis
   await rm(holderSeedPath(profileDir), { force: true }).catch(() => undefined);
 }
 
-/** A holder is running only when its record exists and the PID is alive. */
+export async function hasDevToolsActivePort(profileDir = defaultProfileDir()): Promise<boolean> {
+  try {
+    await access(devToolsActivePortPath(profileDir));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Best-effort CDP liveness via the profile DevToolsActivePort (no Playwright attach). */
+export async function isCdpAlive(profileDir = defaultProfileDir()): Promise<boolean> {
+  try {
+    const raw = await readFile(devToolsActivePortPath(profileDir), "utf8");
+    const port = parseDevToolsActivePort(raw);
+    if (port === undefined) {
+      return false;
+    }
+    const response = await fetch(`${localCdpEndpoint(port)}/json/version`, {
+      signal: AbortSignal.timeout(500),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function chromeOrCdpStillAlive(
+  profileDir: string,
+  record: HolderRecord | undefined,
+): Promise<boolean> {
+  if (record && isBoundBrowserAlive(record)) {
+    return true;
+  }
+  if (await isCdpAlive(profileDir)) {
+    return true;
+  }
+  return false;
+}
+
+/** A holder is running only when its record exists and the bound PID still matches. */
 export async function holderStatus(
   profileDir = defaultProfileDir(),
 ): Promise<{ running: boolean; record?: HolderRecord }> {
   const record = await readHolderRecord(profileDir);
-  if (record && isProcessAlive(record.pid)) {
+  if (record && isBoundHolderAlive(record)) {
     return { running: true, record };
   }
-  if (record) {
+  if (record || (await holderRecordFilePresent(profileDir))) {
+    // Never clear while Chrome/CDP is still alive — even if the holder PID bind failed.
+    if (await chromeOrCdpStillAlive(profileDir, record)) {
+      return { running: false, record };
+    }
     await clearHolderFiles(profileDir);
   }
   return { running: false };
 }
 
-export async function stopSessionHolder(profileDir = defaultProfileDir()): Promise<boolean> {
-  const { running, record } = await holderStatus(profileDir);
-  if (!running || !record) {
+function signalPid(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal);
+  } catch {
+    // Already gone.
+  }
+}
+
+/** Prefer process-group kill; fall back to the single PID if the PGID is not ours. */
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    signalPid(pid, signal);
+  }
+}
+
+async function sessionFullyStopped(
+  profileDir: string,
+  record: HolderRecord,
+): Promise<boolean> {
+  if (isBoundHolderAlive(record) || isBoundBrowserAlive(record)) {
     return false;
   }
-  try {
-    process.kill(record.pid);
-  } catch {
-    // Already gone; cleanup below.
+  if (await isCdpAlive(profileDir)) {
+    return false;
   }
-  for (let attempt = 0; attempt < 20 && isProcessAlive(record.pid); attempt += 1) {
-    await delay(250);
+  if (await hasDevToolsActivePort(profileDir)) {
+    return false;
   }
-  await clearHolderFiles(profileDir);
   return true;
+}
+
+/**
+ * Stop the detached holder. Process-group SIGTERM, then SIGKILL. Refuses to
+ * report stopped (and never clears the record) while a bound Chrome/CDP session
+ * or DevToolsActivePort is still present. Never signals a PID that fails the
+ * start-time/exe bind.
+ */
+export async function stopSessionHolder(profileDir = defaultProfileDir()): Promise<boolean> {
+  const record = await readHolderRecord(profileDir);
+  const filePresent = record !== undefined || (await holderRecordFilePresent(profileDir));
+  if (!filePresent) {
+    return false;
+  }
+  if (!record) {
+    // Unreadable/stale file: clear only when CDP is already dead.
+    if (await isCdpAlive(profileDir)) {
+      throw new AdamError(
+        "provider_unavailable",
+        "A Chrome debug port is still live but the session-holder record is unreadable. Close the ADAM Chrome process, then retry adam-mcp logout.",
+      );
+    }
+    await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
+    await clearHolderFiles(profileDir);
+    return false;
+  }
+
+  const holderBound = isBoundHolderAlive(record);
+  const browserBound = isBoundBrowserAlive(record);
+
+  if (!holderBound && !browserBound) {
+    // Stale PID reuse or dead record: never signal the stranger PID.
+    if (await chromeOrCdpStillAlive(profileDir, record)) {
+      throw new AdamError(
+        "provider_unavailable",
+        "Session-holder PID bind failed but Chrome/CDP is still alive. Close the ADAM Chrome process, then retry adam-mcp logout.",
+      );
+    }
+    await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
+    await clearHolderFiles(profileDir);
+    return false;
+  }
+
+  if (holderBound) {
+    signalProcessGroup(record.pid, "SIGTERM");
+  }
+  if (browserBound && typeof record.browserPid === "number") {
+    signalProcessGroup(record.browserPid, "SIGTERM");
+  }
+
+  const termDeadline = Date.now() + STOP_TERM_GRACE_MS;
+  while (Date.now() < termDeadline) {
+    if (!isBoundHolderAlive(record) && !isBoundBrowserAlive(record)) {
+      break;
+    }
+    await delay(STOP_POLL_MS);
+  }
+
+  if (isBoundHolderAlive(record)) {
+    signalProcessGroup(record.pid, "SIGKILL");
+  }
+  if (isBoundBrowserAlive(record) && typeof record.browserPid === "number") {
+    signalProcessGroup(record.browserPid, "SIGKILL");
+  }
+
+  const deadline = Date.now() + STOP_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    if (!isBoundHolderAlive(record) && !isBoundBrowserAlive(record) && !(await isCdpAlive(profileDir))) {
+      // Chrome may leave DevToolsActivePort after SIGKILL; unlink only once CDP is dead.
+      if (await hasDevToolsActivePort(profileDir)) {
+        await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
+      }
+      if (await sessionFullyStopped(profileDir, record)) {
+        await clearHolderFiles(profileDir);
+        return true;
+      }
+    }
+    await delay(STOP_POLL_MS);
+  }
+
+  // Never clear the holder record while Chrome/CDP is still alive.
+  throw new AdamError(
+    "provider_unavailable",
+    "Could not fully stop the headless ADAM session (Chrome/CDP still alive). Retry adam-mcp logout.",
+  );
 }
 
 export type StartHolderOptions = {
@@ -115,16 +482,31 @@ export async function startSessionHolder(options: StartHolderOptions): Promise<H
   const profileDir = options.profileDir ?? defaultProfileDir();
   const origin = options.origin ?? defaultOrigin();
   await mkdir(profileDir, { recursive: true });
+
+  // Re-login: stop + await the prior holder before writing a new seed.
+  await stopSessionHolder(profileDir);
+
+  const generation = randomUUID();
   const seedFile = holderSeedPath(profileDir);
   // Transient handoff: the holder reads and unlinks this before launching Chrome.
-  await writeFile(seedFile, JSON.stringify(options.seed), { encoding: "utf8", mode: 0o600 });
+  await writeFile(
+    seedFile,
+    JSON.stringify({ ...options.seed, generation } satisfies SessionSeed),
+    { encoding: "utf8", mode: 0o600 },
+  );
   const spawnHolder = options.spawnHolder ?? defaultHolderSpawn;
   spawnHolder(seedFile)?.unref();
   const deadline = Date.now() + (options.timeoutMs ?? 45_000);
   while (Date.now() < deadline) {
     await delay(300);
     const status = await holderStatus(profileDir);
-    if (status.running && status.record?.verifiedAt) {
+    // Only accept a NEW verified record for this generation — never the prior holder.
+    if (
+      status.running &&
+      status.record?.generation === generation &&
+      status.record.verifiedAt &&
+      status.record.startedAt
+    ) {
       return status.record;
     }
   }
@@ -162,6 +544,16 @@ function resolveTypeScriptLoader(): string {
   return fileURLToPath(new URL("../../../node_modules/tsx/dist/cli.mjs", import.meta.url));
 }
 
+function browserIdentityFromContext(context: BrowserContext): ProcessIdentity | undefined {
+  // Playwright's Browser.process() exists for locally launched browsers; typings omit it on Browser.
+  const browser = context.browser() as { process?: () => { pid?: number } | null } | null;
+  const pid = browser?.process?.()?.pid;
+  if (typeof pid !== "number") {
+    return undefined;
+  }
+  return readProcessIdentity(pid);
+}
+
 /**
  * Hidden CLI command: own a headless Chrome with the authenticated cookie jar,
  * write the holder record, and stay alive until signaled.
@@ -176,6 +568,7 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
     await rm(seedFile, { force: true }).catch(() => undefined);
   }
 
+  const generation = seed.generation ?? randomUUID();
   const context = await chromium.launchPersistentContext(profileDir, {
     channel: "chrome",
     headless: true,
@@ -221,11 +614,28 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
     if (!isLoggedInSnapshot(snapshot)) {
       await shutdown(1);
     }
+    const identity = readProcessIdentity(process.pid);
+    if (!identity) {
+      await shutdown(1);
+      return;
+    }
+    const browserIdentity = browserIdentityFromContext(context);
+    const now = new Date().toISOString();
     const record: HolderRecord = {
       version: HOLDER_RECORD_VERSION,
       pid: process.pid,
-      startedAt: new Date().toISOString(),
-      verifiedAt: new Date().toISOString(),
+      generation,
+      pidStartTime: identity.startTime,
+      exe: identity.exe,
+      ...(browserIdentity
+        ? {
+            browserPid: browserIdentity.pid,
+            browserPidStartTime: browserIdentity.startTime,
+            browserExe: browserIdentity.exe,
+          }
+        : {}),
+      startedAt: now,
+      verifiedAt: now,
       origin,
     };
     await writeFile(holderRecordPath(profileDir), JSON.stringify(record), "utf8");
