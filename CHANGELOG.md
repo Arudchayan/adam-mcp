@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Phase B **B-exc** (ADR 0013): browser exercise extract depth — type-hint fail-closed, Europe/Zurich labeled deadlines, ownStatus EN/DE map, multi-unit when Assignment/Aufgabe blocks are labeled; QA criteria + provider performance notes; clone-first install honesty (npx not claimed live)
+
 ### Changed
 
 - Trust surface: ConfirmGate on `adam_get_exercise`; all ADAM `resources/read` payloads use UntrustedContent + deepRedact; permanent oversize/soap/html failures are `retryable: false`; client type hint on `adam_get_forum` fail-closed; docs confirm lists aligned (page + extract + forum threadId + exercise); live B-frm demoted to meta-only until HTML parse

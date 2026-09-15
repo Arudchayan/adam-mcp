@@ -36,7 +36,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today | Notes |
 | --- | --- | --- | --- |
-| Exercise awareness | Instructions, due date, own hand-in status | tool partial (`adam_get_exercise`); **live-unverified** | Phase B blocked until a course with real `exc`; deep-link browser for submit |
+| Exercise awareness | Instructions, due date, own hand-in status | tool + browser extract (ADR 0013); **live inventory unverified** | Parser ready (ownStatus / Zurich deadline / units); deep-link browser for submit; run live compare after `exc` sighting |
 | News / what changed | New files & activity when lecturers enable News | partial→stronger (AT4); **live-seen** on one course | Student QSG: News only if enabled; honest empty when off |
 | Session / timetable blocks | Class dates in course (`sess`) | uncertain | **Wait-for-inventory** (empty enrolled re-verify; not hunting) |
 
@@ -63,7 +63,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | blocked — not observed |
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **re-confirmed** live metadata 2026-09-14 tip 5099529 (file×37); extract confirm exercised |
-| `exc` | Instructions, deadline, status | tool + resource (`adam_get_exercise` + `adam://exc/{refId}`) | labeled synthetic `100021` (AT5); live still unverified |
+| `exc` | Instructions, deadline, status | tool + resource (`adam_get_exercise` + `adam://exc/{refId}`); browser extract ADR 0013 | labeled synthetic `100021` (AT5); browser parsers CI-tested; **live inventory still unverified** (`exc`×0 as of tip 5099529) |
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `webr` | External links | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
@@ -82,7 +82,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 ## 4. Phase B read expansions (priority)
 
 1. **Cross-course deadlines** — first-class aggregation of exercise + page dates (AT1/AT2 — PR #10 / `533d5c5`)  
-2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — PR #13 / `ed40c2c`; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
+2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — PR #13 / `ed40c2c`; labeled synthetic `100021`); browser extract depth (ADR 0013 / B-exc); deep-link submit still **Phase C**; **live sighting** still required to close inventory gate  
 3. **News / what-changed reliability** when News is enabled (AT4 — PR #12 / `b3bb0c0`)  
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
 5. **Forum thread read** — **shipped** read-only fixture path (PR #34 / `1a7931f`; B-frm #35); live browser meta-only until HTML parse; **no write**

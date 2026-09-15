@@ -5,6 +5,8 @@ import {
   type AdamObject,
   type AdamObjectType,
   type Breadcrumb,
+  type ExerciseOwnStatus,
+  type ExerciseUnit,
   type FileObject,
   type InferredDate,
   type NewsItem,
@@ -220,33 +222,246 @@ export function inferDates(text: string): InferredDate[] {
   return found.slice(0, 20);
 }
 
+const DEADLINE_LABEL =
+  /(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi;
+
 /**
- * AT5: only surface a unit deadline when the page labels one (Deadline/Abgabe/Due).
+ * AT5 / ADR 0013: only surface a unit deadline when the page labels one (Deadline/Abgabe/Due).
  * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
+ * When HH:MM is present on the labeled span, interpret wall time as Europe/Zurich → ISO-UTC.
  */
 export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
-  const labeled = [
-    ...text.matchAll(/(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
-  ];
+  const labeled = [...text.matchAll(DEADLINE_LABEL)];
   if (labeled.length === 0) {
     return undefined;
   }
   for (const match of labeled) {
     const raw = match[1].trim();
+    const withTime = deadlineIsoFromLabeledSpan(raw);
+    if (withTime) {
+      return withTime;
+    }
     const fromLabel = inferDates(raw).find((date) => date.iso)?.iso;
     if (fromLabel) {
-      return fromLabel;
+      return attachZurichTimeIfPresent(fromLabel, raw);
     }
     const lowered = raw.toLowerCase();
     const hit = inferredDates.find(
       (date) => date.iso && (lowered.includes(date.raw.toLowerCase()) || date.raw.toLowerCase().includes(lowered.slice(0, 12))),
     );
     if (hit?.iso) {
-      return hit.iso;
+      return attachZurichTimeIfPresent(hit.iso, raw);
     }
   }
   // Labeled but unparseable — honest omit (do not invent).
   return undefined;
+}
+
+/**
+ * ADR 0013: map unambiguous EN/DE hand-in copy to ExerciseOwnStatus; else unknown.
+ */
+export function exerciseOwnStatusFromPage(text: string): ExerciseOwnStatus {
+  const hay = text.replace(/\s+/g, " ");
+  if (/\bnicht\s+bestanden\b|\bfailed\b|\bnicht\s+erfüllt\b/i.test(hay)) {
+    return "failed";
+  }
+  if (/\bbestanden\b|\bpassed\b/i.test(hay)) {
+    return "passed";
+  }
+  if (/\bnicht\s+abgegeben\b|\bnot\s+submitted\b|\bno\s+submission\b|\bnot\s+handed\s+in\b/i.test(hay)) {
+    return "none";
+  }
+  if (/\babgegeben\b|\bsubmitted\b|\bhanded\s+in\b/i.test(hay)) {
+    return "submitted";
+  }
+  return "unknown";
+}
+
+/**
+ * ADR 0013: prefer Instructions / Arbeitsanweisung block; strip logout chrome leftovers.
+ */
+export function exerciseInstructionText(text: string): string {
+  const capped = capText(text, MAX_PAGE_TEXT);
+  const labeled = capped.match(
+    /(?:instructions?|arbeitsanweisung|assignment\s+description|aufgabenstellung)\s*:\s*([\s\S]{1,8000}?)(?=\n\s*(?:deadline|abgabe|status|assignment|aufgabe)\b|$)/i,
+  );
+  const body = (labeled?.[1] ?? capped).replace(/\b(?:abmelden|log\s*out|logout)\b[\s\S]*$/i, "").trim();
+  return capText(body, MAX_PAGE_TEXT);
+}
+
+/**
+ * ADR 0013: multiple Assignment/Aufgabe blocks → one unit each; else a single unit.
+ * Never invent units from unlabeled chrome links.
+ */
+export function extractExerciseUnits(text: string, fallbackTitle: string): ExerciseUnit[] {
+  const blocks = splitAssignmentBlocks(text);
+  if (blocks.length >= 2) {
+    return blocks.map((block, index) => unitFromBlock(block, `Assignment ${index + 1}`));
+  }
+  if (blocks.length === 1) {
+    return [unitFromBlock(blocks[0], fallbackTitle)];
+  }
+  const deadline = exerciseDeadlineFromPage(text);
+  return [
+    {
+      title: fallbackTitle,
+      ...(deadline ? { deadline } : {}),
+      instructionText: exerciseInstructionText(text),
+      ownStatus: exerciseOwnStatusFromPage(text),
+    },
+  ];
+}
+
+function splitAssignmentBlocks(text: string): string[] {
+  const parts = text.split(/(?=\b(?:assignment|aufgabe)\s+\d+\b)/i).map((part) => part.trim()).filter(Boolean);
+  const labeled = parts.filter((part) => /^(?:assignment|aufgabe)\s+\d+\b/i.test(part));
+  return labeled.length >= 2 ? labeled : labeled.length === 1 ? labeled : [];
+}
+
+function unitFromBlock(block: string, fallbackTitle: string): ExerciseUnit {
+  const titleMatch = block.match(/^(?:assignment|aufgabe)\s+\d+\s*[:.–-]?\s*([^\n]{1,120})/i);
+  const title = cleanTitle(titleMatch?.[1] ?? fallbackTitle) || fallbackTitle;
+  const deadline = exerciseDeadlineFromPage(block);
+  return {
+    title,
+    ...(deadline ? { deadline } : {}),
+    instructionText: exerciseInstructionText(block),
+    ownStatus: exerciseOwnStatusFromPage(block),
+  };
+}
+
+function deadlineIsoFromLabeledSpan(raw: string): string | undefined {
+  const dayFirst = new RegExp(
+    `\\b(\\d{1,2})\\.?\\s+(${MONTH_PATTERN})\\.?\\s+(\\d{4})(?:[^\\d]{0,12}(\\d{1,2}):(\\d{2}))?\\b`,
+    "i",
+  );
+  const monthFirst = new RegExp(
+    `\\b(${MONTH_PATTERN})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?:[^\\d]{0,12}(\\d{1,2}):(\\d{2}))?\\b`,
+    "i",
+  );
+  const dotted = /\b(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[^\d]{0,12}(\d{1,2}):(\d{2}))?\b/;
+  const isoDate = /\b(\d{4})-(\d{2})-(\d{2})(?:[^\d]{0,12}(\d{1,2}):(\d{2}))?\b/;
+
+  let match = raw.match(dayFirst);
+  if (match) {
+    const month = MONTHS[match[2].toLowerCase().replace("ä", "a")];
+    if (month !== undefined) {
+      return toZurichIso(Number(match[3]), month, Number(match[1]), optionalHour(match[4]), optionalMinute(match[5]));
+    }
+  }
+  match = raw.match(monthFirst);
+  if (match) {
+    const month = MONTHS[match[1].toLowerCase().replace("ä", "a")];
+    if (month !== undefined) {
+      return toZurichIso(Number(match[3]), month, Number(match[2]), optionalHour(match[4]), optionalMinute(match[5]));
+    }
+  }
+  match = raw.match(dotted);
+  if (match) {
+    return toZurichIso(
+      Number(match[3]),
+      Number(match[2]) - 1,
+      Number(match[1]),
+      optionalHour(match[4]),
+      optionalMinute(match[5]),
+    );
+  }
+  match = raw.match(isoDate);
+  if (match) {
+    return toZurichIso(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      optionalHour(match[4]),
+      optionalMinute(match[5]),
+    );
+  }
+  return undefined;
+}
+
+function attachZurichTimeIfPresent(dayIso: string, raw: string): string {
+  const time = raw.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!time) {
+    return dayIso;
+  }
+  const day = Date.parse(dayIso);
+  if (!Number.isFinite(day)) {
+    return dayIso;
+  }
+  const d = new Date(day);
+  return toZurichIso(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), Number(time[1]), Number(time[2])) ?? dayIso;
+}
+
+function optionalHour(value: string | undefined): number | undefined {
+  return value === undefined ? undefined : Number(value);
+}
+
+function optionalMinute(value: string | undefined): number | undefined {
+  return value === undefined ? undefined : Number(value);
+}
+
+/** Uni Basel deadlines: labeled wall clock is Europe/Zurich. */
+function toZurichIso(
+  year: number,
+  monthIndex: number,
+  day: number,
+  hour?: number,
+  minute?: number,
+): string | undefined {
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) {
+    return undefined;
+  }
+  if (hour === undefined || minute === undefined) {
+    return toIso(year, monthIndex, day);
+  }
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return undefined;
+  }
+  // Probe CET (+1) and CEST (+2); keep the UTC instant whose Zurich wall time matches.
+  for (const offsetHours of [2, 1]) {
+    const utcMs = Date.UTC(year, monthIndex, day, hour - offsetHours, minute, 0);
+    const parts = zurichParts(utcMs);
+    if (
+      parts &&
+      parts.year === year &&
+      parts.monthIndex === monthIndex &&
+      parts.day === day &&
+      parts.hour === hour &&
+      parts.minute === minute
+    ) {
+      return new Date(utcMs).toISOString();
+    }
+  }
+  return undefined;
+}
+
+function zurichParts(utcMs: number):
+  | { year: number; monthIndex: number; day: number; hour: number; minute: number }
+  | undefined {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const bag: Record<string, string> = {};
+  for (const part of fmt.formatToParts(new Date(utcMs))) {
+    if (part.type !== "literal") {
+      bag[part.type] = part.value;
+    }
+  }
+  const year = Number(bag.year);
+  const monthIndex = Number(bag.month) - 1;
+  const day = Number(bag.day);
+  const hour = Number(bag.hour);
+  const minute = Number(bag.minute);
+  if (![year, monthIndex, day, hour, minute].every(Number.isFinite)) {
+    return undefined;
+  }
+  return { year, monthIndex, day, hour, minute };
 }
 
 export function collectLinksFromHtml(html: string): SnapshotLink[] {

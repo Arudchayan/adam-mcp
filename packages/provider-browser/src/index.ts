@@ -12,6 +12,9 @@ export { hostnameAllowed, urlAllowed } from "./allowlist.ts";
 export {
   extractCatalog,
   exerciseDeadlineFromPage,
+  exerciseOwnStatusFromPage,
+  exerciseInstructionText,
+  extractExerciseUnits,
   inferDates,
   isAdamFailurePage,
   isLoggedInSnapshot,

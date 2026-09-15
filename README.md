@@ -26,20 +26,7 @@ Answers include canonical ADAM URLs (`https://adam.unibas.ch/go/...`).
 
 You need Node.js 20+ and Google Chrome.
 
-### From the registry (after publish)
-
-`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are only `@modelcontextprotocol/server`, `playwright-core`, and `zod`. Once `adam-mcp@0.1.0` is published:
-
-```bash
-npx -y adam-mcp
-# or
-npm install -g adam-mcp
-adam-mcp
-```
-
-Default without `--browser` is the synthetic fixture catalog. For live ADAM, pass `--browser` after running `npm run login` once; the session then runs headless (see [docs/setup.md](docs/setup.md)).
-
-### Clone (setup helpers + host snippets)
+### Clone (supported path today)
 
 ```bash
 git clone https://github.com/Arudchayan/adam-mcp.git
@@ -48,7 +35,7 @@ npm install
 npm run setup
 ```
 
-`npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client.
+`npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client (Cursor, Claude Desktop, VS Code Copilot, Windsurf, or Claude Code).
 
 - **Try it now** (synthetic catalog, no ADAM login): use the fixture snippet.
 - **Your real courses:** `npm run login`, sign in to ADAM in Chrome, and use the `--browser` snippet. The window closes automatically; the session continues headless.
@@ -57,7 +44,11 @@ Restart the client, then ask:
 
 > What courses am I in? Include the ADAM URL for each.
 
-Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code): [docs/setup.md](docs/setup.md).
+Host-specific files: [docs/setup.md](docs/setup.md).
+
+### Registry install (not yet)
+
+npm publish of `adam-mcp@0.1.0` is **paused**. Do not use `npx adam-mcp` / `npm install -g adam-mcp` as if they work today — clone + `npm run setup` is the working path. When publish resumes, the pack is self-contained (`dist/adam-mcp.mjs` plus runtime deps).
 
 ## How it works
 

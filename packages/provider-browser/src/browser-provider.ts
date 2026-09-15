@@ -31,6 +31,7 @@ import { defaultOrigin } from "./config.ts";
 import {
   extractCatalog,
   exerciseDeadlineFromPage,
+  extractExerciseUnits,
   classifyListing,
   isAdamFailurePage,
   isLoggedInSnapshot,
@@ -270,6 +271,13 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
+    // ADR 0013: client type hint fail-closed (mirror getForum) — wrong hint must not open as exc.
+    if (options?.type !== undefined && options.type !== "exc") {
+      throw new AdamError(
+        "unsupported_type",
+        `Client type hint "${options.type}" is not exc; refusing exercise read for ref_id ${refId}.`,
+      );
+    }
     const snapshot = await this.openObject(refId, options?.type ?? "exc");
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
@@ -282,18 +290,10 @@ export class BrowserAdamProvider implements AdamProvider {
     if (object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${object.type}, not an exercise.`);
     }
-    const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
     return {
       ...object,
       type: "exc",
-      units: [
-        {
-          title: object.title,
-          ...(deadline ? { deadline } : {}),
-          instructionText: catalog.text,
-          ownStatus: "unknown",
-        },
-      ],
+      units: extractExerciseUnits(catalog.text, object.title),
     };
   }
 

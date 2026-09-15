@@ -55,6 +55,7 @@ After **live sighting** of each type (or honest synthetic fixture). Prefer resou
 | Item | Confidence | Gate |
 | --- | --- | --- |
 | Forum thread read (`frm`) | Known + live | Live `frm` Domain 2026-09-14 tip 5099529 `list_children`; unlock read implementation |
+| Exercise awareness (`exc`) live depth | Live-unverified inventory; parsers Known | AT5 + ADR 0013 / B-exc browser extract; close inventory after live `/go/exc` sighting |
 | Session / timetable (`sess`) | Wait-for-inventory | Live `sess` (parked; not hunting) |
 | Web links (`webr`) | Wait-for-inventory | Live `webr`; no generic fetch (parked; not hunting) |
 | HTML / LM modules | Unknown → hunting | Live presence |

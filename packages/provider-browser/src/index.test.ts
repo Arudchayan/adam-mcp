@@ -9,7 +9,7 @@ import {
   fullSnapshotByteProxy,
   WALK_PARTIAL_NOTICE,
 } from "./browser-provider.ts";
-import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
+import { extractCatalog, exerciseDeadlineFromPage, exerciseOwnStatusFromPage, extractExerciseUnits, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
@@ -386,7 +386,7 @@ describe("BrowserAdamProvider with a memory session", () => {
       "https://adam.unibas.ch/go/exc/100021",
       "Exercise 1 – Retrieval summary",
       exerciseHtml,
-      "Exercise 1 Retrieval summary Deadline: 22 September 2026 Write a one-page retrieval summary Abmelden",
+      "Exercise 1 Retrieval summary Deadline: 22 September 2026, 23:59. Write a one-page retrieval summary Abmelden",
     ),
     },
     {
@@ -505,7 +505,8 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(exercise.type, "exc");
     assert.match(exercise.units[0]?.instructionText ?? "", /retrieval summary/i);
     assert.equal(exercise.units[0]?.ownStatus, "unknown");
-    assert.equal(exercise.units[0]?.deadline, "2026-09-22T00:00:00.000Z");
+    // ADR 0013: labeled 23:59 Europe/Zurich → 21:59Z in September (CEST).
+    assert.equal(exercise.units[0]?.deadline, "2026-09-22T21:59:00.000Z");
     assert.equal(exercise.provenance.provider, "browser");
     assert.match(exercise.url, /\/go\/exc\/100021$/);
   });
@@ -564,7 +565,7 @@ describe("login snapshot detection", () => {
 describe("AT5 getExercise browser harden", () => {
   it("extracts deadline only when labeled; omits unlabeled page dates", () => {
     const labeled = exerciseDeadlineFromPage("Deadline: 22 September 2026, 23:59.\nWrite a summary.");
-    assert.equal(labeled, "2026-09-22T00:00:00.000Z");
+    assert.equal(labeled, "2026-09-22T21:59:00.000Z");
     const unlabeled = exerciseDeadlineFromPage(
       "Published: 1 September 2026\nWritten exam: 12 January 2027\nWrite a summary.",
     );
@@ -632,6 +633,89 @@ describe("AT5 getExercise browser harden", () => {
       assert.match(error.message, /fold/i);
       return true;
     });
+  });
+});
+
+describe("B-exc / ADR 0013 browser exercise extract", () => {
+  it("maps EN/DE ownStatus copy without inventing grades", () => {
+    assert.equal(exerciseOwnStatusFromPage("Status: Not Submitted"), "none");
+    assert.equal(exerciseOwnStatusFromPage("Status: Nicht abgegeben"), "none");
+    assert.equal(exerciseOwnStatusFromPage("Status: Submitted"), "submitted");
+    assert.equal(exerciseOwnStatusFromPage("Status: Abgegeben"), "submitted");
+    assert.equal(exerciseOwnStatusFromPage("Status: Passed / Bestanden"), "passed");
+    assert.equal(exerciseOwnStatusFromPage("Status: Failed"), "failed");
+    assert.equal(exerciseOwnStatusFromPage("Status: Nicht bestanden"), "failed");
+    assert.equal(exerciseOwnStatusFromPage("Write a summary. Abmelden"), "unknown");
+  });
+
+  it("parses multiple labeled assignment units", () => {
+    const units = extractExerciseUnits(
+      [
+        "Assignment 1: Warm-up",
+        "Deadline: 10 September 2026, 23:59",
+        "Status: Not Submitted",
+        "Instructions: Sort the array.",
+        "Assignment 2: Report",
+        "Deadline: 22 September 2026, 23:59",
+        "Status: Submitted",
+        "Instructions: Write one page.",
+      ].join("\n"),
+      "Exercise pack",
+    );
+    assert.equal(units.length, 2);
+    assert.match(units[0]?.title ?? "", /Warm-up/i);
+    assert.equal(units[0]?.ownStatus, "none");
+    assert.equal(units[0]?.deadline, "2026-09-10T21:59:00.000Z");
+    assert.match(units[0]?.instructionText ?? "", /Sort the array/i);
+    assert.match(units[1]?.title ?? "", /Report/i);
+    assert.equal(units[1]?.ownStatus, "submitted");
+    assert.equal(units[1]?.deadline, "2026-09-22T21:59:00.000Z");
+  });
+
+  it("rejects wrong client type hint before coerce", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => hardened.getExercise("100020", { type: "fold" }), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unsupported_type");
+      assert.match(error.message, /not exc/i);
+      return true;
+    });
+  });
+
+  it("surfaces ownStatus and Zurich deadline from ILIAS-shaped exc page", async () => {
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100021",
+          "Exercise 1 – Retrieval summary",
+          `<main>
+  <h1>Exercise 1 – Retrieval summary</h1>
+  <p>Deadline: 22 September 2026, 23:59.</p>
+  <p>Status: Not Submitted</p>
+  <p>Instructions: Write a one-page retrieval summary from the course notes.</p>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+          "Exercise 1 Retrieval summary Deadline: 22 September 2026, 23:59. Status: Not Submitted Instructions: Write a one-page retrieval summary from the course notes. Abmelden",
+        ),
+      }),
+    });
+    const exercise = await hardened.getExercise("100021", { type: "exc" });
+    assert.equal(exercise.type, "exc");
+    assert.equal(exercise.units[0]?.deadline, "2026-09-22T21:59:00.000Z");
+    assert.equal(exercise.units[0]?.ownStatus, "none");
+    assert.match(exercise.units[0]?.instructionText ?? "", /one-page retrieval summary/i);
+    assert.equal("submit" in exercise, false);
   });
 });
 
@@ -718,7 +802,7 @@ describe("AT6 listCalendar provenance", () => {
   <p>Write a one-page retrieval summary.</p>
   <a href="/logout.php">Abmelden</a>
 </main>`,
-          "Exercise 1 Retrieval summary Published: 1 September 2026 Deadline: 22 September 2026 Write a one-page retrieval summary Abmelden",
+          "Exercise 1 Retrieval summary Published: 1 September 2026 Deadline: 22 September 2026, 23:59. Write a one-page retrieval summary Abmelden",
         ),
       }),
     });
@@ -731,7 +815,7 @@ describe("AT6 listCalendar provenance", () => {
     const deadline = calendar.items.find((item) => item.objectRefId === "100021" && item.source === "exc");
     assert.ok(deadline, `expected labeled deadline as exc; items=${JSON.stringify(calendar.items)}`);
     assert.equal(deadline?.confidence, "explicit");
-    assert.equal(deadline?.startsAt, "2026-09-22T00:00:00.000Z");
+    assert.equal(deadline?.startsAt, "2026-09-22T21:59:00.000Z");
 
     // Same object+day: page copy of deadline must lose to exc.
     assert.equal(

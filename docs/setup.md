@@ -9,6 +9,8 @@ npm run setup
 
 That builds `packages/mcp/dist/adam-mcp.mjs` and prints snippets with **absolute** paths. Paste into the host. No `cwd` required.
 
+**Install path today:** clone + `npm run setup`. npm publish of `adam-mcp` 0.1.0 is **paused** — do not use `npx adam-mcp` as if it works ([scope.md](scope.md), [ROADMAP.md](ROADMAP.md)).
+
 ## Fixture vs live ADAM
 
 `npm run setup` prints two snippets:
@@ -28,28 +30,27 @@ Sign in to ADAM in the Chrome window. After success the window closes and a **de
 
 ADAM cookies live in RAM inside the headless Chrome process only. After a reboot or a SWITCH timeout, run `npm run login` again. `ADAM_BROWSER_HEADED=1 npm run login` keeps the headed window in-process for debugging instead of handing off to the headless session.
 
-After publish of `adam-mcp` 0.1.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
+## Common hosts
 
-## Cursor, Claude Desktop, Windsurf
+| Host | Where to paste |
+| --- | --- |
+| Cursor / Claude Desktop / Windsurf | `mcpServers.adam` object from `npm run setup` |
+| VS Code (GitHub Copilot MCP) | `servers.adam` in `.vscode/mcp.json` or user MCP profile |
+| Claude Code | printed `claude mcp add` line |
 
-Paste the JSON object printed by `npm run setup` (`mcpServers.adam`).
-
-Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this).
-
-Fully quit and reopen the host. Enable the **adam** server.
-
-## VS Code (GitHub Copilot)
-
-Workspace `.vscode/mcp.json` or the user MCP profile. `npm run setup` prints a `servers.adam` object.
-
-Reload the window and enable the server in Copilot MCP settings.
-
-## Claude Code
-
-`npm run setup` prints a `claude mcp add` line with the absolute path.
+Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this). Fully quit and reopen the host (or reload the VS Code window). Enable the **adam** server.
 
 ## First checks
 
-1. `adam_session_status` — fixture reports synthetic; live ADAM should look signed in.
-2. `adam_list_courses` — titles plus `https://adam.unibas.ch/go/crs/{ref_id}`.
-3. `adam_read_page` / `adam_extract_file_text` with `confirm: true` only for an object you asked to read.
+1. Fixture snippet → `adam_list_courses` (synthetic titles; no login).
+2. Live: `npm run login` → `--browser` snippet → `adam_session_status` should look signed in.
+3. `adam_list_courses` — titles plus `https://adam.unibas.ch/go/crs/{ref_id}`.
+4. `adam_read_page` / `adam_extract_file_text` / `adam_get_exercise` with `confirm: true` only for an object you asked to read.
+
+### Failure symptoms
+
+| Symptom | Likely cause |
+| --- | --- |
+| `unauthorized` / login-required | Run `npm run login`; check `npm run status` |
+| `listingState: unknown` | Blank ILIAS content area — do not call it empty; open ADAM URL |
+| Tools missing `adam_login` | Fixture provider hides browser-only session tools — expected |
