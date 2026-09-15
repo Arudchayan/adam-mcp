@@ -358,7 +358,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     });
   }
 
-  async fetchAuthorized(url: string): Promise<{ bytes: Uint8Array; contentType?: string }> {
+  async fetchAuthorized(url: string): Promise<{
+    bytes: Uint8Array;
+    contentType?: string;
+    contentDisposition?: string;
+    contentLength?: number;
+  }> {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
@@ -371,7 +376,10 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           `ADAM returned HTTP ${response.status()} for a file fetch.`,
         );
       }
-      const contentType = response.headers()["content-type"];
+      const headers = response.headers();
+      const contentType = headers["content-type"];
+      const contentDisposition = headers["content-disposition"];
+      const contentLength = parseContentLength(headers["content-length"]);
       const body = Buffer.from(await response.body());
       if (body.byteLength > MAX_EXTRACT_BYTES) {
         throw new AdamError(
@@ -380,7 +388,42 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           false,
         );
       }
-      return { bytes: new Uint8Array(body), contentType };
+      return {
+        bytes: new Uint8Array(body),
+        contentType,
+        contentDisposition,
+        contentLength: contentLength ?? body.byteLength,
+      };
+    });
+  }
+
+  async probeAuthorized(url: string): Promise<{
+    contentType?: string;
+    contentDisposition?: string;
+    contentLength?: number;
+  }> {
+    return this.serialize(async () => {
+      const target = this.resolveUrl(url);
+      assertUrlAllowed(target);
+      const page = await this.ensurePage();
+      const response = await page.context().request.fetch(target, {
+        method: "HEAD",
+        timeout: 45_000,
+        maxRedirects: 5,
+      });
+      assertUrlAllowed(response.url());
+      if (!response.ok()) {
+        throw new AdamError(
+          "not_found",
+          `ADAM returned HTTP ${response.status()} for a file probe.`,
+        );
+      }
+      const headers = response.headers();
+      return {
+        contentType: headers["content-type"],
+        contentDisposition: headers["content-disposition"],
+        contentLength: parseContentLength(headers["content-length"]),
+      };
     });
   }
 
@@ -646,6 +689,14 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
 export function createPlaywrightSession(options?: PlaywrightSessionOptions): PlaywrightAdamSession {
   return new PlaywrightAdamSession(options);
+}
+
+function parseContentLength(raw: string | undefined): number | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 async function readLocalCdpEndpoint(profileDir: string): Promise<string | undefined> {

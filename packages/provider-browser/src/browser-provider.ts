@@ -98,6 +98,8 @@ export class BrowserAdamProvider implements AdamProvider {
   private sessionHandle: AdamBrowserSession | undefined;
   private readonly injected: boolean;
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
+  /** Listing-derived file metadata for download-abort getFile fallback (title/mime/size). */
+  private readonly fileByRefId = new Map<RefId, FileObject>();
   /** PERF-1: shared enrolled walk memo; invalidated on close() (new provider = fresh). */
   private livePagesMemo: WalkResult | undefined;
   private livePagesInflight: Promise<WalkResult> | undefined;
@@ -119,6 +121,8 @@ export class BrowserAdamProvider implements AdamProvider {
   async close(): Promise<void> {
     this.livePagesMemo = undefined;
     this.livePagesInflight = undefined;
+    this.fileByRefId.clear();
+    this.typeByRefId.clear();
     if (this.sessionHandle) {
       await this.sessionHandle.close();
     }
@@ -201,6 +205,8 @@ export class BrowserAdamProvider implements AdamProvider {
   async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
     throwIfCancelled(options?.signal);
     try {
+      // Capture listing cache before rememberTypes overwrites with the page parse.
+      const priorListing = this.fileByRefId.get(refId);
       const snapshot = await this.openObject(refId, options?.type ?? "file");
       const catalog = extractCatalog(snapshot, now());
       this.rememberTypes(catalog);
@@ -210,27 +216,59 @@ export class BrowserAdamProvider implements AdamProvider {
           ? { ...catalog.current, type: "file" as const }
           : undefined);
       if (file) {
-        return file;
+        const enriched = preferCachedFileTitle(file, priorListing);
+        this.fileByRefId.set(refId, enriched);
+        return enriched;
       }
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a file.`);
     } catch (error) {
       if (isDownloadNavigationError(error)) {
-        return {
-          type: "file",
-          refId,
-          title: refId,
-          url: objectUrl("file", refId, this.origin),
-          breadcrumb: [],
-          provenance: {
-            sourceUrl: objectUrl("file", refId, this.origin),
-            fetchedAt: now(),
-            provider: "browser",
-            freshness: "live-browser-session",
-          },
-        };
+        return this.fileFromDownloadAbort(refId);
       }
       throw error;
     }
+  }
+
+  private async fileFromDownloadAbort(refId: RefId): Promise<FileObject> {
+    const sourceUrl = objectUrl("file", refId, this.origin);
+    const cached = this.fileByRefId.get(refId);
+    const origin = this.origin.replace(/\/$/, "");
+    const downloadUrl = `${origin}/goto_adam_file_${refId}_download.html`;
+    let probedTitle: string | undefined;
+    let probedMime: string | undefined;
+    let probedSize: number | undefined;
+    const needsProbe =
+      isWeakFileTitle(cached?.title, refId) || cached?.mimeType === undefined || cached?.sizeBytes === undefined;
+    // HEAD only — never pull full bytes just for metadata (legacy sessions without probe skip).
+    if (needsProbe && this.session().probeAuthorized) {
+      try {
+        const probe = await this.session().probeAuthorized!(downloadUrl);
+        probedTitle = filenameFromContentDisposition(probe.contentDisposition);
+        probedMime = probe.contentType;
+        probedSize = probe.contentLength;
+      } catch {
+        // Cold probe is best-effort; fall back to cache / refId stub.
+      }
+    }
+    const title = betterFileTitle(cached?.title, probedTitle, refId);
+    const file: FileObject = {
+      type: "file",
+      refId,
+      title,
+      url: cached?.url || sourceUrl,
+      breadcrumb: cached?.breadcrumb ?? [],
+      mimeType: cached?.mimeType ?? probedMime,
+      sizeBytes: cached?.sizeBytes ?? probedSize,
+      provenance: {
+        ...(cached?.provenance ?? {}),
+        sourceUrl,
+        fetchedAt: now(),
+        provider: "browser",
+        freshness: "live-browser-session",
+      },
+    };
+    this.fileByRefId.set(refId, file);
+    return file;
   }
 
   async extractFileText(
@@ -506,7 +544,9 @@ export class BrowserAdamProvider implements AdamProvider {
         break;
       }
       try {
-        const snapshot = await this.openAuthorized(objectUrl(next.type, next.refId, this.origin));
+        // Prefer ADR 0004 typed open (listingFastFail) so wrong link types can retry once
+        // instead of hard-skipping — same path as listChildren.
+        const snapshot = await this.openObject(next.refId, next.type, { listingFastFail: true });
         const catalog = extractCatalog(snapshot, now());
         this.rememberTypes(catalog);
         pages.push(retainWalkPage(snapshot, catalog));
@@ -548,6 +588,22 @@ export class BrowserAdamProvider implements AdamProvider {
       if (item.type !== "unknown" && !isDeniedObjectType(item.type)) {
         this.typeByRefId.set(item.refId, item.type);
       }
+    }
+    // Seed from objects, then let catalog.files (fileHints: mime/size) win.
+    for (const item of catalog.objects) {
+      if (item.type === "file") {
+        this.fileByRefId.set(item.refId, { ...item, type: "file" });
+      }
+    }
+    for (const file of catalog.files) {
+      this.fileByRefId.set(file.refId, file);
+    }
+    if (catalog.current?.type === "file") {
+      const prior = this.fileByRefId.get(catalog.current.refId);
+      this.fileByRefId.set(
+        catalog.current.refId,
+        preferCachedFileTitle({ ...catalog.current, type: "file" }, prior),
+      );
     }
   }
 
@@ -696,6 +752,75 @@ function looksMissing(snapshot: PageSnapshot): boolean {
 
 function isDownloadNavigationError(error: unknown): boolean {
   return error instanceof Error && /download is starting|net::ERR_ABORTED|Download is starting/i.test(error.message);
+}
+
+function isWeakFileTitle(title: string | undefined, refId: RefId): boolean {
+  if (!title) {
+    return true;
+  }
+  const t = title.trim();
+  if (!t || t === refId || /^\d+$/.test(t)) {
+    return true;
+  }
+  return /^ADAM$/i.test(t) || /:\s*ADAM$/i.test(t);
+}
+
+/** Prefer a human listing title over a bare refId or chrome tab title. */
+function betterFileTitle(...candidates: Array<string | undefined>): string {
+  let fallback = "";
+  for (const c of candidates) {
+    if (!c) {
+      continue;
+    }
+    const t = c.trim();
+    if (!t) {
+      continue;
+    }
+    if (!fallback) {
+      fallback = t;
+    }
+    if (/^\d+$/.test(t)) {
+      continue;
+    }
+    if (/^ADAM$/i.test(t) || /:\s*ADAM$/i.test(t)) {
+      continue;
+    }
+    return t;
+  }
+  return fallback;
+}
+
+function preferCachedFileTitle(file: FileObject, cached: FileObject | undefined): FileObject {
+  const title = betterFileTitle(cached?.title, file.title, file.refId) || file.refId;
+  if (title === file.title && !cached?.mimeType && !cached?.sizeBytes) {
+    return file;
+  }
+  return {
+    ...file,
+    title,
+    mimeType: file.mimeType ?? cached?.mimeType,
+    sizeBytes: file.sizeBytes ?? cached?.sizeBytes,
+  };
+}
+
+export function filenameFromContentDisposition(header: string | undefined): string | undefined {
+  if (!header) {
+    return undefined;
+  }
+  const star = /filename\*=(?:UTF-8''|utf-8'')([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim().replace(/^"|"$/g, "")).replace(/^.*[/\\]/, "") || undefined;
+    } catch {
+      // fall through
+    }
+  }
+  const plain = /filename="([^"]+)"|filename=([^;]+)/i.exec(header);
+  const raw = (plain?.[1] ?? plain?.[2])?.trim().replace(/^"|"$/g, "");
+  if (!raw) {
+    return undefined;
+  }
+  return raw.replace(/^.*[/\\]/, "") || undefined;
 }
 
 function filterRange(events: CalendarEvent[], from?: string, to?: string): CalendarEvent[] {

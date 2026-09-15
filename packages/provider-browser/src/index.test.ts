@@ -416,6 +416,60 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(children.items.some((item) => item.refId === "100011"), true);
   });
 
+  it("preserves listing title when getFile hits a download-navigation abort", async () => {
+    const downloadSession = createMemorySession(
+      {
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "Notes",
+          folderHtml,
+          "03 - Course & Notes 00_Overview.pdf 04 - Exercises Abmelden",
+        ),
+      },
+      {
+        openError: (url) =>
+          /\/go\/file\//.test(url) ? new Error("Download is starting") : undefined,
+      },
+    );
+    const downloadProvider = createBrowserProvider({
+      session: downloadSession,
+      origin: "https://adam.unibas.ch",
+    });
+    const listed = await downloadProvider.listChildren("100010", { type: "fold" });
+    const listedFile = listed.items.find((item) => item.refId === "100011");
+    assert.equal(listedFile?.title, "00_Overview.pdf");
+    const got = await downloadProvider.getFile("100011", { type: "file" });
+    assert.equal(got.title, "00_Overview.pdf");
+    assert.equal(got.refId, "100011");
+    assert.match(got.url, /\/go\/file\/100011$/);
+  });
+
+  it("recovers download-abort title from Content-Disposition without a prior list", async () => {
+    const coldSession = createMemorySession(
+      {},
+      {
+        openError: (url) =>
+          /\/go\/file\//.test(url) ? new Error("Download is starting") : undefined,
+        files: {
+          "https://adam.unibas.ch/goto_adam_file_100011_download.html": {
+            bytes: new Uint8Array([1, 2, 3]),
+            contentType: "application/pdf",
+            contentDisposition: 'attachment; filename="00_Overview.pdf"',
+            contentLength: 3,
+          },
+        },
+      },
+    );
+    const coldProvider = createBrowserProvider({
+      session: coldSession,
+      origin: "https://adam.unibas.ch",
+    });
+    const got = await coldProvider.getFile("100011", { type: "file" });
+    assert.equal(got.title, "00_Overview.pdf");
+    assert.equal(got.mimeType, "application/pdf");
+    assert.equal(got.sizeBytes, 3);
+  });
+
   it("returns course children from the same /go/crs snapshot", async () => {
     const course = await provider.getCourse("100001");
     const children = (course as { children?: Array<{ refId: string }> }).children ?? [];

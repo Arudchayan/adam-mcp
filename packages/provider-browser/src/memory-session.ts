@@ -19,11 +19,18 @@ export function snapshotFromHtml(url: string, title: string, html: string, text:
 export type MemoryBlob = {
   bytes: Uint8Array;
   contentType?: string;
+  contentDisposition?: string;
+  contentLength?: number;
 };
 
 export function createMemorySession(
   pages: MemorySessionPages,
-  options: { files?: Record<string, MemoryBlob>; onOpen?: (url: string) => void } = {},
+  options: {
+    files?: Record<string, MemoryBlob>;
+    onOpen?: (url: string) => void;
+    /** Test seam: throw before resolving a page (e.g. simulate Playwright download abort). */
+    openError?: (url: string) => Error | undefined;
+  } = {},
 ): AdamBrowserSession {
   const origin = defaultOrigin();
   let current = pages.home ?? Object.values(pages)[0];
@@ -40,6 +47,10 @@ export function createMemorySession(
     async open(url: string): Promise<PageSnapshot> {
       assertUrlAllowed(url);
       options.onOpen?.(url);
+      const forced = options.openError?.(url);
+      if (forced) {
+        throw forced;
+      }
       const hit = pages[url] ?? matchByRef(pages, url);
       if (!hit) {
         throw new AdamError("not_found", `No snapshot for ${url} in the memory session.`);
@@ -56,13 +67,39 @@ export function createMemorySession(
         title: current?.title,
       };
     },
-    async fetchAuthorized(url: string): Promise<{ bytes: Uint8Array; contentType?: string }> {
+    async fetchAuthorized(url: string): Promise<{
+      bytes: Uint8Array;
+      contentType?: string;
+      contentDisposition?: string;
+      contentLength?: number;
+    }> {
       assertUrlAllowed(url);
       const blob = options.files?.[url];
       if (!blob) {
         throw new AdamError("not_found", `No file bytes for ${url} in the memory session.`);
       }
-      return blob;
+      return {
+        bytes: blob.bytes,
+        contentType: blob.contentType,
+        contentDisposition: blob.contentDisposition,
+        contentLength: blob.contentLength ?? blob.bytes.byteLength,
+      };
+    },
+    async probeAuthorized(url: string): Promise<{
+      contentType?: string;
+      contentDisposition?: string;
+      contentLength?: number;
+    }> {
+      assertUrlAllowed(url);
+      const blob = options.files?.[url];
+      if (!blob) {
+        throw new AdamError("not_found", `No file bytes for ${url} in the memory session.`);
+      }
+      return {
+        contentType: blob.contentType,
+        contentDisposition: blob.contentDisposition,
+        contentLength: blob.contentLength ?? blob.bytes.byteLength,
+      };
     },
     async close(): Promise<void> {
       return;

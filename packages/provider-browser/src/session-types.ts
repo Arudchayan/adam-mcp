@@ -43,11 +43,26 @@ export type SessionCookie = {
   sameSite?: "Strict" | "Lax" | "None";
 };
 
+export type AuthorizedFetchResult = {
+  bytes: Uint8Array;
+  contentType?: string;
+  contentDisposition?: string;
+  contentLength?: number;
+};
+
+export type AuthorizedProbeResult = {
+  contentType?: string;
+  contentDisposition?: string;
+  contentLength?: number;
+};
+
 export type AdamBrowserSession = {
   status(): Promise<SessionStatus>;
   open(url: string): Promise<PageSnapshot>;
   loginInteractively(timeoutMs?: number): Promise<SessionStatus>;
-  fetchAuthorized(url: string): Promise<{ bytes: Uint8Array; contentType?: string }>;
+  fetchAuthorized(url: string): Promise<AuthorizedFetchResult>;
+  /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
+  probeAuthorized?(url: string): Promise<AuthorizedProbeResult>;
   close(): Promise<void>;
   /** Export the authenticated cookie jar for the headless session holder (ADR 0009). */
   exportSessionState?(): Promise<{ cookies: SessionCookie[]; userAgent?: string } | undefined>;
