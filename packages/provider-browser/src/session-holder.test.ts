@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -8,12 +8,15 @@ import { AdamError } from "adam-core";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import {
   clearHolderFiles,
+  devToolsActivePortPath,
   holderRecordPath,
   holderStatus,
   isProcessAlive,
   readHolderRecord,
+  readProcessIdentity,
   startSessionHolder,
   stopSessionHolder,
+  type HolderRecord,
 } from "./session-holder.ts";
 
 async function tempProfile(): Promise<string> {
@@ -24,23 +27,46 @@ function keepAlive(): ReturnType<typeof spawn> {
   return spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
 }
 
+function ignoreSigtermDetached(): ReturnType<typeof spawn> {
+  return spawn(
+    process.execPath,
+    ["-e", `process.on("SIGTERM", () => {}); setInterval(() => {}, 1000);`],
+    { detached: true, stdio: "ignore" },
+  );
+}
+
+async function writeBoundRecord(
+  profileDir: string,
+  child: { pid?: number },
+  overrides: Partial<HolderRecord> = {},
+): Promise<HolderRecord> {
+  const pid = child.pid;
+  assert.equal(typeof pid, "number");
+  const identity = readProcessIdentity(pid!);
+  assert.ok(identity, "expected /proc identity for test child");
+  const record: HolderRecord = {
+    version: 2,
+    generation: "test-generation",
+    startedAt: new Date().toISOString(),
+    verifiedAt: new Date().toISOString(),
+    origin: "https://adam.unibas.ch",
+    ...overrides,
+    // Bind to the live child unless the caller intentionally forges identity.
+    pid: overrides.pid ?? pid!,
+    pidStartTime: overrides.pidStartTime ?? identity.startTime,
+    exe: overrides.exe ?? identity.exe,
+  };
+  await writeFile(holderRecordPath(profileDir), JSON.stringify(record), "utf8");
+  return record;
+}
+
 describe("session holder records", () => {
   it("detects a live holder and clears a stale record", async () => {
     const profileDir = await tempProfile();
     try {
       const child = keepAlive();
       try {
-        await writeFile(
-          holderRecordPath(profileDir),
-          JSON.stringify({
-            version: 1,
-            pid: child.pid,
-            startedAt: new Date().toISOString(),
-            verifiedAt: new Date().toISOString(),
-            origin: "https://adam.unibas.ch",
-          }),
-          "utf8",
-        );
+        await writeBoundRecord(profileDir, child);
         const live = await holderStatus(profileDir);
         assert.equal(live.running, true);
         assert.equal(live.record?.pid, child.pid);
@@ -52,8 +78,11 @@ describe("session holder records", () => {
       await writeFile(
         holderRecordPath(profileDir),
         JSON.stringify({
-          version: 1,
+          version: 2,
           pid: 999_999_999,
+          generation: "dead",
+          pidStartTime: "0",
+          exe: "/nonexistent",
           startedAt: new Date().toISOString(),
           verifiedAt: new Date().toISOString(),
           origin: "https://adam.unibas.ch",
@@ -72,17 +101,7 @@ describe("session holder records", () => {
     const profileDir = await tempProfile();
     const child = keepAlive();
     try {
-      await writeFile(
-        holderRecordPath(profileDir),
-        JSON.stringify({
-          version: 1,
-          pid: child.pid,
-          startedAt: new Date().toISOString(),
-          verifiedAt: new Date().toISOString(),
-          origin: "https://adam.unibas.ch",
-        }),
-        "utf8",
-      );
+      await writeBoundRecord(profileDir, child);
       const stopped = await stopSessionHolder(profileDir);
       assert.equal(stopped, true);
       assert.equal(await readHolderRecord(profileDir), undefined);
@@ -110,6 +129,141 @@ describe("session holder records", () => {
       );
       assert.equal(await readHolderRecord(profileDir), undefined);
     } finally {
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  it("re-login stops a prior holder and returns a new generation/pid", async () => {
+    const profileDir = await tempProfile();
+    const oldChild = keepAlive();
+    let newChild: ReturnType<typeof spawn> | undefined;
+    try {
+      const oldRecord = await writeBoundRecord(profileDir, oldChild, {
+        generation: "old-generation",
+        startedAt: "2020-01-01T00:00:00.000Z",
+        verifiedAt: "2020-01-01T00:00:00.000Z",
+      });
+
+      const record = await startSessionHolder({
+        profileDir,
+        seed: { cookies: [] },
+        timeoutMs: 5_000,
+        spawnHolder: (seedFile) => {
+          newChild = spawn(
+            process.execPath,
+            [
+              "-e",
+              `
+              const fs = require("node:fs");
+              const seed = JSON.parse(fs.readFileSync(${JSON.stringify(seedFile)}, "utf8"));
+              const profileDir = ${JSON.stringify(profileDir)};
+              const pid = process.pid;
+              const exe = fs.readlinkSync("/proc/" + pid + "/exe");
+              const stat = fs.readFileSync("/proc/" + pid + "/stat", "utf8");
+              const startTime = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19];
+              const now = new Date().toISOString();
+              fs.writeFileSync(
+                profileDir + "/session-holder.json",
+                JSON.stringify({
+                  version: 2,
+                  pid,
+                  generation: seed.generation,
+                  pidStartTime: startTime,
+                  exe,
+                  startedAt: now,
+                  verifiedAt: now,
+                  origin: "https://adam.unibas.ch",
+                }),
+              );
+              try { fs.unlinkSync(${JSON.stringify(seedFile)}); } catch {}
+              setInterval(() => {}, 1000);
+              `,
+            ],
+            { detached: true, stdio: "ignore" },
+          );
+          return newChild;
+        },
+      });
+
+      assert.notEqual(record.generation, oldRecord.generation);
+      assert.notEqual(record.pid, oldChild.pid);
+      assert.notEqual(record.startedAt, oldRecord.startedAt);
+      assert.equal(isProcessAlive(oldChild.pid!), false);
+      assert.equal(record.pid, newChild?.pid);
+    } finally {
+      oldChild.kill();
+      if (newChild?.pid && isProcessAlive(newChild.pid)) {
+        try {
+          process.kill(-newChild.pid, "SIGKILL");
+        } catch {
+          newChild.kill("SIGKILL");
+        }
+      }
+      await clearHolderFiles(profileDir);
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  it("escalates SIGTERM hang and clears DevToolsActivePort before reporting stopped", async () => {
+    const profileDir = await tempProfile();
+    const child = ignoreSigtermDetached();
+    child.unref();
+    try {
+      assert.equal(typeof child.pid, "number");
+      await writeBoundRecord(profileDir, child);
+      await writeFile(devToolsActivePortPath(profileDir), "9\n/devtools/browser/deadbeef", "utf8");
+
+      const stopped = await stopSessionHolder(profileDir);
+      assert.equal(stopped, true);
+      assert.equal(isProcessAlive(child.pid!), false);
+      assert.equal(await readHolderRecord(profileDir), undefined);
+      await assert.rejects(() => access(devToolsActivePortPath(profileDir)));
+    } finally {
+      if (child.pid && isProcessAlive(child.pid)) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          child.kill("SIGKILL");
+        }
+      }
+      await clearHolderFiles(profileDir);
+      await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not kill a reused PID that fails the identity bind", async () => {
+    const profileDir = await tempProfile();
+    const stranger = keepAlive();
+    try {
+      assert.equal(typeof stranger.pid, "number");
+      const identity = readProcessIdentity(stranger.pid!);
+      assert.ok(identity);
+      await writeFile(
+        holderRecordPath(profileDir),
+        JSON.stringify({
+          version: 2,
+          pid: stranger.pid!,
+          generation: "stale-reuse",
+          // Deliberately wrong bind — same PID number, different process identity.
+          pidStartTime: "1",
+          exe: "/tmp/not-the-real-holder-exe",
+          startedAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString(),
+          origin: "https://adam.unibas.ch",
+        } satisfies HolderRecord),
+        "utf8",
+      );
+
+      const stopped = await stopSessionHolder(profileDir);
+      assert.equal(stopped, false);
+      assert.equal(isProcessAlive(stranger.pid!), true);
+      assert.equal(await readHolderRecord(profileDir), undefined);
+      // Identity still matches the live stranger — we must not have signaled it.
+      assert.deepEqual(readProcessIdentity(stranger.pid!), identity);
+    } finally {
+      stranger.kill();
+      await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
   });
