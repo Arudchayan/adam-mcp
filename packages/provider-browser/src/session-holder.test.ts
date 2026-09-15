@@ -43,7 +43,12 @@ async function writeBoundRecord(
 ): Promise<HolderRecord> {
   const pid = child.pid;
   assert.equal(typeof pid, "number");
-  const identity = readProcessIdentity(pid!);
+  // Windows identity probes (WMIC/PowerShell) can lag briefly after spawn.
+  let identity = readProcessIdentity(pid!);
+  for (let attempt = 0; !identity && attempt < 10; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    identity = readProcessIdentity(pid!);
+  }
   assert.ok(identity, "expected portable process identity for test child");
   const record: HolderRecord = {
     version: 2,
@@ -157,7 +162,15 @@ describe("session holder records", () => {
           });
           const pid = newChild.pid;
           assert.equal(typeof pid, "number");
-          const identity = readProcessIdentity(pid!);
+          let identity = readProcessIdentity(pid!);
+          const deadline = Date.now() + 1_000;
+          while (!identity && Date.now() < deadline) {
+            const start = Date.now();
+            while (Date.now() - start < 100) {
+              // spin — spawnHolder is synchronous
+            }
+            identity = readProcessIdentity(pid!);
+          }
           assert.ok(identity, "expected portable process identity for new holder");
           const now = new Date().toISOString();
           writeFileSync(

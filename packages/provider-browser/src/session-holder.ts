@@ -83,15 +83,23 @@ export function isProcessAlive(pid: number): boolean {
 /** Linux /proc identity for a live PID; undefined if the PID is gone or unreadable. */
 /**
  * Cross-platform process identity for PID bind.
- * Prefer Linux /proc starttime+exe; fall back to `ps` (macOS/Unix) or
- * Win32 CIM CreationDate+ExecutablePath. Never invent a bind that would
- * match a reused stranger PID — if identity cannot be read, return undefined.
+ * Prefer Linux /proc starttime+exe; on Unix use `ps`; on Windows skip `ps`
+ * (Git's ps rejects `-o`) and use WMIC / PowerShell Get-Process.
+ * Never invent a bind that would match a reused stranger PID.
  */
 export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
   if (!isProcessAlive(pid)) {
     return undefined;
   }
-  return readLinuxProcIdentity(pid) ?? readPsIdentity(pid) ?? readWindowsIdentity(pid);
+  const linux = readLinuxProcIdentity(pid);
+  if (linux) {
+    return linux;
+  }
+  // Windows runners often ship a non-BSD `ps` that errors on `-o` and burns time.
+  if (process.platform === "win32") {
+    return readWindowsIdentity(pid);
+  }
+  return readPsIdentity(pid) ?? readWindowsIdentity(pid);
 }
 
 function readLinuxProcIdentity(pid: number): ProcessIdentity | undefined {
@@ -118,6 +126,7 @@ function readPsIdentity(pid: number): ProcessIdentity | undefined {
     const out = execFileSync("ps", ["-p", String(pid), "-o", "lstart=", "-o", "args="], {
       encoding: "utf8",
       timeout: 2_000,
+      stdio: ["ignore", "pipe", "pipe"],
     }).trim();
     if (!out) {
       return undefined;
@@ -133,30 +142,80 @@ function readPsIdentity(pid: number): ProcessIdentity | undefined {
   }
 }
 
-/** Windows: Win32_Process CreationDate + ExecutablePath via PowerShell CIM. */
+/** Windows: WMIC (fast) then PowerShell Get-Process StartTime/Path. */
 function readWindowsIdentity(pid: number): ProcessIdentity | undefined {
   if (process.platform !== "win32") {
     return undefined;
   }
+  // One quick retry: freshly spawned processes can lag in WMIC/Get-Process.
+  return (
+    readWindowsWmicIdentity(pid) ??
+    readWindowsPowerShellIdentity(pid) ??
+    readWindowsWmicIdentity(pid) ??
+    readWindowsPowerShellIdentity(pid)
+  );
+}
+
+function readWindowsWmicIdentity(pid: number): ProcessIdentity | undefined {
   try {
-    const script =
-      `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}";` +
-      ` if ($null -eq $p) { exit 1 };` +
-      ` Write-Output $p.CreationDate;` +
-      ` Write-Output $p.ExecutablePath;`;
     const out = execFileSync(
-      "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-Command", script],
+      "wmic",
+      [
+        "process",
+        "where",
+        `ProcessId=${pid}`,
+        "get",
+        "CreationDate,ExecutablePath",
+        "/VALUE",
+      ],
       { encoding: "utf8", timeout: 5_000, windowsHide: true },
-    ).trim();
-    const lines = out
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-    if (lines.length < 2 || !lines[0] || !lines[1]) {
+    );
+    let startTime = "";
+    let exe = "";
+    for (const rawLine of out.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (line.startsWith("CreationDate=")) {
+        startTime = line.slice("CreationDate=".length).trim();
+      } else if (line.startsWith("ExecutablePath=")) {
+        exe = line.slice("ExecutablePath=".length).trim();
+      }
+    }
+    // ExecutablePath can be empty for some processes; fall back to a stable token.
+    if (!startTime) {
       return undefined;
     }
-    return { pid, startTime: lines[0], exe: lines[1] };
+    if (!exe) {
+      exe = `pid:${pid}`;
+    }
+    return { pid, startTime, exe };
+  } catch {
+    return undefined;
+  }
+}
+
+function readWindowsPowerShellIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    // Single-line pipe-delimited output avoids multi-line DateTime formatting issues.
+    // Get-Process is faster/more reliable than Get-CimInstance on GHA windows-latest.
+    const script =
+      `$p = Get-Process -Id ${pid} -ErrorAction Stop;` +
+      `$exe = if ($p.Path) { $p.Path } else { $p.ProcessName };` +
+      `Write-Output ($p.StartTime.ToUniversalTime().ToString("o") + "|" + $exe)`;
+    const out = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+      { encoding: "utf8", timeout: 15_000, windowsHide: true },
+    ).trim();
+    const sep = out.indexOf("|");
+    if (sep <= 0 || sep >= out.length - 1) {
+      return undefined;
+    }
+    const startTime = out.slice(0, sep).trim();
+    const exe = out.slice(sep + 1).trim();
+    if (!startTime || !exe) {
+      return undefined;
+    }
+    return { pid, startTime, exe };
   } catch {
     return undefined;
   }
