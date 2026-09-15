@@ -41,7 +41,7 @@ None — Phase A-thin AT1–AT6 closed via PR #14 / `16f08c8`.
 | ID | PASS | Closed |
 | --- | --- | --- |
 | B-frm | `adam_get_forum` + `adam://frm/{refId}`; ConfirmGate on `threadId`; fail-closed `type===frm`; ADR 0012 + ADR 0008 envelope; labeled synthetic `100040` posts OK; live browser meta-only until HTML parse | PR #34 (`1a7931f`) |
-| B-exc | Browser `getExercise` depth (ADR 0013): type-hint fail-closed; labeled deadline + Europe/Zurich wall time; ownStatus EN/DE map or honest `unknown`; multi-unit when Assignment/Aufgabe blocks labeled; no submit; AT5 goldens `100020`/`100021` held; memory-session + unit tests. Soft: live inventory/`fixtures/live` exc capture deferred until Domain sighting (`exc`×0 as of tip 5099529) | this PR |
+| B-exc | Browser `getExercise` depth (ADR 0013): type-hint fail-closed; labeled deadline + Europe/Zurich wall time; ownStatus EN/DE map or honest `unknown`; multi-unit when Assignment/Aufgabe blocks labeled; no submit; AT5 goldens `100020`/`100021` held; memory-session + unit tests. Soft: live inventory/`fixtures/live` exc capture deferred until Domain sighting (`exc`×0 as of tip 5099529) | PR #39 |
 
 ## Keep
 
