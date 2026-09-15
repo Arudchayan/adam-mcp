@@ -250,7 +250,7 @@ export class BrowserAdamProvider implements AdamProvider {
         // Cold probe is best-effort; fall back to cache / refId stub.
       }
     }
-    const title = betterFileTitle(cached?.title, probedTitle, refId);
+    const title = betterFileTitle(refId, cached?.title, probedTitle);
     const file: FileObject = {
       type: "file",
       refId,
@@ -589,20 +589,21 @@ export class BrowserAdamProvider implements AdamProvider {
         this.typeByRefId.set(item.refId, item.type);
       }
     }
-    // Seed from objects, then let catalog.files (fileHints: mime/size) win.
+    // Seed from objects, then catalog.files (fileHints); always merge with prior cache.
     for (const item of catalog.objects) {
       if (item.type === "file") {
-        this.fileByRefId.set(item.refId, { ...item, type: "file" });
+        const next = { ...item, type: "file" as const };
+        this.fileByRefId.set(item.refId, preferCachedFileTitle(next, this.fileByRefId.get(item.refId)));
       }
     }
     for (const file of catalog.files) {
-      this.fileByRefId.set(file.refId, file);
+      this.fileByRefId.set(file.refId, preferCachedFileTitle(file, this.fileByRefId.get(file.refId)));
     }
     if (catalog.current?.type === "file") {
-      const prior = this.fileByRefId.get(catalog.current.refId);
+      const next = { ...catalog.current, type: "file" as const };
       this.fileByRefId.set(
         catalog.current.refId,
-        preferCachedFileTitle({ ...catalog.current, type: "file" }, prior),
+        preferCachedFileTitle(next, this.fileByRefId.get(catalog.current.refId)),
       );
     }
   }
@@ -766,32 +767,17 @@ function isWeakFileTitle(title: string | undefined, refId: RefId): boolean {
 }
 
 /** Prefer a human listing title over a bare refId or chrome tab title. */
-function betterFileTitle(...candidates: Array<string | undefined>): string {
-  let fallback = "";
+function betterFileTitle(refId: RefId, ...candidates: Array<string | undefined>): string {
   for (const c of candidates) {
-    if (!c) {
-      continue;
+    if (!isWeakFileTitle(c, refId)) {
+      return c!.trim();
     }
-    const t = c.trim();
-    if (!t) {
-      continue;
-    }
-    if (!fallback) {
-      fallback = t;
-    }
-    if (/^\d+$/.test(t)) {
-      continue;
-    }
-    if (/^ADAM$/i.test(t) || /:\s*ADAM$/i.test(t)) {
-      continue;
-    }
-    return t;
   }
-  return fallback;
+  return refId;
 }
 
 function preferCachedFileTitle(file: FileObject, cached: FileObject | undefined): FileObject {
-  const title = betterFileTitle(cached?.title, file.title, file.refId) || file.refId;
+  const title = betterFileTitle(file.refId, cached?.title, file.title);
   if (title === file.title && !cached?.mimeType && !cached?.sizeBytes) {
     return file;
   }
