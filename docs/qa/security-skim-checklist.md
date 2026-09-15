@@ -17,7 +17,7 @@ Use on docs and runtime PRs. Cross-check [SECURITY.md](../../SECURITY.md) and [d
 | S1 | Local-first / stdio | No new hosted MCP HTTP without ADR | Streamable HTTP or remote listener added casually |
 | S2 | No MCP OAuth on stdio | Auth stays Chrome session / env | OAuth bolted onto stdio |
 | S3 | Secrets / PII in diff | No cookies, profiles, SWITCH passwords, live course PDFs | Any of the above committed |
-| S4 | Untrusted content | Page/extract keep `untrusted` + notice (B6) | Missing envelope on those tools |
+| S4 | Untrusted content | Page/extract/exercise/forum + all ADAM `resources/read` keep `untrusted` + notice (ADR 0008); ConfirmGate on page/extract/exercise/forum posts | Missing envelope on those surfaces |
 | S5 | `tst` / EXAM | Exam/test bodies denied (B10) | Exam content returned |
 | S6 | No file bytes to model | Extract = text/metadata only | Bytes/base64 in tool results |
 | S7 | Writes | No write tools unless Phase C + elicitation ADR | Submit/post/mail tools without review |

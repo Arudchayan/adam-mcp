@@ -31,7 +31,7 @@ Default provider is `fixture`. Live ADAM is `--browser` / `ADAM_PROVIDER=browser
 
 - Do not put SWITCH passwords in tools, env, logs, issues, or git.
 - No write tools. Object type `tst` is denied.
-- `adam_read_page` and `adam_extract_file_text` require `confirm: true` (interim schema gate after the student asked to read — not OS permission, not elicitation, not equated to tool annotations alone). Return text, never file bytes. Real confirms / future writes → MCP elicitation when host supports MRTR; see docs/architecture.md.
+- `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true` (interim schema gate after the student asked to read — not OS permission, not elicitation, not equated to tool annotations alone). Return text, never file bytes. Real confirms / future writes → MCP elicitation when host supports MRTR; see docs/architecture.md.
 - stdout is JSON-RPC only. Logs go to stderr.
 - Pin origin to `https://adam.unibas.ch`. No generic URL fetch.
 - Do not commit cookies, Chrome profiles, live course files, or private screenshots.
@@ -47,7 +47,7 @@ Fixture-first. SoT:
 
 Golden fixture IDs: `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines.
 
-Close baseline gaps in order when possible: B6–B12 done; A1/A2/A6 done (PR #8 / `e52d947`); A3/A4 done (PR #9 / `a5e1fd6`); AT1/AT2 done (PR #10 / `533d5c5`); AT3 done (PR #11 / `01069ef`); AT4 done (PR #12 / `b3bb0c0`); AT5 done (PR #13 / `ed40c2c`); AT6 done (PR #14 / `16f08c8`). Soft backlog A2-news-browser done (PR #16 / `5593840`). A5 deferred Phase B P1. **Phase A-thin closed**. Phase B **B-frm** closed (PR #34 / `1a7931f`) — current SoT: [docs/ROADMAP.md](docs/ROADMAP.md), [docs/qa/open-pass-criteria.md](docs/qa/open-pass-criteria.md).
+Close baseline gaps in order when possible: B6–B12 done; A1/A2/A6 done (PR #8 / `e52d947`); A3/A4 done (PR #9 / `a5e1fd6`); AT1/AT2 done (PR #10 / `533d5c5`); AT3 done (PR #11 / `01069ef`); AT4 done (PR #12 / `b3bb0c0`); AT5 done (PR #13 / `ed40c2c`); AT6 done (PR #14 / `16f08c8`). Soft backlog A2-news-browser done (PR #16 / `5593840`). A5 deferred Phase B P1. **Phase A-thin closed**. Phase B **B-frm** shipped fixture-side (PR #34 / `1a7931f`; live browser still meta-only until thread HTML parse) — current SoT: [docs/ROADMAP.md](docs/ROADMAP.md), [docs/qa/open-pass-criteria.md](docs/qa/open-pass-criteria.md).
 
 ## Review / merge
 

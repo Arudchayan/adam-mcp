@@ -75,7 +75,7 @@ export async function extractLocalFileText(
   maxPages = DEFAULT_EXTRACT_PAGES,
 ): Promise<FileExtract> {
   if (bytes.byteLength > MAX_EXTRACT_BYTES) {
-    throw new AdamError("provider_unavailable", `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`);
+    throw new AdamError("provider_unavailable", `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`, false);
   }
   const pagesLimit = normalizeMaxPages(maxPages);
   const digest = sha256Hex(bytes);

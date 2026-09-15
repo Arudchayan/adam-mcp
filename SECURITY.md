@@ -21,7 +21,7 @@ Do not tag GitHub/npm until all of these hold:
 5. Chrome debugging is not a well-known localhost port.
 6. HTTPS + pinned `https://adam.unibas.ch`; allowlist on start and final URL.
 7. Concurrency 1 (SerialQueue), size caps — tested.
-8. `adam_read_page`, `adam_extract_file_text`, and `adam_get_forum` (when `threadId` / post bodies) require `confirm: true`.
+8. `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true`.
 9. Object type `tst` is denied. No write tools.
 10. No PDF bytes to the model. Download cancel is tested.
 11. Stdout is protocol-only. Redaction tests cover emails, cookies, and session query keys.

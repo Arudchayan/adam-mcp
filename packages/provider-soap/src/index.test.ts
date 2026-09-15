@@ -9,11 +9,13 @@ describe("SoapAdamProvider", () => {
     await assert.rejects(() => provider.listCourses(), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "provider_unavailable");
+      assert.equal(error.retryable, false);
       return true;
     });
     await assert.rejects(() => provider.extractFileText("1"), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "provider_unavailable");
+      assert.equal(error.retryable, false);
       return true;
     });
     await assert.rejects(() => provider.getForum("1"), (error: unknown) => {
@@ -23,6 +25,7 @@ describe("SoapAdamProvider", () => {
     await assert.rejects(() => provider.getExercise("1"), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "provider_unavailable");
+      assert.equal(error.retryable, false);
       return true;
     });
   });

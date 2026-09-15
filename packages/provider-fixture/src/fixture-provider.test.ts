@@ -473,3 +473,19 @@ describe("Phase B adam forum read (labeled synthetic frm)", () => {
     });
   });
 });
+
+
+describe("getForum client type hint", () => {
+  it("fail-closes when caller passes a non-frm type hint for a real forum", async () => {
+    const provider = createFixtureProvider();
+    await assert.rejects(
+      () => provider.getForum("100040", { type: "fold", threadId: "200001" }),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "unsupported_type");
+        assert.match(error.message, /type hint|not frm/i);
+        return true;
+      },
+    );
+  });
+});
