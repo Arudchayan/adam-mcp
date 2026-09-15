@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -43,7 +44,7 @@ async function writeBoundRecord(
   const pid = child.pid;
   assert.equal(typeof pid, "number");
   const identity = readProcessIdentity(pid!);
-  assert.ok(identity, "expected /proc identity for test child");
+  assert.ok(identity, "expected portable process identity for test child");
   const record: HolderRecord = {
     version: 2,
     generation: "test-generation",
@@ -149,38 +150,35 @@ describe("session holder records", () => {
         seed: { cookies: [] },
         timeoutMs: 5_000,
         spawnHolder: (seedFile) => {
-          newChild = spawn(
-            process.execPath,
-            [
-              "-e",
-              `
-              const fs = require("node:fs");
-              const seed = JSON.parse(fs.readFileSync(${JSON.stringify(seedFile)}, "utf8"));
-              const profileDir = ${JSON.stringify(profileDir)};
-              const pid = process.pid;
-              const exe = fs.readlinkSync("/proc/" + pid + "/exe");
-              const stat = fs.readFileSync("/proc/" + pid + "/stat", "utf8");
-              const startTime = stat.slice(stat.lastIndexOf(")") + 2).split(" ")[19];
-              const now = new Date().toISOString();
-              fs.writeFileSync(
-                profileDir + "/session-holder.json",
-                JSON.stringify({
-                  version: 2,
-                  pid,
-                  generation: seed.generation,
-                  pidStartTime: startTime,
-                  exe,
-                  startedAt: now,
-                  verifiedAt: now,
-                  origin: "https://adam.unibas.ch",
-                }),
-              );
-              try { fs.unlinkSync(${JSON.stringify(seedFile)}); } catch {}
-              setInterval(() => {}, 1000);
-              `,
-            ],
-            { detached: true, stdio: "ignore" },
+          const seed = JSON.parse(readFileSync(seedFile, "utf8")) as { generation?: string };
+          newChild = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+            detached: true,
+            stdio: "ignore",
+          });
+          const pid = newChild.pid;
+          assert.equal(typeof pid, "number");
+          const identity = readProcessIdentity(pid!);
+          assert.ok(identity, "expected portable process identity for new holder");
+          const now = new Date().toISOString();
+          writeFileSync(
+            holderRecordPath(profileDir),
+            JSON.stringify({
+              version: 2,
+              pid,
+              generation: seed.generation,
+              pidStartTime: identity.startTime,
+              exe: identity.exe,
+              startedAt: now,
+              verifiedAt: now,
+              origin: "https://adam.unibas.ch",
+            }),
+            "utf8",
           );
+          try {
+            unlinkSync(seedFile);
+          } catch {
+            // Seed already consumed.
+          }
           return newChild;
         },
       });

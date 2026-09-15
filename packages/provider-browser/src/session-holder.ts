@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync, readlinkSync } from "node:fs";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -46,9 +46,9 @@ export type HolderRecord = {
   version: typeof HOLDER_RECORD_VERSION;
   pid: number;
   generation: string;
-  /** /proc/<pid>/stat starttime — binds the PID against reuse. */
+  /** Process start token (Linux starttime, ps lstart, or Win CreationDate). */
   pidStartTime: string;
-  /** /proc/<pid>/exe at record write — binds the PID against reuse. */
+  /** Executable path/command at record write — binds the PID against reuse. */
   exe: string;
   /** Chrome child PID when known; also identity-bound when present. */
   browserPid?: number;
@@ -81,7 +81,20 @@ export function isProcessAlive(pid: number): boolean {
 }
 
 /** Linux /proc identity for a live PID; undefined if the PID is gone or unreadable. */
+/**
+ * Cross-platform process identity for PID bind.
+ * Prefer Linux /proc starttime+exe; fall back to `ps` (macOS/Unix) or
+ * Win32 CIM CreationDate+ExecutablePath. Never invent a bind that would
+ * match a reused stranger PID — if identity cannot be read, return undefined.
+ */
 export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
+  if (!isProcessAlive(pid)) {
+    return undefined;
+  }
+  return readLinuxProcIdentity(pid) ?? readPsIdentity(pid) ?? readWindowsIdentity(pid);
+}
+
+function readLinuxProcIdentity(pid: number): ProcessIdentity | undefined {
   try {
     const exe = readlinkSync(`/proc/${pid}/exe`);
     const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
@@ -94,6 +107,56 @@ export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
       return undefined;
     }
     return { pid, startTime, exe };
+  } catch {
+    return undefined;
+  }
+}
+
+/** macOS / BSD / Unix: `ps -o lstart= -o args=`. */
+function readPsIdentity(pid: number): ProcessIdentity | undefined {
+  try {
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "lstart=", "-o", "args="], {
+      encoding: "utf8",
+      timeout: 2_000,
+    }).trim();
+    if (!out) {
+      return undefined;
+    }
+    // lstart: "Tue Sep 15 16:13:01 2026" then the args/command.
+    const match = /^(\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4})\s+(.+)$/.exec(out);
+    if (!match) {
+      return undefined;
+    }
+    return { pid, startTime: match[1]!, exe: match[2]! };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Windows: Win32_Process CreationDate + ExecutablePath via PowerShell CIM. */
+function readWindowsIdentity(pid: number): ProcessIdentity | undefined {
+  if (process.platform !== "win32") {
+    return undefined;
+  }
+  try {
+    const script =
+      `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${pid}";` +
+      ` if ($null -eq $p) { exit 1 };` +
+      ` Write-Output $p.CreationDate;` +
+      ` Write-Output $p.ExecutablePath;`;
+    const out = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { encoding: "utf8", timeout: 5_000, windowsHide: true },
+    ).trim();
+    const lines = out
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    if (lines.length < 2 || !lines[0] || !lines[1]) {
+      return undefined;
+    }
+    return { pid, startTime: lines[0], exe: lines[1] };
   } catch {
     return undefined;
   }

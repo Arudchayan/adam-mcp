@@ -42,7 +42,7 @@ credential store.
    startedAt) — never the first still-verified old record. `stopSessionHolder`
    signals the **process group**, escalates SIGTERM → SIGKILL, and refuses
    “stopped” (never clears the holder record) until CDP is dead **and**
-   `DevToolsActivePort` is gone. Liveness is bound to `/proc` start time + exe +
+   `DevToolsActivePort` is gone. Liveness is bound to a cross-platform process identity (Linux `/proc` starttime+exe, or `ps` lstart/args on macOS/Unix, or Win32 CreationDate/ExecutablePath) +
    generation UUID; a PID mismatch is stale and must **not** be signaled.
 
 ## Consequences
