@@ -315,7 +315,7 @@ describe("B4 confirm RPC", () => {
       );
 
       const tools = await rpc(child, { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
-      for (const name of ["adam_read_page", "adam_extract_file_text"] as const) {
+      for (const name of ["adam_read_page", "adam_extract_file_text", "adam_get_exercise"] as const) {
         const tool = (tools.result?.tools ?? []).find((entry) => entry.name === name);
         assert.ok(tool, `missing ${name}`);
         assert.equal(tool.inputSchema?.required?.includes("confirm"), true, `${name} must require confirm`);
@@ -384,6 +384,35 @@ describe("B4 confirm RPC", () => {
       assert.equal(extractOk.result?.structuredContent?.untrusted, true);
       assert.equal("bytes" in (extractOk.result?.structuredContent ?? {}), false);
       assert.equal(typeof extractOk.result?.structuredContent?.sha256, "string");
+
+      const exerciseOmit = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+      });
+      assert.equal(exerciseOmit.result?.isError, true);
+      assert.match(exerciseOmit.result?.content?.[0]?.text ?? "", /confirm/i);
+
+      const exerciseFalse = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: false } },
+      });
+      assert.equal(exerciseFalse.result?.isError, true);
+      assert.match(exerciseFalse.result?.content?.[0]?.text ?? "", /confirm/i);
+
+      const exerciseOk = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
+      });
+      assert.equal(exerciseOk.error, undefined, exerciseOk.error?.message);
+      assert.equal(exerciseOk.result?.isError, undefined);
+      assert.equal(exerciseOk.result?.structuredContent?.untrusted, true);
+      assert.equal(exerciseOk.result?.structuredContent?.type, "exc");
     } finally {
       child.kill();
     }
@@ -508,7 +537,7 @@ describe("B10 tst deny fail-closed", () => {
         method: "tools/call",
         params: {
           name: "adam_get_exercise",
-          arguments: { refId: GOLDEN_TST_REF_ID },
+          arguments: { refId: GOLDEN_TST_REF_ID, confirm: true },
         },
       });
       assert.equal(exerciseDenied.result?.isError, true);
@@ -647,7 +676,7 @@ describe("B12 no MCP OAuth on stdio", () => {
         jsonrpc: "2.0",
         id: 5,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
       });
       assert.equal(exercise.error, undefined, exercise.error?.message);
       assert.equal(exercise.result?.isError, undefined);
@@ -720,7 +749,7 @@ describe("A1 resource links in tool results", () => {
         jsonrpc: "2.0",
         id: 4,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
       });
       assert.equal(exercise.result?.structuredContent?.resourceUri, "adam://exc/100021");
       assert.equal(exercise.result?.structuredContent?.url, "https://adam.unibas.ch/go/exc/100021");
@@ -902,6 +931,8 @@ describe("A6 resources for read-by-id", () => {
       const exerciseText = (exercise.result as { contents?: Array<{ text?: string }> } | undefined)
         ?.contents?.[0]?.text ?? "";
       assert.match(exerciseText, /"refId": "100021"/);
+      assert.match(exerciseText, /"untrusted": true/);
+      assert.match(exerciseText, /"notice":/);
 
       // A1 tie-in: get-course tool result cites the same resource handle.
       const viaTool = await rpc(child, {
@@ -1161,7 +1192,7 @@ describe("AT3 adam_search enrolled-tree ranking", () => {
         jsonrpc: "2.0",
         id: 7,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
       });
       assert.equal(exercise.result?.structuredContent?.type, "exc");
 
@@ -1308,7 +1339,7 @@ describe("AT4 adam_list_news reliability", () => {
         jsonrpc: "2.0",
         id: 6,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
       });
       assert.equal(exercise.result?.structuredContent?.type, "exc");
       const denied = await rpc(child, {
@@ -1357,7 +1388,7 @@ describe("AT5 adam_get_exercise harden", () => {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100021" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
       });
       assert.equal(exercise.error, undefined, exercise.error?.message);
       assert.equal(exercise.result?.isError, undefined);
@@ -1396,7 +1427,7 @@ describe("AT5 adam_get_exercise harden", () => {
         jsonrpc: "2.0",
         id: 4,
         method: "tools/call",
-        params: { name: "adam_get_exercise", arguments: { refId: "100020" } },
+        params: { name: "adam_get_exercise", arguments: { refId: "100020", confirm: true } },
       });
       assert.equal(fold.result?.isError, true);
       assert.match(fold.result?.content?.[0]?.text ?? "", /unsupported_type|fold/i);
@@ -1504,6 +1535,8 @@ describe("Phase B adam_get_forum + adam://frm", () => {
       const body =
         (resource.result as { contents?: Array<{ text?: string }> } | undefined)?.contents?.[0]?.text ?? "";
       assert.match(body, /"type": "frm"/);
+      assert.match(body, /"untrusted": true/);
+      assert.match(body, /"notice":/);
       assert.equal(/"body":/.test(body), false);
 
       const denied = await rpc(child, {
@@ -1536,6 +1569,21 @@ describe("Phase B adam_get_forum + adam://frm", () => {
       assert.equal(withPosts?.untrusted, true);
       assert.ok((withPosts?.selectedThread?.posts?.length ?? 0) >= 1);
       assert.match(withPosts?.selectedThread?.posts?.[0]?.body ?? "", /SYNTHETIC/i);
+
+
+      const wrongHint = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "adam_get_forum",
+          arguments: { refId: "100040", type: "fold", threadId: "200001", confirm: true },
+        },
+      });
+      assert.equal(wrongHint.result?.isError, true);
+      assert.match(wrongHint.result?.content?.[0]?.text ?? "", /unsupported_type|not frm|type hint/i);
+      assert.equal(/"body":/.test(wrongHint.result?.content?.[0]?.text ?? ""), false);
+      assert.equal(wrongHint.result?.structuredContent?.selectedThread, undefined);
 
       const wrong = await rpc(child, {
         jsonrpc: "2.0",
@@ -1670,5 +1718,23 @@ describe("AT6 adam_list_calendar page vs exc provenance", () => {
       child.stdout.off("data", onData);
       child.kill();
     }
+  });
+});
+
+
+describe("docs confirm-list alignment", () => {
+  it("AGENTS.md / SECURITY.md confirm lists include page, extract, forum threadId, and exercise", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const agents = await readFile(new URL("../../../AGENTS.md", import.meta.url), "utf8");
+    const security = await readFile(new URL("../../../SECURITY.md", import.meta.url), "utf8");
+    for (const doc of [agents, security]) {
+      assert.match(doc, /adam_read_page/);
+      assert.match(doc, /adam_extract_file_text/);
+      assert.match(doc, /adam_get_forum/);
+      assert.match(doc, /adam_get_exercise/);
+      assert.match(doc, /confirm:\s*true/);
+    }
+    assert.match(security, /threadId/);
+    assert.match(agents, /threadId/);
   });
 });

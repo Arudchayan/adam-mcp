@@ -3,6 +3,7 @@ import { AdamError, type AdamProvider } from "adam-core";
 const UNAVAILABLE = new AdamError(
   "provider_unavailable",
   "The SOAP provider is disabled. Unauthenticated GET https://adam.unibas.ch/soap/server.php returns Apache HTTP 403 and no WSDL. SOAP login is a local password, not SWITCH edu-ID.",
+  false,
 );
 
 function disabled(): never {

@@ -328,7 +328,7 @@ export function ok(data: unknown, schema?: { safeParse: (value: unknown) => { su
 }
 
 /** Redact secrets inside structured payloads, not just the text block (T4). */
-function deepRedact(value: unknown, keyHint?: string): unknown {
+export function deepRedact(value: unknown, keyHint?: string): unknown {
   if (typeof value === "string") {
     // URL-shaped fields get query-aware redaction; everything else gets text redaction.
     if (keyHint && /url$/i.test(keyHint)) {
@@ -347,6 +347,16 @@ function deepRedact(value: unknown, keyHint?: string): unknown {
     return next;
   }
   return value;
+}
+
+
+/** ADR 0008: every resources/read payload is untrusted + deep-redacted JSON text. */
+export function resourceJsonText(data: object): string {
+  const enveloped = UntrustedContent.wrap(
+    deepRedact(data) as object,
+    UntrustedContent.DATA_NOTICE,
+  );
+  return redactText(JSON.stringify(enveloped, null, 2));
 }
 
 export function fail(error: unknown, runId?: string): ToolResponse {

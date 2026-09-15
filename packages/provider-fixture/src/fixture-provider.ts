@@ -202,6 +202,13 @@ export class FixtureAdamProvider implements AdamProvider {
     options?: { type?: AdamObject["type"]; threadId?: string; signal?: AbortSignal },
   ): Promise<ForumObject> {
     throwIfCancelled(options?.signal);
+    // Fail-closed on client type hint: wrong hint must not return forum posts/meta.
+    if (options?.type !== undefined && options.type !== "frm") {
+      throw new AdamError(
+        "unsupported_type",
+        `Client type hint "${options.type}" is not frm; refusing forum read for ref_id ${refId}.`,
+      );
+    }
     const record = requireRecord(refId);
     assertReadableObjectType(record.object.type, refId);
     if (record.object.type !== "frm") {

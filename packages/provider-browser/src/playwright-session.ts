@@ -377,6 +377,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         throw new AdamError(
           "provider_unavailable",
           `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`,
+          false,
         );
       }
       return { bytes: new Uint8Array(body), contentType };

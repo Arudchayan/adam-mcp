@@ -6,6 +6,19 @@ import { createAdamMcpServer } from "./server.ts";
 import { createFixtureProvider } from "adam-provider-fixture";
 
 describe("parseProviderName", () => {
+
+  it("refuses soap and html at boot (fail-closed, non-retryable)", () => {
+    for (const name of ["soap", "html"] as const) {
+      assert.throws(() => parseProviderName(name), (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "provider_unavailable");
+        assert.equal(error.retryable, false);
+        assert.match(error.message, /disabled|fail-closed|ADR/i);
+        return true;
+      });
+    }
+  });
+
   it("defaults to fixture and rejects unknown names", () => {
     assert.equal(parseProviderName(undefined), "fixture");
     assert.equal(parseProviderName("browser"), "browser");

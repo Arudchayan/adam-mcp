@@ -40,7 +40,7 @@ None — Phase A-thin AT1–AT6 closed via PR #14 / `16f08c8`.
 
 | ID | PASS | Closed |
 | --- | --- | --- |
-| B-frm | `adam_get_forum` + `adam://frm/{refId}`; ConfirmGate on `threadId`; fail-closed `type===frm`; ADR 0012 + ADR 0008 envelope; labeled synthetic `100040` only; Domain frm-only | PR #34 (`1a7931f`) |
+| B-frm | `adam_get_forum` + `adam://frm/{refId}`; ConfirmGate on `threadId`; fail-closed `type===frm`; ADR 0012 + ADR 0008 envelope; labeled synthetic `100040` posts OK; live browser meta-only until HTML parse | PR #34 (`1a7931f`) |
 
 ## Keep
 
@@ -58,4 +58,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). AT6 closed (PR #14 / `16f08c8`). Soft backlog **A2-news-browser** closed (PR #16 / `5593840`). **A5** completions deferred (Phase B P1). Phase A-thin complete. Phase B **B-frm** closed (PR #34 / `1a7931f`).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). AT6 closed (PR #14 / `16f08c8`). Soft backlog **A2-news-browser** closed (PR #16 / `5593840`). **A5** completions deferred (Phase B P1). Phase A-thin complete. Phase B **B-frm** shipped fixture-side (PR #34 / `1a7931f`; live `threadId` withheld until HTML parse).

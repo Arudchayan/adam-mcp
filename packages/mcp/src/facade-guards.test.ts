@@ -284,6 +284,8 @@ describe("facade listing guards", () => {
     assert.doesNotMatch(JSON.stringify(course), /SECRET INSTRUCTION TEXT/);
 
     const meCourses = await resourceJson(rpc, "adam://me/courses");
+    assert.equal(meCourses.untrusted, true);
+    assert.equal(typeof meCourses.notice, "string");
     const meItems = meCourses.items as Array<Record<string, unknown>>;
     assert.equal(meItems.some((item) => item.type === "tst" || item.refId === "100099"), false);
     assert.ok(meItems.some((item) => item.refId === "100001"), "allowed rows survive the courses resource");

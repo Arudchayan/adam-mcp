@@ -45,6 +45,7 @@ describe("extractLocalFileText", () => {
       (error: unknown) => {
         assert.ok(error instanceof AdamError);
         assert.equal(error.code, "provider_unavailable");
+        assert.equal(error.retryable, false);
         return true;
       },
     );

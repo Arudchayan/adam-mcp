@@ -1,8 +1,6 @@
 import { AdamError, type AdamProvider } from "adam-core";
 import { BrowserAdamProvider, createBrowserProvider } from "adam-provider-browser";
 import { createFixtureProvider } from "adam-provider-fixture";
-import { createHtmlProvider } from "adam-provider-html";
-import { createSoapProvider } from "adam-provider-soap";
 import type { SessionController } from "./server.ts";
 
 export type ProviderName = "fixture" | "browser" | "soap" | "html";
@@ -17,13 +15,19 @@ export function parseProviderName(raw: string | undefined): ProviderName {
   switch (value) {
     case "fixture":
     case "browser":
+      return value;
     case "soap":
     case "html":
-      return value;
+      throw new AdamError(
+        "provider_unavailable",
+        `ADAM_PROVIDER="${value}" is disabled (fail-closed). Use fixture or browser. Enabling requires an ADR.`,
+        false,
+      );
     default:
       throw new AdamError(
         "provider_unavailable",
-        `Unknown ADAM_PROVIDER="${raw ?? ""}". Use fixture, browser, soap, or html.`,
+        `Unknown ADAM_PROVIDER="${raw ?? ""}". Use fixture or browser.`,
+        false,
       );
   }
 }
@@ -46,9 +50,12 @@ export function createConfiguredProvider(
       return { provider, session: provider };
     }
     case "soap":
-      return { provider: createSoapProvider() };
     case "html":
-      return { provider: createHtmlProvider() };
+      throw new AdamError(
+        "provider_unavailable",
+        `ADAM_PROVIDER="${name}" is disabled (fail-closed). Use fixture or browser. Enabling requires an ADR.`,
+        false,
+      );
     default: {
       const exhaustive: never = name;
       throw new AdamError("provider_unavailable", `Unhandled provider ${String(exhaustive)}`);

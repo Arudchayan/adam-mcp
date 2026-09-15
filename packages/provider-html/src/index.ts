@@ -3,6 +3,7 @@ import { AdamError, type AdamProvider } from "adam-core";
 const UNAVAILABLE = new AdamError(
   "provider_unavailable",
   "The HTML provider is disabled. It is a last-resort, rate-limited fallback and must not scrape ADAM from v1.",
+  false,
 );
 
 function disabled(): never {
