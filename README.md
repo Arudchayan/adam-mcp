@@ -28,7 +28,7 @@ You need Node.js 20+ and Google Chrome.
 
 ### From the registry (after publish)
 
-`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are only `@modelcontextprotocol/server`, `playwright-core`, and `zod`. Once `adam-mcp@0.1.0` is published:
+`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are only `@modelcontextprotocol/server`, `playwright-core`, and `zod`. Once `adam-mcp@0.2.0` is published:
 
 ```bash
 npx -y adam-mcp
@@ -80,7 +80,8 @@ ADAM MCP uses a local Chrome session for ADAM authentication. Default without `-
 | `adam_extract_file_text` | Local PDF/text extract (`confirm: true`) |
 | `adam_search` | Title matches in enrolled objects |
 | `adam_list_calendar` / `adam_list_news` | Dates and news from pages you can see |
-| `adam_get_exercise` | Exercise text and deadline; no submit |
+| `adam_get_exercise` | Exercise text and deadline (`confirm: true`); no submit |
+| `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true`; no post/reply |
 | `adam_login` / `adam_session_status` | Chrome session (`--browser` only; fixture hides them) |
 
 Listings carry `listingState: ok | empty | unknown` — `empty` means the folder listed and has nothing (not a failure, not "no deadlines"); `unknown` means the list did not load, do not call it empty.

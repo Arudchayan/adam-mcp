@@ -22,7 +22,7 @@ Writes (submit, forum, mail, enroll). Exam taking (`tst` denied). File bytes/bas
 
 ## Install
 
-Clone this repo. `npm run setup` prints host JSON. npm registry publish is a later step; do not document `npx adam-mcp` as if it already works.
+After publish of `adam-mcp` 0.2.0: `npx -y adam-mcp` (or `npm install -g adam-mcp`). Clone this repo and `npm run setup` still prints host JSON and `npm run login` helpers. Do not claim the package is already on npm until published.
 
 ## Changes that need an ADR
 
