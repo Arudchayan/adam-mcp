@@ -7,20 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Trust surface: ConfirmGate on `adam_get_exercise`; all ADAM `resources/read` payloads use UntrustedContent + deepRedact; permanent oversize/soap/html failures are `retryable: false`; client type hint on `adam_get_forum` fail-closed; docs confirm lists aligned (page + extract + forum threadId + exercise); live B-frm demoted to meta-only until HTML parse
-
+## [0.2.0] - 2026-09-16
 
 ### Added
 
 - Phase B read-only forum: `adam_get_forum` + `adam://frm/{refId}` (ADR 0012); post bodies require `confirm:true`
-
-### Added
-
 - ADR 0010 protocol correctness: strict digits-only cursor (`InvalidParams`), resource `not_found` → `ResourceNotFoundError`, structured-output validation against advertised schemas, server `instructions`
 - ADR 0011 bounds/cancellation: `MAX_PAGE_CHARS` + `PageContent.truncated`, cooperative `AbortSignal` on all providers (cancelled walks never memoized), `retryable=false` for unknown bugs, password/api_key/matriculation redaction + URL-aware `deepRedact`
 - Bounded live re-verify guide (`docs/live-reverify.md`) for the post-population ADAM pass; no premature type expansion (`sess/htlm/wiki/grp` still gated on live sighting)
+
+### Changed
+
+- Trust surface: ConfirmGate on `adam_get_exercise`; all ADAM `resources/read` payloads use UntrustedContent + deepRedact; permanent oversize/soap/html failures are `retryable: false`; client type hint on `adam_get_forum` fail-closed; docs confirm lists aligned (page + extract + forum threadId + exercise); live B-frm demoted to meta-only until HTML parse (#37)
+- Session holder lifecycle P0s / ADR 0009 amend: re-login stops and awaits the prior holder; stop waits for PID/CDP; liveness bound to process identity (#38)
+
+### Fixed
+
+- `adam_get_file` preserves listing title on download abort (ADR 0013, #40)
 
 ## [0.1.0] - 2026-09-07
 

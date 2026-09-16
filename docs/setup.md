@@ -28,7 +28,7 @@ Sign in to ADAM in the Chrome window. After success the window closes and a **de
 
 ADAM cookies live in RAM inside the headless Chrome process only. After a reboot or a SWITCH timeout, run `npm run login` again. `ADAM_BROWSER_HEADED=1 npm run login` keeps the headed window in-process for debugging instead of handing off to the headless session.
 
-After publish of `adam-mcp` 0.1.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
+After publish of `adam-mcp` 0.2.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
 
 ## Cursor, Claude Desktop, Windsurf
 
