@@ -42,6 +42,7 @@ describe("FixtureAdamProvider", () => {
   it("extracts fixture PDF text without returning bytes", async () => {
     const extracted = await provider.extractFileText("100011");
     assert.match(extracted.pages[0]?.text ?? "", /multimedia retrieval/i);
+    assert.ok(extracted.pages.some((page) => page.text.trim().length > 0));
     assert.equal("bytes" in extracted, false);
     assert.doesNotMatch(JSON.stringify(extracted), /%PDF-/);
   });

@@ -383,7 +383,13 @@ describe("B4 confirm RPC", () => {
       assert.equal(extractOk.result?.isError, undefined);
       assert.equal(extractOk.result?.structuredContent?.untrusted, true);
       assert.equal("bytes" in (extractOk.result?.structuredContent ?? {}), false);
+      assert.equal("blob" in (extractOk.result?.structuredContent ?? {}), false);
       assert.equal(typeof extractOk.result?.structuredContent?.sha256, "string");
+      const extractPages = (extractOk.result?.structuredContent?.pages ?? []) as Array<{ text?: string }>;
+      assert.ok(
+        extractPages.some((page) => String(page.text ?? "").trim().length > 0),
+        "confirm:true extract must not be silent empty",
+      );
 
       const exerciseOmit = await rpc(child, {
         jsonrpc: "2.0",
@@ -474,6 +480,11 @@ describe("B6 untrusted notice on page/extract", () => {
       assert.match(extract.result?.content?.[0]?.text ?? "", /"untrusted": true/);
       assert.match(extract.result?.content?.[0]?.text ?? "", /untrusted data/i);
       assert.equal("bytes" in (extract.result?.structuredContent ?? {}), false);
+      const extractPages = (extract.result?.structuredContent?.pages ?? []) as Array<{ text?: string }>;
+      assert.ok(
+        extractPages.some((page) => String(page.text ?? "").trim().length > 0),
+        "untrusted extract envelope must carry real text, not a blank body",
+      );
     } finally {
       child.kill();
     }

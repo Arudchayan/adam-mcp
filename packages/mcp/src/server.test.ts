@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { AdamError } from "adam-core";
+import { AdamError, assertExtractHasText } from "adam-core";
 import { createFixtureProvider, GOLDEN_TST_REF_ID } from "adam-provider-fixture";
 import {
   ConfirmGate,
@@ -80,6 +80,43 @@ describe("read-only MCP facade", () => {
     assert.equal(result.structuredContent?.notice, UNTRUSTED_PAGE_NOTICE);
     assert.equal("bytes" in (result.structuredContent ?? {}), false);
     assert.doesNotMatch(toolText(result), /%PDF-/);
+    assert.ok(
+      (extracted.pages ?? []).some((page) => page.text.trim().length > 0),
+      "fixture extract after confirm must not be silent empty",
+    );
+  });
+
+  it("P0: empty extract after confirm fails closed with a reason", () => {
+    assert.throws(
+      () => assertExtractHasText({ pages: [{ page: 1, text: "" }], truncated: false }),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "unsupported_type");
+        assert.equal(error.retryable, false);
+        assert.match(error.message, /no extractable text/i);
+        return true;
+      },
+    );
+    assert.throws(
+      () => assertExtractHasText({ pages: [{ page: 1, text: "\n" }], truncated: true }, 8),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "provider_unavailable");
+        assert.match(error.message, /no text within/i);
+        return true;
+      },
+    );
+    const denied = fail(
+      new AdamError(
+        "unsupported_type",
+        "This file has no extractable text. Open it in ADAM instead.",
+        false,
+      ),
+    );
+    assert.equal(denied.isError, true);
+    assert.match(toolText(denied), /^unsupported_type:/);
+    assert.match(toolText(denied), /no extractable text/);
+    assert.doesNotMatch(toolText(denied), /%PDF-/);
   });
 
   it("keeps provider listing notices when wrapping untrusted content", () => {

@@ -6,8 +6,10 @@ export {
 } from "./calendar.ts";
 export { AdamError, isAdamError, throwIfCancelled } from "./errors.ts";
 export {
+  assertExtractHasText,
   DEFAULT_EXTRACT_PAGES,
   extractLocalFileText,
+  extractPagesHaveText,
   looksLikeHtml,
   MAX_EXTRACT_BYTES,
   MAX_EXTRACT_CHARS,
