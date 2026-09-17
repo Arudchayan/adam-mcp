@@ -23,7 +23,7 @@ import {
   mergeFrameLinks,
 } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
-import { holderStatus, startSessionHolder } from "./session-holder.ts";
+import { boundHolderPid, holderStatus, startSessionHolder } from "./session-holder.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import type {
   AdamBrowserSession,
@@ -193,16 +193,19 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   async status(): Promise<SessionStatus> {
     return this.serialize(async () => {
       const holder = await holderStatus(this.profileDir);
+      const holderPid = boundHolderPid(holder) ?? null;
+      const loginRequired = (): SessionStatus => ({
+        loggedIn: false,
+        origin: this.origin,
+        reason: "login-required" as const,
+        message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
+        checkedAt: new Date().toISOString(),
+        holderPid,
+      });
       if (!holder.running && !this.page && !this.context) {
         const endpoint = await readLocalCdpEndpoint(this.profileDir);
         if (!endpoint) {
-          return {
-            loggedIn: false,
-            origin: this.origin,
-            reason: "login-required" as const,
-            message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
-            checkedAt: new Date().toISOString(),
-          };
+          return loginRequired();
         }
       }
       const page = await this.ensurePage().catch((error: unknown) => {
@@ -212,13 +215,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         throw error;
       });
       if (!page) {
-        return {
-          loggedIn: false,
-          origin: this.origin,
-          reason: "login-required" as const,
-          message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
-          checkedAt: new Date().toISOString(),
-        };
+        return loginRequired();
       }
       if (shouldProbeOrigin(page.url(), this.origin)) {
         assertUrlAllowed(this.origin);
@@ -241,7 +238,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         await this.waitForSessionSettled(page);
         snapshot = await this.readSnapshot(page);
       }
-      return this.toStatus(snapshot);
+      return this.toStatus(snapshot, holderPid);
     });
   }
 
@@ -338,7 +335,11 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
             "Signed in, but no session cookies were captured. Run adam-mcp login again.",
           );
         }
-        await startSessionHolder({ profileDir: this.profileDir, origin: this.origin, seed });
+        const holderRecord = await startSessionHolder({
+          profileDir: this.profileDir,
+          origin: this.origin,
+          seed,
+        });
         const attached = await this.tryAttachCdp();
         if (!attached || !this.context) {
           throw new AdamError(
@@ -348,13 +349,13 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         }
         this.page = this.context.pages()[0] ?? (await this.context.newPage());
         attachDownloadGuard(this.page);
-        return this.toStatus(await this.readSnapshot(this.page));
+        return this.toStatus(await this.readSnapshot(this.page), holderRecord.pid);
       }
       // Debug escape hatch (ADAM_BROWSER_HEADED=1): keep the headed browser in-process.
       if (this.hideWindowAfterFeedback) {
         await minimizeChromeWindow(page);
       }
-      return this.toStatus(await this.readSnapshot(page));
+      return this.toStatus(await this.readSnapshot(page), null);
     });
   }
 
@@ -435,7 +436,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return new URL(url, this.origin).toString();
   }
 
-  private toStatus(snapshot: PageSnapshot): SessionStatus {
+  private toStatus(snapshot: PageSnapshot, holderPid: number | null): SessionStatus {
     const loggedIn = isLoggedInSnapshot(snapshot);
     return {
       loggedIn,
@@ -444,6 +445,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       title: snapshot.title,
       reason: loggedIn ? "signed-in" : "login-required",
       checkedAt: new Date().toISOString(),
+      holderPid,
     };
   }
 
