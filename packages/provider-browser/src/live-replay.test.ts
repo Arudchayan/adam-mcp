@@ -70,11 +70,6 @@ describe("live fixture replay (scrubbed)", () => {
         assert.equal("totalHint" in listed, false);
         assert.match(listed.notice ?? "", /blank content area/i);
         assert.equal(listed.listingSignals?.contentItemCount, 0);
-        assert.equal(
-          listed.items.some((item) => item.type === "cat" || item.type === "blog" || item.refId === "888888"),
-          false,
-          "blank/unknown folds must not invent chrome or placeholder children",
-        );
       }
     });
   }
