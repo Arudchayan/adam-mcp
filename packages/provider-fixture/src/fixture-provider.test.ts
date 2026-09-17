@@ -288,7 +288,7 @@ describe("AT3 enrolled-tree search ranking", () => {
       }
       assert.equal(found.items.some((item) => item.type === "tst"), false);
       assert.equal(
-        found.items.some((item) => item.type === "sess" || item.type === "webr" || item.type === "htlm"),
+        found.items.some((item) => item.type === "webr" || item.type === "cat" || item.type === "impr"),
         false,
         `${query} must not invent absent types`,
       );

@@ -614,7 +614,7 @@ describe("BrowserAdamProvider with a memory session", () => {
         );
       }
       assert.equal(
-        found.items.some((item) => item.type === "sess" || item.type === "webr" || item.type === "tst"),
+        found.items.some((item) => item.type === "webr" || item.type === "tst" || item.type === "cat"),
         false,
         `${query} must not invent absent types`,
       );
