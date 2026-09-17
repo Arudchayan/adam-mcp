@@ -189,6 +189,33 @@ describe("listing classification", () => {
     assert.match(classified.notice ?? "", /blank content area/i);
     assert.equal(classified.signals.chromeOnly, false);
   });
+
+  it("does not treat leaked parseable links as ok when the content area is blank", () => {
+    const classified = classifyListing(
+      { ...base, dom: { itemRows: 0, emptyCopy: false, contentBlank: true } },
+      4,
+    );
+    assert.equal(classified.state, "unknown");
+    assert.equal(classified.signals.contentItemCount, 0);
+    assert.match(classified.notice ?? "", /blank content area/i);
+  });
+
+  it("does not treat leaked parseable links as ok on honest empty copy", () => {
+    const classified = classifyListing(
+      { ...base, text: "This folder is empty.", dom: { itemRows: 0, emptyCopy: true, contentBlank: false } },
+      2,
+    );
+    assert.equal(classified.state, "empty");
+    assert.equal(classified.signals.contentItemCount, 0);
+    assert.equal(classified.signals.emptyCopy, true);
+  });
+
+  it("keeps ok when parseable links exist without contradictory DOM evidence", () => {
+    const withRows = classifyListing({ ...base, dom: { itemRows: 2, emptyCopy: false } }, 2);
+    assert.equal(withRows.state, "ok");
+    const htmlOnly = classifyListing(base, 2);
+    assert.equal(htmlOnly.state, "ok");
+  });
 });
 
 describe("mergeListingProbes", () => {
@@ -914,6 +941,68 @@ describe("ADR 0005 listing honesty", () => {
     const listed = await chromeOnly.listChildren("100099", { type: "fold" });
     assert.deepEqual(listed.items, []);
     assert.equal(listed.listingState, "unknown");
+  });
+
+  it("blank folds stay unknown with zero children even when chrome links leak", async () => {
+    const blank = snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/900254",
+      "Notes",
+      `<nav class="il-mainbar"><a href="/go/cat/900032">ADAMtools</a></nav>
+<main><h1>Notes</h1><div id="il_center_col"></div></main>`,
+      "Notes ADAM Search Dashboard",
+    );
+    blank.dom = { itemRows: 0, emptyCopy: false, contentBlank: true };
+    blank.links = [
+      ...blank.links,
+      {
+        href: "https://adam.unibas.ch/go/cat/900032",
+        text: "ADAMtools",
+        inChrome: false,
+        inBreadcrumb: false,
+      },
+      {
+        href: "https://adam.unibas.ch/go/fold/888888",
+        text: "Placeholder folder",
+        inChrome: false,
+        inBreadcrumb: false,
+      },
+    ];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({ "https://adam.unibas.ch/go/fold/900254": blank }),
+    });
+    const listed = await provider.listChildren("900254", { type: "fold" });
+    assert.equal(listed.listingState, "unknown");
+    assert.deepEqual(listed.items, []);
+    assert.equal("totalHint" in listed, false);
+    assert.match(listed.notice ?? "", /blank content area/i);
+  });
+
+  it("empty-copy folds stay empty with zero children even when chrome links leak", async () => {
+    const empty = snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100020",
+      "04 - Exercises",
+      emptyFolderHtml,
+      "04 - Exercises This folder is empty Abmelden",
+    );
+    empty.dom = { itemRows: 0, emptyCopy: true, contentBlank: false };
+    empty.links = [
+      ...empty.links,
+      {
+        href: "https://adam.unibas.ch/go/fold/888888",
+        text: "Placeholder folder",
+        inChrome: false,
+        inBreadcrumb: false,
+      },
+    ];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({ "https://adam.unibas.ch/go/fold/100020": empty }),
+    });
+    const listed = await provider.listChildren("100020", { type: "fold" });
+    assert.equal(listed.listingState, "empty");
+    assert.deepEqual(listed.items, []);
+    assert.equal(listed.totalHint, 0);
   });
 
   it("parses ILIAS container item titles with parent ref_id cmdClass hrefs", async () => {

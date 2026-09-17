@@ -497,21 +497,25 @@ export const LISTING_ROWS_UNPARSED_NOTICE =
 export const LISTING_BLANK_CONTENT_NOTICE =
   "The folder view rendered a blank content area: no items and no empty message. It may be empty, or its contents may not be visible to this account. Do not claim it is empty or that nothing exists; open the ADAM URL to check.";
 
-/** ADR 0005: classify from DOM signals in extract, not from waits. First match wins. */
+/**
+ * ADR 0005/0007: classify from DOM signals first. Parsed link count must not
+ * promote chrome leaks into `ok` when the content area is blank, empty, or rowless.
+ */
 export function classifyListing(
   snapshot: PageSnapshot,
   keptCount: number,
 ): ListingClassification {
+  const hasDom = snapshot.dom !== undefined;
   const domRows = snapshot.dom?.itemRows ?? 0;
   const emptyCopy = isAdamEmptyContainerPage(snapshot) || snapshot.dom?.emptyCopy === true;
-  if (keptCount > 0) {
-    return {
-      state: "ok",
-      signals: { contentItemCount: keptCount, emptyCopy, chromeOnly: false },
-    };
-  }
   // Visible rows beat empty copy: a stray empty widget or frame must never hide content.
   if (domRows > 0) {
+    if (keptCount > 0) {
+      return {
+        state: "ok",
+        signals: { contentItemCount: keptCount, emptyCopy, chromeOnly: false },
+      };
+    }
     return {
       state: "unknown",
       signals: { contentItemCount: domRows, emptyCopy: false, chromeOnly: false },
@@ -532,11 +536,23 @@ export function classifyListing(
       notice: LISTING_BLANK_CONTENT_NOTICE,
     };
   }
+  // HTML fixtures without a DOM probe: parseable non-chrome links are the listing.
+  if (keptCount > 0 && !hasDom) {
+    return {
+      state: "ok",
+      signals: { contentItemCount: keptCount, emptyCopy, chromeOnly: false },
+    };
+  }
   return {
     state: "unknown",
     signals: { contentItemCount: 0, emptyCopy: false, chromeOnly: true },
     notice: LISTING_UNKNOWN_NOTICE,
   };
+}
+
+/** Empty/unknown listings never carry children — zero fake trees (ADR 0005/0007). */
+export function listingItemsOrEmpty<T>(items: T[], classified: ListingClassification): T[] {
+  return classified.state === "ok" ? items : [];
 }
 
 /** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). */

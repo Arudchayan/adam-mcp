@@ -87,16 +87,16 @@ type ListingItem = {
 };
 
 /**
- * B10 defense in depth: listing surfaces never carry denied object types (tst)
- * or exercise units, including nested course child summaries. Provider-reported
- * counts are intentionally left untouched: the facade cannot know whether a
- * leaky provider counted the withheld rows (ADR 0006).
+ * B10 + listing honesty: drop denied types/units, and subtract leaked children
+ * on empty/unknown listings (ADR 0005/0006/0007). Denied-row totals stay as the
+ * provider reported them; empty/unknown honesty never invents a child tree.
  */
 export function sanitizeListingItems<T extends ListingItem>(page: Paginated<T>): Paginated<T> {
+  const honest = subtractUntrustworthyListingItems(page);
   const items: T[] = [];
   let dropped = 0;
-  let changed = false;
-  for (const item of page.items) {
+  let changed = honest !== page;
+  for (const item of honest.items) {
     if (isDeniedObjectType(item.type)) {
       dropped += 1;
       continue;
@@ -110,7 +110,30 @@ export function sanitizeListingItems<T extends ListingItem>(page: Paginated<T>):
   if (dropped === 0 && !changed) {
     return page;
   }
-  return { ...page, items };
+  return { ...honest, items };
+}
+
+/**
+ * ADR 0005/0006/0007: subtract leaked children on empty/unknown listings.
+ * Do not invent a tree, and do not rewrite listingState. Unknown omits totalHint.
+ */
+function subtractUntrustworthyListingItems<T extends ListingItem>(page: Paginated<T>): Paginated<T> {
+  if (page.items.length === 0) {
+    return page;
+  }
+  if (page.listingState === "empty") {
+    return { ...page, items: [], totalHint: 0 };
+  }
+  if (page.listingState === "unknown" && unknownListingHasNoTrustworthyItems(page)) {
+    const { totalHint: _dropped, ...rest } = page;
+    return { ...rest, items: [] };
+  }
+  return page;
+}
+
+function unknownListingHasNoTrustworthyItems<T>(page: Paginated<T>): boolean {
+  const signals = page.listingSignals;
+  return !signals || signals.contentItemCount === 0 || signals.chromeOnly === true;
 }
 
 /** Strip units and denied nested children recursively from one listing row. */

@@ -32,6 +32,7 @@ import {
   extractCatalog,
   exerciseDeadlineFromPage,
   classifyListing,
+  listingItemsOrEmpty,
   isAdamFailurePage,
   isLoggedInSnapshot,
   isLoginSnapshot,
@@ -133,8 +134,8 @@ export class BrowserAdamProvider implements AdamProvider {
     const snapshot = await this.openAuthorized(this.origin);
     const catalog = extractCatalog(snapshot, now());
     const courses = uniqueByRef(catalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type)));
-    const page = paginate(courses, options);
     const classified = classifyListing(snapshot, courses.length);
+    const page = paginate(listingItemsOrEmpty(courses, classified), options);
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
@@ -150,7 +151,8 @@ export class BrowserAdamProvider implements AdamProvider {
     const children = uniqueByRef(
       catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type)),
     ).slice(0, MAX_COURSE_CHILDREN);
-    return { ...course, children };
+    const classified = classifyListing(snapshot, children.length);
+    return { ...course, children: listingItemsOrEmpty(children, classified) };
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -159,8 +161,8 @@ export class BrowserAdamProvider implements AdamProvider {
     const catalog = extractCatalog(snapshot, now());
     this.rememberTypes(catalog);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
-    const page = paginate(children, options);
     const classified = classifyListing(snapshot, children.length);
+    const page = paginate(listingItemsOrEmpty(children, classified), options);
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
@@ -193,12 +195,10 @@ export class BrowserAdamProvider implements AdamProvider {
     const direct = catalog.files.filter((item) => item.refId !== refId);
     const nested = catalog.objects.filter((item): item is FileObject => item.type === "file");
     const files = direct.length > 0 ? direct : nested;
-    const page = paginate(files, options);
     // Files filtered to zero while the container list hydrated is complete + [] (ADR 0005).
     const hydrated = catalog.objects.filter((item) => item.refId !== refId).length;
-    const classified = files.length > 0 || hydrated > 0
-      ? { state: "ok" as const, signals: classifyListing(snapshot, hydrated).signals, notice: undefined as string | undefined }
-      : classifyListing(snapshot, 0);
+    const classified = classifyListing(snapshot, hydrated);
+    const page = paginate(listingItemsOrEmpty(files, classified), options);
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 

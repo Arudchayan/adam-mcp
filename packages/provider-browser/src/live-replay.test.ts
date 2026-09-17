@@ -66,7 +66,8 @@ describe("live fixture replay (scrubbed)", () => {
         assert.ok(listed.items.length >= 1, "course lists child objects");
       } else {
         assert.equal(listed.listingState, "unknown");
-        assert.equal(listed.items.length, 0);
+        assert.deepEqual(listed.items, []);
+        assert.equal("totalHint" in listed, false);
         assert.match(listed.notice ?? "", /blank content area/i);
         assert.equal(listed.listingSignals?.contentItemCount, 0);
       }
