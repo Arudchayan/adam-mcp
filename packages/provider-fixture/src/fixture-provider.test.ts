@@ -264,7 +264,39 @@ describe("AT3 enrolled-tree search ranking", () => {
     const blocked = await provider.search("BLOCKED EXAM CONTENT");
     assert.equal(blocked.items.length, 0);
   });
+
+  it("pdf / PDF / .pdf return type=file hits from enrolled PDF files", async () => {
+    assert.equal(fixtureCatalog["100011"]?.object.type, "file");
+    assert.match(fixtureCatalog["100011"]?.object.title ?? "", /\.pdf$/i);
+
+    for (const query of ["pdf", "PDF", ".pdf"]) {
+      const found = await provider.search(query);
+      assert.ok(
+        found.items.some((item) => item.type === "file"),
+        `${query} must return at least one type=file hit`,
+      );
+      assert.ok(
+        found.items.some((item) => item.refId === "100011" && item.type === "file"),
+        `${query} must surface enrolled 00_Overview.pdf`,
+      );
+      const ids = found.items.map((item) => item.refId);
+      if (ids.includes("100001")) {
+        assert.ok(
+          (ids.indexOf("100011") as number) < (ids.indexOf("100001") as number),
+          `${query}: file title/extension rank before course page-body`,
+        );
+      }
+      assert.equal(found.items.some((item) => item.type === "tst"), false);
+      assert.equal(
+        found.items.some((item) => item.type === "webr" || item.type === "cat" || item.type === "impr"),
+        false,
+        `${query} must not invent absent types`,
+      );
+      assert.equal(found.items.some((item) => item.refId === CATALOG_ONLY_COURSE_ID), false);
+    }
+  });
 });
+
 
 describe("AT4 adam_list_news reliability", () => {
   const provider = createFixtureProvider();

@@ -29,7 +29,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 | Journey | User need | MCP today | Living checklist |
 | --- | --- | --- | --- |
 | Study week | Courses → folders/pages → new files → readable text | partial–strong | Harden browser scrape; `what_changed` fidelity; empty-folder ≠ no deadlines |
-| Find materials | Title/keyword in enrolled tree; open file/page/link | partial→stronger (AT3) | Title-before-body ranking; enrolled-tree only; cite `https://adam.unibas.ch/go/...`; never claim global search |
+| Find materials | Title/keyword in enrolled tree; open file/page/link | partial→stronger (AT3) | Title-before-body ranking; `pdf`/`.pdf` → `type=file` when files exist; enrolled-tree only; cite `https://adam.unibas.ch/go/...`; never claim global search |
 | Deadlines | Exercises + dates across courses | partial→stronger (AT6) | Provenance honesty; unlabeled page≠exc; dedup exc>calendar>page; no invented dates |
 
 ### P1 — expand reads

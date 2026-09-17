@@ -5,6 +5,7 @@ import {
   isDeniedObjectType,
   MAX_PAGE_CHARS,
   paginate,
+  searchTitleHit,
   syntheticPdfWithText,
   throwIfCancelled,
   withListingState,
@@ -310,8 +311,8 @@ function rankEnrolledSearch(needle: string): AdamObject[] {
 
     const object = record.object;
     if (!seen.has(object.refId)) {
-      const titleHit = object.title.toLowerCase().includes(needle);
-      const pageHit = (record.page?.text ?? "").toLowerCase().includes(needle);
+    const titleHit = searchTitleHit(needle, object);
+    const pageHit = (record.page?.text ?? "").toLowerCase().includes(needle);
       if (titleHit || pageHit) {
         seen.add(object.refId);
         matches.push({ object, rank: titleHit ? 0 : 1 });
