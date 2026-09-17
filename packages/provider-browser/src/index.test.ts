@@ -530,6 +530,97 @@ describe("BrowserAdamProvider with a memory session", () => {
     assert.equal(exam.items.some((item) => item.refId === "100011"), false);
   });
 
+  it("search pdf/PDF/.pdf returns type=file when files exist without pdf in the title", async () => {
+    const dashboardNoFileHtml = `
+<nav aria-label="Hauptnavigationsleiste"><a href="/go/root/1">Magazin</a></nav>
+<nav aria-label="Brotkrumen"><a href="/go/root/1">ADAM</a></nav>
+<main>
+  <h1>Schreibtisch</h1>
+  <a href="/go/crs/100001">00000-01 – Synthetic Multimedia Seminar</a>
+  <a href="/logout.php">Abmelden</a>
+</main>
+`;
+    const notesFolderHtml = `
+<nav aria-label="Brotkrumen">
+  <a href="/go/crs/100001">00000-01 – Synthetic Multimedia Seminar</a>
+</nav>
+<main>
+  <h1>03 - Course &amp; Notes</h1>
+  <a href="/go/file/100011">Skript Woche 1</a>
+  <span>PDF document, 1.6 MB</span>
+</main>
+`;
+    const coursePdfMentionHtml = `
+<nav aria-label="Brotkrumen">
+  <a href="/go/root/1">ADAM</a>
+</nav>
+<main>
+  <h1>00000-01 – Synthetic Multimedia Seminar</h1>
+  <p>Assigned reading is a PDF in Course &amp; Notes.</p>
+  <a href="/go/fold/100010">03 - Course &amp; Notes</a>
+  <a href="/go/fold/100020">04 - Exercises</a>
+  <a href="/logout.php">Abmelden</a>
+</main>
+`;
+    const searchProvider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        home: snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardNoFileHtml,
+          "Schreibtisch 00000-01 Synthetic Multimedia Seminar Abmelden",
+        ),
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardNoFileHtml,
+          "Schreibtisch 00000-01 Synthetic Multimedia Seminar Abmelden",
+        ),
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100001",
+          "00000-01 – Synthetic Multimedia Seminar",
+          coursePdfMentionHtml,
+          "00000-01 Synthetic Multimedia Seminar Assigned reading is a PDF in Course Notes 03 - Course & Notes 04 - Exercises Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "03 - Course & Notes",
+          notesFolderHtml,
+          "03 - Course & Notes Skript Woche 1 PDF document 1.6 MB Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+      }),
+    });
+
+    for (const query of ["pdf", "PDF", ".pdf"]) {
+      const found = await searchProvider.search(query);
+      assert.ok(
+        found.items.some((item) => item.refId === "100011" && item.type === "file"),
+        `${query} must return the enrolled file as type=file`,
+      );
+      const ids = found.items.map((item) => item.refId);
+      if (ids.includes("100001") || ids.includes("100010")) {
+        const fileIdx = ids.indexOf("100011");
+        const pageIdx = [ids.indexOf("100001"), ids.indexOf("100010")].filter((idx) => idx >= 0);
+        assert.ok(
+          pageIdx.every((idx) => fileIdx < idx),
+          `${query}: file hits rank before crs/fold page-body`,
+        );
+      }
+      assert.equal(
+        found.items.some((item) => item.type === "sess" || item.type === "webr" || item.type === "tst"),
+        false,
+        `${query} must not invent absent types`,
+      );
+    }
+  });
+
   it("fuses dates from enrolled course pages and keeps empty folders distinct", async () => {
     const calendar = await provider.listCalendar();
     const exam = calendar.items.find((item) => /12 January 2027/i.test(item.title ?? ""));

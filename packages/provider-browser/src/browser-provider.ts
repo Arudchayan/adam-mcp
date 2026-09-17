@@ -9,6 +9,7 @@ import {
   paginate,
   preferCalendarEvents,
   parseAdamRef,
+  searchTitleHit,
   throwIfCancelled,
   withListingState,
   type AdamObject,
@@ -382,21 +383,24 @@ export class BrowserAdamProvider implements AdamProvider {
     const titleMatches: AdamObject[] = [];
     const bodyMatches: AdamObject[] = [];
     for (const { catalog } of walk.pages) {
+      const filesByRef = new Map(catalog.files.map((file) => [file.refId, file]));
       if (
         catalog.current &&
         !isDeniedObjectType(catalog.current.type) &&
         catalog.current.type !== "root" &&
         catalog.text.toLowerCase().includes(needle)
       ) {
-        const titleHit = catalog.current.title.toLowerCase().includes(needle);
-        (titleHit ? titleMatches : bodyMatches).push(catalog.current);
+        const current = filesByRef.get(catalog.current.refId) ?? catalog.current;
+        const titleHit = searchTitleHit(needle, current);
+        (titleHit ? titleMatches : bodyMatches).push(current);
       }
       for (const item of catalog.objects) {
         if (isDeniedObjectType(item.type)) {
           continue;
         }
-        if (item.title.toLowerCase().includes(needle)) {
-          titleMatches.push(item);
+        const candidate = filesByRef.get(item.refId) ?? item;
+        if (searchTitleHit(needle, candidate)) {
+          titleMatches.push(candidate);
         }
       }
     }
