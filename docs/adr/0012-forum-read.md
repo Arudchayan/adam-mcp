@@ -16,9 +16,11 @@ Domain live pass 2026-09-14 (tip 5099529) sighted `frm` via enrolled `list_child
 5. **Fixture.** Labeled synthetic `frm` only for CI (AT5 style). Never invent unlabeled live-looking threads.
 6. **Listing.** `list_children` may surface `type: "frm"` when a child is a forum. Do not expand `sess` / `webr` / `exc`.
 7. **SOAP/HTML.** Stay fail-closed for `getForum`.
+8. **Browser live HTML.** Parse thread summaries from the forum page markup students see (`thr_pk`, `thread_ids[]`, `viewThread` / `goto.php?target=frm_{refId}_{threadId}`). Parse post bodies from `ilFrmPostContent` when `threadId` is set. Missing or unparseable HTML → honest empty `threads`, or fail-closed posts (`not_found`, never invent bodies). Do not follow `showUser` links.
 
 ## Consequences
 
 - First-party surface stays small: one resource template + one read tool.
 - Post bodies stay behind the same interim `confirm: true` schema gate as page/extract (not OS permission, not elicitation).
+- Live `adam_get_forum` / `adam://frm` thread lists can match the UI when the listing HTML contains thread rows; fixture still proves the full posts shape.
 - `sess` / `webr` remain wait-for-inventory; `exc` unchanged beyond existing AT5 path.

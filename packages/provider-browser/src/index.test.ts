@@ -10,6 +10,7 @@ import {
   WALK_PARTIAL_NOTICE,
 } from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
+import { resolveForumThreadUrl } from "./forum-parse.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
@@ -95,6 +96,48 @@ const exerciseHtml = `
   <h1>Exercise 1 – Retrieval summary</h1>
   <p>Deadline: 22 September 2026, 23:59.</p>
   <p>Write a one-page retrieval summary. Do not submit through this connector.</p>
+  <a href="/logout.php">Abmelden</a>
+</main>
+`;
+
+const forumListingHtml = `
+<nav aria-label="Brotkrumen">
+  <a href="/go/crs/100001">00000-01 – Synthetic Multimedia Seminar</a>
+</nav>
+<main>
+  <h1>Course forum</h1>
+  <table class="table table-striped" id="frm_tt_sho_100040">
+    <tbody>
+      <tr class="tblrow1">
+        <td class="std small"><input type="checkbox" name="thread_ids[]" value="200001"></td>
+        <td class="std small">Office hours</td>
+        <td class="std small"><a href="/ilias.php?baseClass=ilrepositorygui&amp;cmdClass=ilobjforumgui&amp;cmd=showUser&amp;ref_id=100040&amp;thr_pk=200001&amp;user=5">Lecturer Name</a></td>
+        <td class="std small">2</td>
+      </tr>
+    </tbody>
+  </table>
+  <a href="/logout.php">Abmelden</a>
+</main>
+`;
+
+const forumThreadHtml = `
+<nav aria-label="Brotkrumen">
+  <a href="/go/frm/100040">Course forum</a>
+</nav>
+<main>
+  <h1>Office hours</h1>
+  <ul id="ilFrmPostList">
+    <li class="ilFrmPostRow ilFrmPost-level-1">
+      <div class="ilFrmPostContentContainer">
+        <a id="300001"></a>
+        <div class="ilFrmPostHeader">
+          <span class="small">Lecturer Name | 1 Sep 2026</span>
+          <div class="ilFrmPostTitle">Office hours</div>
+        </div>
+        <div class="ilFrmPostContent">Please ask questions here.</div>
+      </div>
+    </li>
+  </ul>
   <a href="/logout.php">Abmelden</a>
 </main>
 `;
@@ -1440,5 +1483,112 @@ describe("Phase B getForum browser fail-closed", () => {
       assert.match(error.message, /fold/i);
       return true;
     });
+  });
+
+  it("fail-closes a non-frm client type hint before returning live threads or posts", async () => {
+    const listing = snapshotFromHtml(
+      "https://adam.unibas.ch/go/frm/100040",
+      "Course forum",
+      forumListingHtml,
+      "Course forum Office hours Abmelden",
+    );
+    const hardened = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100040": listing,
+      }),
+    });
+    await assert.rejects(
+      () => hardened.getForum("100040", { type: "fold", threadId: "200001" }),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "unsupported_type");
+        assert.match(error.message, /type hint|not frm/i);
+        return true;
+      },
+    );
+  });
+
+  it("returns UI thread summaries when listing HTML parses", async () => {
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100040": snapshotFromHtml(
+          "https://adam.unibas.ch/go/frm/100040",
+          "Course forum",
+          forumListingHtml,
+          "Course forum Office hours Welcome thread Abmelden",
+        ),
+      }),
+    });
+    const forum = await provider.getForum("100040");
+    assert.equal(forum.type, "frm");
+    assert.equal(forum.selectedThread, undefined);
+    assert.equal(forum.threads.some((thread) => thread.threadId === "200001" && thread.title === "Office hours"), true);
+    assert.equal(forum.threads.some((thread) => "posts" in thread), false);
+  });
+
+  it("returns honest empty threads when forum HTML has no thread markup", async () => {
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100040": snapshotFromHtml(
+          "https://adam.unibas.ch/go/frm/100040",
+          "Course forum",
+          "<main><h1>Course forum</h1><p>No topics have been created yet.</p><a href=\"/logout.php\">Abmelden</a></main>",
+          "Course forum No topics have been created yet Abmelden",
+        ),
+      }),
+    });
+    const forum = await provider.getForum("100040");
+    assert.equal(forum.type, "frm");
+    assert.deepEqual(forum.threads, []);
+    assert.equal(forum.selectedThread, undefined);
+  });
+
+  it("fail-closes threadId when post HTML is missing instead of inventing bodies", async () => {
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100040": snapshotFromHtml(
+          "https://adam.unibas.ch/go/frm/100040",
+          "Course forum",
+          forumListingHtml,
+          "Course forum Office hours Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => provider.getForum("100040", { threadId: "200001" }), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "not_found");
+      assert.match(error.message, /refus(e|ing) to invent/i);
+      return true;
+    });
+  });
+
+  it("returns thread posts when viewThread HTML parses", async () => {
+    const threadUrl = resolveForumThreadUrl("https://adam.unibas.ch", "100040", "200001");
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/frm/100040": snapshotFromHtml(
+          "https://adam.unibas.ch/go/frm/100040",
+          "Course forum",
+          forumListingHtml,
+          "Course forum Office hours Abmelden",
+        ),
+        [threadUrl]: snapshotFromHtml(
+          threadUrl,
+          "Office hours",
+          forumThreadHtml,
+          "Office hours Please ask questions here When is the next session Abmelden",
+        ),
+      }),
+    });
+    const forum = await provider.getForum("100040", { threadId: "200001" });
+    assert.equal(forum.selectedThread?.threadId, "200001");
+    assert.ok((forum.selectedThread?.posts.length ?? 0) >= 1);
+    assert.match(forum.selectedThread?.posts[0]?.body ?? "", /Please ask questions here/);
+    assert.equal(forum.threads.every((thread) => thread.threadId === "200001"), true);
   });
 });
