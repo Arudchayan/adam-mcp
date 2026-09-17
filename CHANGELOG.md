@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- After `confirm:true`, `adam_extract_file_text` never returns silent empty text; empty/whitespace or cap-window-empty extracts fail closed with a reason (ADR 0014)
+
 ## [0.2.0] - 2026-09-16
 
 ### Added

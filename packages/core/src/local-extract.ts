@@ -68,6 +68,32 @@ function extractPdfLiterals(bytes: Uint8Array): string {
   return chunks.join(" ");
 }
 
+export function extractPagesHaveText(pages: Array<{ text: string }>): boolean {
+  return pages.some((page) => page.text.trim().length > 0);
+}
+
+/** After confirm:true, never return a successful extract with a blank body. */
+export function assertExtractHasText(
+  extract: Pick<FileExtract, "pages" | "truncated">,
+  pagesLimit: number = DEFAULT_EXTRACT_PAGES,
+): void {
+  if (extractPagesHaveText(extract.pages)) {
+    return;
+  }
+  if (extract.truncated) {
+    throw new AdamError(
+      "provider_unavailable",
+      `Extract produced no text within the ${pagesLimit}-page / ${MAX_EXTRACT_CHARS}-character cap. Open the file in ADAM instead.`,
+      false,
+    );
+  }
+  throw new AdamError(
+    "unsupported_type",
+    "This file has no extractable text. Open it in ADAM instead.",
+    false,
+  );
+}
+
 export async function extractLocalFileText(
   file: FileObject,
   bytes: Uint8Array,
@@ -87,14 +113,7 @@ export async function extractLocalFileText(
   } else if (type === "application/json") {
     pages = [{ page: 1, text: Buffer.from(bytes).toString("utf8") }];
   } else if (isPdf(bytes, type)) {
-    const extracted = extractPdfLiterals(bytes);
-    if (!extracted.trim()) {
-      throw new AdamError(
-        "unsupported_type",
-        "This PDF has no extractable text (likely a scan). Open it in ADAM instead.",
-      );
-    }
-    pages = [{ page: 1, text: extracted }];
+    pages = [{ page: 1, text: extractPdfLiterals(bytes) }];
   } else {
     throw new AdamError(
       "unsupported_type",
@@ -118,6 +137,17 @@ export async function extractLocalFileText(
     }
     bounded.push({ page: page.page, text });
     used += text.length;
+  }
+
+  if (!extractPagesHaveText(bounded)) {
+    if (!truncated && isPdf(bytes, type)) {
+      throw new AdamError(
+        "unsupported_type",
+        "This PDF has no extractable text (likely a scan). Open it in ADAM instead.",
+        false,
+      );
+    }
+    assertExtractHasText({ pages: bounded, truncated }, pagesLimit);
   }
 
   return {

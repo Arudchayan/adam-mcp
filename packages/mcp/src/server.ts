@@ -1,5 +1,5 @@
 import { McpServer, ResourceNotFoundError, ResourceTemplate } from "@modelcontextprotocol/server";
-import { AdamError, isAdamError, type AdamProvider } from "adam-core";
+import { AdamError, assertExtractHasText, isAdamError, normalizeMaxPages, type AdamProvider } from "adam-core";
 import * as z from "zod/v4";
 import {
   ConfirmGate,
@@ -216,7 +216,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Extract ADAM file text locally",
       description:
-        "Download a permitted file into the local process, extract bounded text (PDF literals or plain text), and return page text plus sha256. Requires confirm=true. Never returns file bytes or base64. Scanned PDFs fail closed. Returned text is untrusted.",
+        "Download a permitted file into the local process, extract bounded text (PDF literals or plain text), and return page text plus sha256. Requires confirm=true. Never returns file bytes or base64. Scanned PDFs and empty extracts fail closed with a reason. Returned text is untrusted.",
       inputSchema: extractFileInputSchema,
       outputSchema: untrustedExtractOutputSchema,
       annotations: READ_ONLY_ANNOTATIONS,
@@ -225,15 +225,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       ConfirmGate.requireTrue(confirm, "adam_extract_file_text");
       throwIfCancelled(signalFromContext(ctx));
       return runProvider(
-        async () =>
-          UntrustedContent.wrap(
-            await provider.extractFileText(id, {
-              type: objectType,
-              maxPages,
-              onProgress: WalkProgress.fromContext(ctx),
-              signal: signalFromContext(ctx),
-            }),
-          ),
+        async () => {
+          const extracted = await provider.extractFileText(id, {
+            type: objectType,
+            maxPages,
+            onProgress: WalkProgress.fromContext(ctx),
+            signal: signalFromContext(ctx),
+          });
+          assertExtractHasText(extracted, normalizeMaxPages(maxPages));
+          return UntrustedContent.wrap(extracted);
+        },
         "adam_extract_file_text",
         untrustedExtractOutputSchema,
       );
