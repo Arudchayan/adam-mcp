@@ -29,6 +29,29 @@ const listingHtml = `
 </main>
 `;
 
+/** Live ADAM ILIAS 10 showThreadsObject: UI Item listing, not the legacy table. */
+const liveItemListingHtml = `
+<nav aria-label="Brotkrumen"><a href="/go/crs/100001">Course</a></nav>
+<main>
+  <h1>Course forum</h1>
+  <div class="il-panel-listing-std-container">
+    <h2>Thread Overview</h2>
+    <div class="il-item-group">
+      <div class="il-item il-std-item">
+        <h4 class="il-item-title">
+          <a href="./ilias.php?baseClass=ilrepositorygui&amp;cmdClass=ilobjforumgui&amp;cmd=viewThread&amp;ref_id=100040&amp;thr_pk=200001&amp;page=0">Office hours</a>
+        </h4>
+        <div class="il-item-properties">
+          <span class="il-item-property-name">Author</span>
+          <span class="il-item-property-value">Lecturer Name</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <a href="/logout.php">Abmelden</a>
+</main>
+`;
+
 const threadHtml = `
 <nav aria-label="Brotkrumen"><a href="/go/frm/100040">Course forum</a></nav>
 <main>
@@ -77,6 +100,20 @@ describe("parseForumPage", () => {
       "showUser leftover thr_pk must not become a thread title",
     );
     assert.equal(parsed.posts.length, 0);
+  });
+
+  it("FAIL if UI-visible il-item thread yields empty threads (live item listing)", () => {
+    const parsed = parseForumPage(
+      snapshotFromHtml(
+        "https://adam.unibas.ch/go/frm/100040",
+        "Course forum",
+        liveItemListingHtml,
+        "Course forum Thread Overview Office hours Lecturer Name Abmelden",
+      ),
+    );
+    assert.notEqual(parsed.threads.length, 0, "UI thread visible, get_forum was empty");
+    assert.equal(parsed.threads.some((thread) => thread.threadId === "200001" && thread.title === "Office hours"), true);
+    assert.equal(parsed.posts.length, 0, "listing must not invent post bodies");
   });
 
   it("returns honest empty threads when HTML has no thr_pk markup", () => {

@@ -10,7 +10,7 @@ import {
   WALK_PARTIAL_NOTICE,
 } from "./browser-provider.ts";
 import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
-import { resolveForumThreadUrl } from "./forum-parse.ts";
+import { parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
@@ -106,16 +106,16 @@ const forumListingHtml = `
 </nav>
 <main>
   <h1>Course forum</h1>
-  <table class="table table-striped" id="frm_tt_sho_100040">
-    <tbody>
-      <tr class="tblrow1">
-        <td class="std small"><input type="checkbox" name="thread_ids[]" value="200001"></td>
-        <td class="std small">Office hours</td>
-        <td class="std small"><a href="/ilias.php?baseClass=ilrepositorygui&amp;cmdClass=ilobjforumgui&amp;cmd=showUser&amp;ref_id=100040&amp;thr_pk=200001&amp;user=5">Lecturer Name</a></td>
-        <td class="std small">2</td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="il-panel-listing-std-container">
+    <h2>Thread Overview</h2>
+    <div class="il-item-group">
+      <div class="il-item il-std-item">
+        <h4 class="il-item-title">
+          <a href="./ilias.php?baseClass=ilrepositorygui&amp;cmdClass=ilobjforumgui&amp;cmd=viewThread&amp;ref_id=100040&amp;thr_pk=200001&amp;page=0">Office hours</a>
+        </h4>
+      </div>
+    </div>
+  </div>
   <a href="/logout.php">Abmelden</a>
 </main>
 `;
@@ -1524,6 +1524,7 @@ describe("Phase B getForum browser fail-closed", () => {
     const forum = await provider.getForum("100040");
     assert.equal(forum.type, "frm");
     assert.equal(forum.selectedThread, undefined);
+    assert.notEqual(forum.threads.length, 0, "UI thread visible, get_forum was empty");
     assert.equal(forum.threads.some((thread) => thread.threadId === "200001" && thread.title === "Office hours"), true);
     assert.equal(forum.threads.some((thread) => "posts" in thread), false);
   });
@@ -1567,16 +1568,22 @@ describe("Phase B getForum browser fail-closed", () => {
   });
 
   it("returns thread posts when viewThread HTML parses", async () => {
-    const threadUrl = resolveForumThreadUrl("https://adam.unibas.ch", "100040", "200001");
+    const listing = snapshotFromHtml(
+      "https://adam.unibas.ch/go/frm/100040",
+      "Course forum",
+      forumListingHtml,
+      "Course forum Office hours Abmelden",
+    );
+    const threadUrl = resolveForumThreadUrl(
+      "https://adam.unibas.ch",
+      "100040",
+      "200001",
+      parseForumPage(listing).threadHrefs["200001"],
+    );
     const provider = createBrowserProvider({
       origin: "https://adam.unibas.ch",
       session: createMemorySession({
-        "https://adam.unibas.ch/go/frm/100040": snapshotFromHtml(
-          "https://adam.unibas.ch/go/frm/100040",
-          "Course forum",
-          forumListingHtml,
-          "Course forum Office hours Abmelden",
-        ),
+        "https://adam.unibas.ch/go/frm/100040": listing,
         [threadUrl]: snapshotFromHtml(
           threadUrl,
           "Office hours",

@@ -20,6 +20,10 @@ export function parseForumPage(snapshot: PageSnapshot): ParsedForum {
   const threadHrefs: Record<string, string> = {};
   const threads = new Map<string, ForumThreadSummary>();
 
+  // Live ADAM (ILIAS 10) renders thread overview as UI Item listing, not the
+  // legacy topic table. Item titles first so a visible UI thread cannot be
+  // dropped as empty meta.
+  mergeThread(threads, threadHrefs, threadsFromItemTitles(html));
   mergeThread(threads, threadHrefs, threadsFromLinks(snapshot.links ?? []));
   mergeThread(threads, threadHrefs, threadsFromHtmlLinks(html));
   mergeThread(threads, threadHrefs, threadsFromTableRows(html));
@@ -86,13 +90,37 @@ function isThreadViewHref(href: string): boolean {
   if (/cmd=(?:create|merge|move|delete|edit|print|mark|save|add|reply)/.test(decoded)) {
     return false;
   }
-  if (/[?&#]thr_pk=\d+/.test(decoded) && /cmd=(?:viewthread|showthread)/.test(decoded)) {
+  if (
+    /[?&#]thr_pk=\d+/.test(decoded) &&
+    /(?:cmd=|cmd\[[^\]]*]=)(?:viewthread|showthread)(?:object)?\b/.test(decoded)
+  ) {
     return true;
   }
   if (/(?:[?&]target=|\/goto\.php\/)frm_\d+_\d+/.test(decoded)) {
     return true;
   }
   return /[?&#]thr_pk=\d+/.test(decoded) && !/cmd=/.test(decoded);
+}
+
+/** ILIAS 10 showThreadsObject: panel listing of il-item / il-item-title links. */
+function threadsFromItemTitles(html: string): Array<ForumThreadSummary & { href?: string }> {
+  const found: Array<ForumThreadSummary & { href?: string }> = [];
+  const titleBlocks = [
+    ...extractClassBlocks(html, "il-item-title"),
+    ...extractClassBlocks(html, "c-item__title"),
+  ];
+  for (const block of titleBlocks) {
+    const href = block.match(/<a\b[^>]*href=["']([^"']+)["']/i)?.[1];
+    if (!href) {
+      continue;
+    }
+    const title = cleanTitle(stripTags(block));
+    const parsed = threadFromHref(href, title);
+    if (parsed) {
+      found.push(parsed);
+    }
+  }
+  return found;
 }
 
 function threadsFromLinks(links: SnapshotLink[]): Array<ForumThreadSummary & { href?: string }> {
@@ -280,7 +308,10 @@ function authorFromHeader(header: string): string | undefined {
 
 function extractClassBlocks(html: string, className: string): string[] {
   const blocks: string[] = [];
-  const open = new RegExp(`<(div|li|article|span)\\b([^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*)>`, "gi");
+  const open = new RegExp(
+    `<(div|li|article|span|h2|h3|h4)\\b([^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*)>`,
+    "gi",
+  );
   for (const match of html.matchAll(open)) {
     const tag = match[1];
     const start = (match.index ?? 0) + match[0].length;
