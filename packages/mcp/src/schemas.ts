@@ -280,5 +280,6 @@ export const sessionStatusOutputSchema = z
     reason: z.enum(["signed-in", "login-required", "unknown"]).optional(),
     message: z.string().optional(),
     checkedAt: z.string().optional(),
+    holderPid: z.number().int().nullable().optional(),
   })
   .passthrough();

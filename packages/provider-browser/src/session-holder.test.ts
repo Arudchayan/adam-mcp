@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { AdamError } from "adam-core";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import {
+  boundHolderPid,
   clearHolderFiles,
   devToolsActivePortPath,
   holderRecordPath,
@@ -76,6 +77,7 @@ describe("session holder records", () => {
         const live = await holderStatus(profileDir);
         assert.equal(live.running, true);
         assert.equal(live.record?.pid, child.pid);
+        assert.equal(boundHolderPid(live), child.pid);
         assert.equal(isProcessAlive(child.pid!), true);
       } finally {
         child.kill();
@@ -97,6 +99,7 @@ describe("session holder records", () => {
       );
       const stale = await holderStatus(profileDir);
       assert.equal(stale.running, false);
+      assert.equal(boundHolderPid(stale), undefined);
       assert.equal(await readHolderRecord(profileDir), undefined);
     } finally {
       await rm(profileDir, { recursive: true, force: true });
@@ -270,6 +273,7 @@ describe("session holder records", () => {
       assert.equal(stopped, false);
       assert.equal(isProcessAlive(stranger.pid!), true);
       assert.equal(await readHolderRecord(profileDir), undefined);
+      assert.equal(boundHolderPid(await holderStatus(profileDir)), undefined);
       // Identity still matches the live stranger — we must not have signaled it.
       assert.deepEqual(readProcessIdentity(stranger.pid!), identity);
     } finally {
@@ -289,6 +293,7 @@ describe("headless session contract", () => {
       assert.equal(status.loggedIn, false);
       assert.equal(status.reason, "login-required");
       assert.match(status.message ?? "", /adam-mcp login/);
+      assert.equal(status.holderPid, null);
       assert.equal(await session.exportSessionState(), undefined);
       await session.close();
     } finally {
@@ -304,8 +309,102 @@ describe("headless session contract", () => {
       const status = await session.status();
       assert.equal(status.loggedIn, false);
       assert.equal(status.reason, "login-required");
+      assert.equal(status.holderPid, null);
       await session.close();
     } finally {
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("holderPid honesty", () => {
+  it("status reports non-null holderPid matching the bound live holder", async () => {
+    const profileDir = await tempProfile();
+    const child = keepAlive();
+    try {
+      const record = await writeBoundRecord(profileDir, child);
+      const holder = await holderStatus(profileDir);
+      assert.equal(holder.running, true);
+      assert.equal(boundHolderPid(holder), record.pid);
+      assert.equal(boundHolderPid(holder), child.pid);
+
+      const session = createPlaywrightSession({ profileDir, origin: "https://adam.unibas.ch" });
+      const status = await session.status();
+      assert.notEqual(status.holderPid, null);
+      assert.equal(status.holderPid, child.pid);
+      assert.equal(status.holderPid, record.pid);
+      await session.close();
+    } finally {
+      child.kill();
+      await clearHolderFiles(profileDir);
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  it("status reports null holderPid for a dead holder without claiming it is alive", async () => {
+    const profileDir = await tempProfile();
+    try {
+      await writeFile(
+        holderRecordPath(profileDir),
+        JSON.stringify({
+          version: 2,
+          pid: 999_999_999,
+          generation: "dead",
+          pidStartTime: "0",
+          exe: "/nonexistent",
+          startedAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString(),
+          origin: "https://adam.unibas.ch",
+        } satisfies HolderRecord),
+        "utf8",
+      );
+      const holder = await holderStatus(profileDir);
+      assert.equal(holder.running, false);
+      assert.equal(boundHolderPid(holder), undefined);
+
+      const session = createPlaywrightSession({ profileDir, origin: "https://adam.unibas.ch" });
+      const status = await session.status();
+      assert.equal(status.holderPid, null);
+      assert.notEqual(status.reason, "signed-in");
+      await session.close();
+    } finally {
+      await clearHolderFiles(profileDir);
+      await rm(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  it("status does not claim holderPid for a reused PID that fails the identity bind", async () => {
+    const profileDir = await tempProfile();
+    const stranger = keepAlive();
+    try {
+      assert.equal(typeof stranger.pid, "number");
+      await writeFile(
+        holderRecordPath(profileDir),
+        JSON.stringify({
+          version: 2,
+          pid: stranger.pid!,
+          generation: "stale-reuse",
+          pidStartTime: "1",
+          exe: "/tmp/not-the-real-holder-exe",
+          startedAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString(),
+          origin: "https://adam.unibas.ch",
+        } satisfies HolderRecord),
+        "utf8",
+      );
+      const holder = await holderStatus(profileDir);
+      assert.equal(holder.running, false);
+      assert.equal(boundHolderPid(holder), undefined);
+      assert.equal(isProcessAlive(stranger.pid!), true);
+
+      const session = createPlaywrightSession({ profileDir, origin: "https://adam.unibas.ch" });
+      const status = await session.status();
+      assert.equal(status.holderPid, null);
+      assert.equal(isProcessAlive(stranger.pid!), true);
+      await session.close();
+    } finally {
+      stranger.kill();
+      await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
   });

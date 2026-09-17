@@ -240,6 +240,23 @@ export function isBoundHolderAlive(record: HolderRecord): boolean {
   });
 }
 
+/**
+ * PID to report on session status (ADR 0009). Only the bound live holder.
+ * Stale, dead, or identity-mismatched records are absent — never a stranger PID.
+ */
+export function boundHolderPid(holder: {
+  running: boolean;
+  record?: HolderRecord;
+}): number | undefined {
+  if (!holder.running || !holder.record) {
+    return undefined;
+  }
+  if (!isBoundHolderAlive(holder.record)) {
+    return undefined;
+  }
+  return holder.record.pid;
+}
+
 export function isBoundBrowserAlive(record: HolderRecord): boolean {
   if (
     typeof record.browserPid !== "number" ||

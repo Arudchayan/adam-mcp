@@ -1,7 +1,7 @@
 import { defaultOrigin, defaultProfileDir } from "./config.ts";
 import { isNamedCliEntry } from "./is-main.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
-import { holderStatus } from "./session-holder.ts";
+import { boundHolderPid, holderStatus } from "./session-holder.ts";
 import type { AdamBrowserSession } from "./session-types.ts";
 
 /** Holder-aware status: never opens a browser window (ADR 0009). */
@@ -12,6 +12,7 @@ export async function runStatusCli(
   try {
     const status = await session.status();
     const holder = await holderStatus(defaultProfileDir());
+    const holderPid = boundHolderPid(holder) ?? null;
     const report = {
       loggedIn: status.loggedIn,
       reason: status.reason ?? (status.loggedIn ? "signed-in" : "login-required"),
@@ -20,7 +21,8 @@ export async function runStatusCli(
       currentUrl: status.currentUrl,
       title: status.title,
       checkedAt: status.checkedAt,
-      holder: holder.running ? { pid: holder.record?.pid, startedAt: holder.record?.startedAt } : null,
+      holderPid,
+      holder: holderPid !== null ? { pid: holderPid, startedAt: holder.record?.startedAt } : null,
       profileDir: defaultProfileDir(),
     };
     console.log(JSON.stringify(report, null, 2));

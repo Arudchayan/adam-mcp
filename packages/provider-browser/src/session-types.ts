@@ -29,6 +29,11 @@ export type SessionStatus = {
   reason?: "signed-in" | "login-required" | "unknown";
   message?: string;
   checkedAt?: string;
+  /**
+   * Bound live session-holder PID. Null/absent when the holder is stale, dead,
+   * or unbound — never a reused stranger PID (ADR 0009).
+   */
+  holderPid?: number | null;
 };
 
 /** Playwright storage-state cookie shape, kept dependency-free for the session interface. */

@@ -29,10 +29,14 @@ credential store.
    before) and never launch a browser outside an explicit login. Reads without a
    session fail closed with `unauthorized` and a "run `adam-mcp login`" message;
    `adam_session_status` returns `reason: "login-required"` without launching.
-5. **Lifecycle commands.** `adam-mcp status` reports logged-in reason, holder PID,
-   and `checkedAt` without opening a window; `adam-mcp logout` stops the holder
-   (`--purge` also removes the Chrome profile). `ADAM_BROWSER_HEADED=1` is a debug
-   escape hatch that keeps the headed session in-process instead of handing off.
+5. **Lifecycle commands.** `adam-mcp status` and `adam_session_status` report
+   logged-in reason, `holderPid`, and `checkedAt` without opening a window;
+   `adam-mcp logout` stops the holder (`--purge` also removes the Chrome profile).
+   `ADAM_BROWSER_HEADED=1` is a debug escape hatch that keeps the headed session
+   in-process instead of handing off. `holderPid` is the bound live holder PID
+   (same generation / start-time / exe bind as stop and re-login). A live bound
+   holder MUST NOT report null; stale, dead, or identity-mismatched records
+   report null/absent and must not claim the holder is alive.
 6. **RAM-only cookies remain.** Rebooting or a SWITCH timeout requires
    `adam-mcp login` again; re-login is the privacy trade, not a regression.
 
