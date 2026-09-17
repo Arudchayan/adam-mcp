@@ -40,7 +40,7 @@ None — Phase A-thin AT1–AT6 closed via PR #14 / `16f08c8`.
 
 | ID | PASS | Closed |
 | --- | --- | --- |
-| B-frm | `adam_get_forum` + `adam://frm/{refId}`; ConfirmGate on `threadId`; fail-closed `type===frm`; ADR 0012 + ADR 0008 envelope; labeled synthetic `100040` posts OK; live browser meta-only until HTML parse | PR #34 (`1a7931f`) |
+| B-frm | `adam_get_forum` + `adam://frm/{refId}`; ConfirmGate on `threadId`; fail-closed `type===frm`; ADR 0012 + ADR 0008 envelope; labeled synthetic `100040` posts OK; live HTML threads when parse succeeds | PR #34 (`1a7931f`); live HTML parse follow-up |
 
 ## Keep
 
@@ -49,7 +49,7 @@ None — Phase A-thin AT1–AT6 closed via PR #14 / `16f08c8`.
 | **Fixture lock** | `100020` = empty Exercises **fold**; `100021` = **exc** with deadline (not a folder). Empty fold ≠ no deadlines. `100040` = labeled synthetic **frm** (AT5 style). |
 | **Domain unlock** | 2026-09-14 tip `5099529`: live `frm`×1 via list_children; unlock **frm only**. `sess`/`webr` wait-for-inventory; `exc` unchanged; no invented types. |
 | **P0–P2 harness** | (#34 @ `bc2ca8a`): P0 `npm test` hold; P1 resource+tool+ConfirmGate+fail-closed+envelope; P2 no writes/post/subscribe; no sess/webr/exc expand. |
-| **Soft (not FAIL)** | Browser live thread/post HTML parse deferred — empty `threads` + `threadId` fail-closed until honest parse. |
+| **Soft (not FAIL)** | News orphans remain parked. Live forum posts still fail closed when thread HTML is missing (never invent). |
 | **Deferred** | A5 completions still deferred Phase B P1. |
 
 ## Queued (baseline B-series)
@@ -58,4 +58,4 @@ None — B1–B12 baseline gaps closed via PR #7 / `21728f3`.
 
 ## Next
 
-Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). AT6 closed (PR #14 / `16f08c8`). Soft backlog **A2-news-browser** closed (PR #16 / `5593840`). **A5** completions deferred (Phase B P1). Phase A-thin complete. Phase B **B-frm** shipped fixture-side (PR #34 / `1a7931f`; live `threadId` withheld until HTML parse).
+Phase A backlog A1–A4 + A6 closed (A3/A4 = PR #9 / `a5e1fd6`). AT1/AT2 closed (PR #10 / `533d5c5`). AT3 closed (PR #11 / `01069ef`). AT4 closed (PR #12 / `b3bb0c0`). AT5 closed (PR #13 / `ed40c2c`). AT6 closed (PR #14 / `16f08c8`). Soft backlog **A2-news-browser** closed (PR #16 / `5593840`). **A5** completions deferred (Phase B P1). Phase A-thin complete. Phase B **B-frm** shipped fixture-side (PR #34 / `1a7931f`); live HTML thread parse elevates the prior meta-only park.

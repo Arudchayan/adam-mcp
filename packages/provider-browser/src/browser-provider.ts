@@ -39,6 +39,7 @@ import {
   isLoginSnapshot,
   type ExtractedCatalog,
 } from "./extract.ts";
+import { pageHeading, parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
@@ -360,20 +361,56 @@ export class BrowserAdamProvider implements AdamProvider {
     if (object.type !== "frm") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${object.type}, not a forum.`);
     }
-    // Live thread/post HTML parse is intentionally thin: meta + empty summaries until a
-    // dedicated parser lands. Callers needing bodies use threadId + confirm on MCP.
-    const forum: ForumObject = {
-      ...object,
-      type: "frm",
-      threads: [],
-    };
-    if (options?.threadId) {
+    const parsed = parseForumPage(snapshot);
+    const threads = parsed.threads;
+    if (!options?.threadId) {
+      return { ...object, type: "frm", threads };
+    }
+    throwIfCancelled(options.signal);
+    let posts = parsed.posts;
+    let threadTitle = threads.find((thread) => thread.threadId === options.threadId)?.title;
+    if (posts.length === 0) {
+      const threadUrl = resolveForumThreadUrl(
+        this.origin,
+        refId,
+        options.threadId,
+        parsed.threadHrefs[options.threadId],
+      );
+      try {
+        const threadSnapshot = await this.openAuthorized(threadUrl);
+        const threadParsed = parseForumPage(threadSnapshot);
+        posts = threadParsed.posts;
+        threadTitle =
+          threadTitle ??
+          threadParsed.threads.find((thread) => thread.threadId === options.threadId)?.title ??
+          pageHeading(threadSnapshot.html);
+      } catch (error) {
+        if (!(error instanceof AdamError && error.code === "not_found")) {
+          throw error;
+        }
+      }
+    }
+    if (posts.length === 0) {
       throw new AdamError(
-        "unsupported_type",
-        `Browser forum thread body parse is not implemented for thread ${options.threadId}; use a labeled fixture or wait for parser coverage.`,
+        "not_found",
+        `No parseable posts for forum thread ${options.threadId} on ref_id ${refId}; refusing to invent post bodies.`,
       );
     }
-    return forum;
+    const title = threadTitle ?? posts[0]?.subject ?? options.threadId;
+    const selected = threads.find((thread) => thread.threadId === options.threadId) ?? {
+      threadId: options.threadId,
+      title,
+    };
+    return {
+      ...object,
+      type: "frm",
+      threads: [selected],
+      selectedThread: {
+        threadId: options.threadId,
+        title,
+        posts,
+      },
+    };
   }
 
   async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {

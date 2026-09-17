@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `adam_session_status` / `adam-mcp status` report `holderPid` for a live bound session holder; stale/dead/unbound records stay null (ADR 0009)
 - `adam_search` for `pdf` / `PDF` / `.pdf` returns enrolled `type=file` hits (title/extension/mime; not only crs/fold page text)
 - After `confirm:true`, `adam_extract_file_text` never returns silent empty text; empty/whitespace or cap-window-empty extracts fail closed with a reason (ADR 0014)
+- Live `adam_get_forum` / `adam://frm` thread summaries parse from ILIAS forum HTML when present; missing HTML stays honest-empty; `threadId` posts fail closed instead of inventing bodies (ADR 0012)
 
 ## [0.2.0] - 2026-09-16
 

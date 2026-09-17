@@ -4,7 +4,7 @@ Living map of University of Basel ADAM student workflows to MCP coverage. Dated 
 
 Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live?** (Chrome verification)
 
-**Live pass (2026-09-06, Course Member session):** validated `crs`, standard `fold`, `file`, and News/what-changed on one contentful course; calendar widget present (agenda empty). **Not observed** then (do not invent fixtures): `exc`, `frm`, Postbox / Member Work Area, Etherpad, `sess`, `webr`, `htlm` / `lm`. Later: `frm` list_children **live-seen** (Domain tip `5099529`; B-frm #34/`1a7931f`); live thread bodies still **meta-only** until HTML parse (fixture posts OK); park `sess` / `webr` as **wait-for-inventory** (not actively hunting).
+**Live pass (2026-09-06, Course Member session):** validated `crs`, standard `fold`, `file`, and News/what-changed on one contentful course; calendar widget present (agenda empty). **Not observed** then (do not invent fixtures): `exc`, `frm`, Postbox / Member Work Area, Etherpad, `sess`, `webr`, `htlm` / `lm`. Later: `frm` list_children **live-seen** (Domain tip `5099529`; B-frm #34/`1a7931f`); live thread summaries parse from forum HTML when present (posts still ConfirmGate; fail-closed if HTML missing); park `sess` / `webr` as **wait-for-inventory** (not actively hunting).
 
 **Live pass (2026-09-09, ADR 0005 build):** 8 enrolled courses; only Multimedia Retrieval (`2206931`) exposes children — `list_children` → `ok` + 2 folds (`2291290`, `2291292`); the other 7 courses list zero children. Both MM folds report `listingState: unknown` (folder GUI served, no parseable items, no empty copy); `read_page` is chrome-only (538 chars). No `file`/`exc` reachable anywhere (`search pdf` → 0), so file-extract and exercise paths remain live-unverified for lack of live objects, not connector failure. Pre-semester timing (HS 2026) fits truly-empty folders. Re-verify after semester start.
 
@@ -44,7 +44,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today |
 | --- | --- | --- |
-| Forum read | Lecturer Q&A threads | **Fixture posts + live meta** (B-frm #34/`1a7931f`; Domain tip `5099529` list_children). Soft: withhold live `threadId` bodies until HTML parse |
+| Forum read | Lecturer Q&A threads | **Fixture posts + live HTML threads** (B-frm #34/`1a7931f`; Domain tip `5099529` list_children). Live `threads` from listing HTML; `threadId` bodies ConfirmGate; missing HTML honest-empty / fail-closed |
 | Groups / ADAMtools | Study groups, surveys (discover) | no |
 | Wiki/blog/Etherpad read | Collab surfaces | no |
 | Learning progress (own) | Completion if course enables LP | no |
@@ -67,7 +67,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `webr` | External links | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
-| `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live posts **meta-only** until HTML parse; fixture `threadId` posts OK |
+| `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live threads from HTML when parse succeeds; missing HTML honest-empty / fail-closed posts; fixture `threadId` posts OK |
 | `wiki` / `blog` / Etherpad | Collab | no | blocked — not observed |
 | `grp` / `svy` / ADAMtools | Groups, surveys | no | discoverability |
 | news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
@@ -85,7 +85,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 2. **Exercise awareness** — harden `adam_get_exercise` (AT5 — PR #13 / `ed40c2c`; labeled synthetic `100021`); deep-link submit still **blocked** until live `exc`  
 3. **News / what-changed reliability** when News is enabled (AT4 — PR #12 / `b3bb0c0`)  
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
-5. **Forum thread read** — **shipped** read-only fixture path (PR #34 / `1a7931f`; B-frm #35); live browser meta-only until HTML parse; **no write**
+5. **Forum thread read** — **shipped** read-only fixture path (PR #34 / `1a7931f`; B-frm #35) plus live HTML thread parse; **no write**
 
 Principle: deepen P0 reliability before new object types; deep-link submit until gated write review.
 
