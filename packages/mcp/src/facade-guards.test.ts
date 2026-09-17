@@ -162,6 +162,34 @@ describe("sanitizeListingItems", () => {
     assert.equal(sanitizeListingItems(empty), empty);
   });
 
+  it("subtracts leaked rows on empty listings without inventing a tree", () => {
+    const page: Paginated<AdamObject> = {
+      items: [allowed],
+      totalHint: 4,
+      listingState: "empty",
+      listingSignals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
+    };
+    const safe = sanitizeListingItems(page);
+    assert.deepEqual(safe.items, []);
+    assert.equal(safe.listingState, "empty");
+    assert.equal(safe.totalHint, 0);
+  });
+
+  it("subtracts leaked rows on unknown/blank listings without claiming ok", () => {
+    const page: Paginated<AdamObject> = {
+      items: [allowed],
+      totalHint: 4,
+      listingState: "unknown",
+      listingSignals: { contentItemCount: 0, emptyCopy: false, chromeOnly: false },
+      notice: "The folder view rendered a blank content area",
+    };
+    const safe = sanitizeListingItems(page);
+    assert.deepEqual(safe.items, []);
+    assert.equal(safe.listingState, "unknown");
+    assert.equal("totalHint" in safe, false);
+    assert.match(safe.notice ?? "", /blank content area/i);
+  });
+
   it("sanitizes a single object with nested children", () => {
     const course = sanitizeListingObject({
       ...allowed,
