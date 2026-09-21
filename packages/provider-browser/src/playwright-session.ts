@@ -32,7 +32,11 @@ import type {
   SessionStatus,
   SnapshotLink,
 } from "./session-types.ts";
-import { adamErrorFromAuthorizedHttpStatus, adamErrorFromNavigationFailure } from "./upstream-errors.ts";
+import {
+  adamErrorFromAuthorizedHttpStatus,
+  adamErrorFromNavigationFailure,
+  rejectIfGotoHttpFailed,
+} from "./upstream-errors.ts";
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -266,8 +270,14 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
       // content wait with a real function predicate (arg undefined, options 3rd).
       try {
-        await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+        // Capture main response so 403/429/5xx documents use ADR 0016 taxonomy.
+        // Null response (download abort / ERR_ABORTED — ADR 0013) is not forbidden.
+        const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+        rejectIfGotoHttpFailed(response);
       } catch (error) {
+        if (error instanceof AdamError) {
+          throw error;
+        }
         const mapped = adamErrorFromNavigationFailure(error);
         if (mapped) {
           throw mapped;
