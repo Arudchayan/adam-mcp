@@ -7,6 +7,7 @@ import {
   redactText,
   redactUrl,
   resourceUri,
+  throwIfCancelled,
   type AdamProvider,
   type ExerciseObject,
   type Paginated,
@@ -14,6 +15,9 @@ import {
   type ProgressUpdate,
 } from "adam-core";
 import { createRunId, logToolCall, type ToolCallLog } from "./telemetry.ts";
+
+/** Re-export core cancellation helper so MCP callers keep a single import path. */
+export { throwIfCancelled };
 
 export const READ_ONLY_TOOLS = [
   "adam_list_courses",
@@ -415,13 +419,6 @@ export function fail(error: unknown, runId?: string): ToolResponse {
     content: [{ type: "text", text: `${redactText(message)} (retryable=false)${suffix}` }],
     isError: true,
   };
-}
-
-/** Cooperative cancellation: throws AdamError(cancelled, retryable=false) when aborted. */
-export function throwIfCancelled(signal?: AbortSignal): void {
-  if (signal?.aborted) {
-    throw new AdamError("cancelled", "Request was cancelled by the client.", false);
-  }
 }
 
 /** Best-effort AbortSignal extraction across SDK handler extra shapes. */
