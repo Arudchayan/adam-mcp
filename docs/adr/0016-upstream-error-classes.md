@@ -27,5 +27,7 @@
 
 Agents see re-login vs permission vs missing vs retry. MCP tool copy that
 says “not_found is the only missing-object error” remains true for absence;
-`forbidden` / `stale_id` are distinct. Optional long serial-queue wait lines
-go to stderr only.
+`forbidden` / `stale_id` are distinct. On enrolled walks (search/calendar/news),
+mid-walk `forbidden` and `stale_id` abort and rethrow like `unauthorized` —
+they are never counted as ordinary skips or memoized as a successful partial
+(ADR 0015). Optional long serial-queue wait lines go to stderr only.

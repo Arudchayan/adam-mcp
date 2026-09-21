@@ -1589,6 +1589,84 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
     assert.ok(opens.length > afterAuthFail, "unauthorized walk must not be memoized");
   });
 
+  it("forbidden mid-walk surfaces and is not memoized", async () => {
+    const opens: string[] = [];
+    const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
+      "https://adam.unibas.ch/": snapshotFromHtml(
+        "https://adam.unibas.ch/",
+        "Schreibtisch",
+        dashboardHtml,
+        "Schreibtisch 00000-01 Written exam: 12 January 2027 News Abmelden",
+      ),
+      "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+        "https://adam.unibas.ch/go/crs/100001",
+        "Failure Message",
+        "<main><h1>Failure Message</h1><p>Keine Berechtigung</p></main>",
+        "Failure Message Keine Berechtigung für dieses Objekt.",
+      ),
+      "https://adam.unibas.ch/go/fold/100010": walkPages["https://adam.unibas.ch/go/fold/100010"],
+      "https://adam.unibas.ch/go/fold/100020": walkPages["https://adam.unibas.ch/go/fold/100020"],
+      "https://adam.unibas.ch/go/exc/100021": walkPages["https://adam.unibas.ch/go/exc/100021"],
+    };
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages, { onOpen: (url) => opens.push(url) }),
+    });
+    await assert.rejects(() => provider.search("exam"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "forbidden");
+      return true;
+    });
+    const afterForbidden = opens.length;
+    pages["https://adam.unibas.ch/go/crs/100001"] = snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "00000-01 – Synthetic Multimedia Seminar",
+      courseHtml,
+      "00000-01 Written exam Course Notes Exercises Exercise 1 Abmelden",
+    );
+    await provider.search("exam");
+    assert.ok(opens.length > afterForbidden, "forbidden walk must not be memoized");
+  });
+
+  it("stale_id mid-walk surfaces and is not memoized", async () => {
+    const opens: string[] = [];
+    const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
+      "https://adam.unibas.ch/": snapshotFromHtml(
+        "https://adam.unibas.ch/",
+        "Schreibtisch",
+        dashboardHtml,
+        "Schreibtisch 00000-01 Written exam: 12 January 2027 News Abmelden",
+      ),
+      "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+        "https://adam.unibas.ch/go/crs/100002",
+        "Other course",
+        courseHtml,
+        "Other course Abmelden",
+      ),
+      "https://adam.unibas.ch/go/fold/100010": walkPages["https://adam.unibas.ch/go/fold/100010"],
+      "https://adam.unibas.ch/go/fold/100020": walkPages["https://adam.unibas.ch/go/fold/100020"],
+      "https://adam.unibas.ch/go/exc/100021": walkPages["https://adam.unibas.ch/go/exc/100021"],
+    };
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages, { onOpen: (url) => opens.push(url) }),
+    });
+    await assert.rejects(() => provider.search("exam"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "stale_id");
+      return true;
+    });
+    const afterStale = opens.length;
+    pages["https://adam.unibas.ch/go/crs/100001"] = snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "00000-01 – Synthetic Multimedia Seminar",
+      courseHtml,
+      "00000-01 Written exam Course Notes Exercises Exercise 1 Abmelden",
+    );
+    await provider.search("exam");
+    assert.ok(opens.length > afterStale, "stale_id walk must not be memoized");
+  });
+
   it("cancelled walks are never memoized", async () => {
     const opens: string[] = [];
     const provider = createBrowserProvider({

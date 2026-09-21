@@ -107,7 +107,7 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly fileByRefId = new Map<RefId, FileObject>();
   /**
    * PERF-1 / ADR 0015: enrolled walk memo owned by this provider instance.
-   * Invalidated on login() and close(); cancelled/unauthorized walks never memoize.
+   * Invalidated on login() and close(); cancelled/unauthorized/forbidden/stale_id walks never memoize.
    */
   private livePagesMemo: WalkResult | undefined;
   private livePagesInflight: Promise<WalkResult> | undefined;
@@ -540,7 +540,7 @@ export class BrowserAdamProvider implements AdamProvider {
     throwIfCancelled(signal);
     // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
     // Invalidation: login() + close(). Memo hit emits no progress.
-    // Cancelled and unauthorized walks are never memoized (ADR 0011 / 0015).
+    // Cancelled / unauthorized / forbidden / stale_id walks are never memoized (ADR 0011 / 0015 / 0016).
     if (this.livePagesMemo) {
       throwIfCancelled(signal);
       return this.livePagesMemo;
@@ -641,8 +641,14 @@ export class BrowserAdamProvider implements AdamProvider {
           }
         }
       } catch (error) {
-        if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) {
-          // Do not skip+memoize auth expiry or cancel — surface to the agent (ADR 0015).
+        if (
+          error instanceof AdamError &&
+          (error.code === "cancelled" ||
+            error.code === "unauthorized" ||
+            error.code === "forbidden" ||
+            error.code === "stale_id")
+        ) {
+          // Do not skip+memoize cancel, auth, permission, or stale identity — surface (ADR 0015 / 0016).
           throw error;
         }
         skipped += 1;
