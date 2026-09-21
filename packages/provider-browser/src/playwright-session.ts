@@ -32,6 +32,7 @@ import type {
   SessionStatus,
   SnapshotLink,
 } from "./session-types.ts";
+import { adamErrorFromAuthorizedHttpStatus, adamErrorFromNavigationFailure } from "./upstream-errors.ts";
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -264,7 +265,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const page = await this.ensurePage();
       // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
       // content wait with a real function predicate (arg undefined, options 3rd).
-      await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      try {
+        await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+      } catch (error) {
+        const mapped = adamErrorFromNavigationFailure(error);
+        if (mapped) {
+          throw mapped;
+        }
+        throw error;
+      }
       if (/\/go\/crs\//i.test(target)) {
         await page
           .locator("[role='tab'], a, button")
@@ -372,10 +381,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const response = await page.context().request.get(target, { timeout: 45_000, maxRedirects: 5 });
       assertUrlAllowed(response.url());
       if (!response.ok()) {
-        throw new AdamError(
-          "not_found",
-          `ADAM returned HTTP ${response.status()} for a file fetch.`,
-        );
+        throw adamErrorFromAuthorizedHttpStatus(response.status(), "fetch");
       }
       const headers = response.headers();
       const contentType = headers["content-type"];
@@ -414,10 +420,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       });
       assertUrlAllowed(response.url());
       if (!response.ok()) {
-        throw new AdamError(
-          "not_found",
-          `ADAM returned HTTP ${response.status()} for a file probe.`,
-        );
+        throw adamErrorFromAuthorizedHttpStatus(response.status(), "probe");
       }
       const headers = response.headers();
       return {

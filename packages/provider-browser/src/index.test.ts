@@ -575,6 +575,50 @@ describe("BrowserAdamProvider with a memory session", () => {
     );
   });
 
+  it("throws forbidden (not not_found) on permission-denied pages", async () => {
+    const denied = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100077": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100077",
+          "Failure Message",
+          "<main><h1>Failure Message</h1><p>Keine Berechtigung</p></main>",
+          "Failure Message Keine Berechtigung für dieses Objekt.",
+        ),
+      }),
+    });
+    await assert.rejects(() => denied.readPage("100077", { type: "crs" }), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "forbidden");
+      assert.equal(error.retryable, false);
+      assert.doesNotMatch(error.message, /does not exist|did not return an object/i);
+      assert.match(error.message, /not reported as missing|Permission denied/i);
+      return true;
+    });
+  });
+
+  it("throws stale_id when ADAM lands on a different typed ref_id", async () => {
+    const mismatched = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100002",
+          "Other course",
+          courseHtml,
+          "Other course Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(() => mismatched.readPage("100001", { type: "crs" }), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "stale_id");
+      assert.equal(error.retryable, false);
+      assert.doesNotMatch(error.message, /does not exist|did not return an object/i);
+      assert.match(error.message, /not a missing object|instead of/i);
+      return true;
+    });
+  });
+
   it("searches enrolled course and folder titles, not every dashboard card", async () => {
     const overview = await provider.search("Overview");
     assert.equal(overview.items.some((item) => item.refId === "100011"), true);
