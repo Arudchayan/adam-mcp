@@ -139,7 +139,8 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   /**
-   * Drop walk memo/inflight, type/file maps, and bump generation so a racing walk cannot rememoize.
+   * Drop walk memo/inflight, type/file maps, and bump generation so a racing walk cannot
+   * rememoize or repopulate type/file caches (ADR 0015).
    * Ordinary reads must not call this.
    */
   private clearSessionCaches(): void {
@@ -148,6 +149,11 @@ export class BrowserAdamProvider implements AdamProvider {
     this.livePagesInflight = undefined;
     this.typeByRefId.clear();
     this.fileByRefId.clear();
+  }
+
+  /** True when generation still matches — false after login()/close() cleared caches. */
+  private cachesCurrent(generation: number): boolean {
+    return generation === this.walkGeneration;
   }
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -162,9 +168,10 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
     throwIfCancelled(options?.signal);
-    const snapshot = await this.openObject(refId, options?.type ?? "crs");
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
     if (!course) {
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a course in the browser session.`);
@@ -191,9 +198,13 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
     throwIfCancelled(options?.signal);
-    const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type, {
+      listingFastFail: true,
+      cacheGeneration: generation,
+    });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
     const classified = classifyListing(snapshot, children.length);
     const page = paginate(listingItemsOrEmpty(children, classified), options);
@@ -202,9 +213,10 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
     throwIfCancelled(options?.signal);
-    const snapshot = await this.openObject(refId, options?.type);
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type, { cacheGeneration: generation });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
       throw new AdamError("not_found", `No page could be read for ref_id ${refId}.`);
@@ -223,9 +235,13 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
     throwIfCancelled(options?.signal);
-    const snapshot = await this.openObject(refId, options?.type, { listingFastFail: true });
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type, {
+      listingFastFail: true,
+      cacheGeneration: generation,
+    });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const direct = catalog.files.filter((item) => item.refId !== refId);
     const nested = catalog.objects.filter((item): item is FileObject => item.type === "file");
     const files = direct.length > 0 ? direct : nested;
@@ -238,12 +254,13 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
     throwIfCancelled(options?.signal);
+    const generation = this.walkGeneration;
     try {
       // Capture listing cache before rememberTypes overwrites with the page parse.
       const priorListing = this.fileByRefId.get(refId);
-      const snapshot = await this.openObject(refId, options?.type ?? "file");
+      const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation });
       const catalog = extractCatalog(snapshot, now());
-      this.rememberTypes(catalog);
+      this.rememberTypes(catalog, generation);
       const file =
         catalog.files.find((item) => item.refId === refId) ??
         (catalog.current?.type === "file" && catalog.current.refId === refId
@@ -251,19 +268,21 @@ export class BrowserAdamProvider implements AdamProvider {
           : undefined);
       if (file) {
         const enriched = preferCachedFileTitle(file, priorListing);
-        this.fileByRefId.set(refId, enriched);
+        if (this.cachesCurrent(generation)) {
+          this.fileByRefId.set(refId, enriched);
+        }
         return enriched;
       }
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a file.`);
     } catch (error) {
       if (isDownloadNavigationError(error)) {
-        return this.fileFromDownloadAbort(refId);
+        return this.fileFromDownloadAbort(refId, generation);
       }
       throw error;
     }
   }
 
-  private async fileFromDownloadAbort(refId: RefId): Promise<FileObject> {
+  private async fileFromDownloadAbort(refId: RefId, generation = this.walkGeneration): Promise<FileObject> {
     const sourceUrl = objectUrl("file", refId, this.origin);
     const cached = this.fileByRefId.get(refId);
     const origin = this.origin.replace(/\/$/, "");
@@ -301,7 +320,9 @@ export class BrowserAdamProvider implements AdamProvider {
         freshness: "live-browser-session",
       },
     };
-    this.fileByRefId.set(refId, file);
+    if (this.cachesCurrent(generation)) {
+      this.fileByRefId.set(refId, file);
+    }
     return file;
   }
 
@@ -342,9 +363,10 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
-    const snapshot = await this.openObject(refId, options?.type ?? "exc");
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
       throw new AdamError("not_found", `No exercise could be read for ref_id ${refId}.`);
@@ -381,9 +403,10 @@ export class BrowserAdamProvider implements AdamProvider {
         `Client type hint "${options.type}" is not frm; refusing forum read for ref_id ${refId}.`,
       );
     }
-    const snapshot = await this.openObject(refId, options?.type ?? "frm");
+    const generation = this.walkGeneration;
+    const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation });
     const catalog = extractCatalog(snapshot, now());
-    this.rememberTypes(catalog);
+    this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
       throw new AdamError("not_found", `No forum could be read for ref_id ${refId}.`);
@@ -553,7 +576,7 @@ export class BrowserAdamProvider implements AdamProvider {
       return this.livePagesInflight;
     }
     const generation = this.walkGeneration;
-    const inflight = this.walkLivePages(onProgress, signal)
+    const inflight = this.walkLivePages(onProgress, signal, generation)
       .then((pages) => {
         if (generation === this.walkGeneration) {
           this.livePagesMemo = pages;
@@ -569,7 +592,11 @@ export class BrowserAdamProvider implements AdamProvider {
     return inflight;
   }
 
-  private async walkLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
+  private async walkLivePages(
+    onProgress: ProgressReporter | undefined,
+    signal: AbortSignal | undefined,
+    generation: number,
+  ): Promise<WalkResult> {
     const report = async (progress: number) => {
       if (!onProgress) {
         return;
@@ -583,7 +610,7 @@ export class BrowserAdamProvider implements AdamProvider {
 
     const home = await this.openAuthorized(this.origin);
     const homeCatalog = extractCatalog(home, now());
-    this.rememberTypes(homeCatalog);
+    this.rememberTypes(homeCatalog, generation);
     const pages: LivePage[] = [retainWalkPage(home, homeCatalog)];
     await report(pages.length);
     const seen = new Set<string>(homeCatalog.current?.refId ? [homeCatalog.current.refId] : []);
@@ -625,9 +652,12 @@ export class BrowserAdamProvider implements AdamProvider {
       try {
         // Prefer ADR 0004 typed open (listingFastFail) so wrong link types can retry once
         // instead of hard-skipping — same path as listChildren.
-        const snapshot = await this.openObject(next.refId, next.type, { listingFastFail: true });
+        const snapshot = await this.openObject(next.refId, next.type, {
+          listingFastFail: true,
+          cacheGeneration: generation,
+        });
         const catalog = extractCatalog(snapshot, now());
-        this.rememberTypes(catalog);
+        this.rememberTypes(catalog, generation);
         pages.push(retainWalkPage(snapshot, catalog));
         await report(pages.length);
         throwIfCancelled(signal);
@@ -666,7 +696,10 @@ export class BrowserAdamProvider implements AdamProvider {
     };
   }
 
-  private rememberTypes(catalog: ExtractedCatalog): void {
+  private rememberTypes(catalog: ExtractedCatalog, generation: number): void {
+    if (!this.cachesCurrent(generation)) {
+      return;
+    }
     if (catalog.current && catalog.current.type !== "unknown" && !isDeniedObjectType(catalog.current.type)) {
       this.typeByRefId.set(catalog.current.refId, catalog.current.type);
     }
@@ -697,11 +730,12 @@ export class BrowserAdamProvider implements AdamProvider {
   private async openObject(
     refId: RefId,
     typeHint?: AdamObjectType,
-    opts?: { listingFastFail?: boolean },
+    opts?: { listingFastFail?: boolean; cacheGeneration?: number },
   ): Promise<PageSnapshot> {
     if (!/^\d+$/.test(refId)) {
       throw new AdamError("not_found", "ADAM ref_id must contain digits only.");
     }
+    const generation = opts?.cacheGeneration ?? this.walkGeneration;
     const preferred = typeHint && typeHint !== "unknown" ? typeHint : this.typeByRefId.get(refId);
     const tried = new Set<AdamObjectType>();
     let lastNotFound: AdamError | undefined;
@@ -725,7 +759,13 @@ export class BrowserAdamProvider implements AdamProvider {
         // now parses as unknown/CHILD — never cache that as the parent's type.
         // An unknown landing never confirms the probed type either: caching the
         // guess would poison later opens.
-        if (landed && landed.type !== "unknown" && landed.refId === refId && !isDeniedObjectType(landed.type)) {
+        if (
+          landed &&
+          landed.type !== "unknown" &&
+          landed.refId === refId &&
+          !isDeniedObjectType(landed.type) &&
+          this.cachesCurrent(generation)
+        ) {
           this.typeByRefId.set(refId, landed.type);
         }
         return snapshot;
