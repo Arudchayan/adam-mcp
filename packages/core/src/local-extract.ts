@@ -42,6 +42,27 @@ function unescapePdfLiteral(inner: string): string {
   return inner.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\\)/g, ")").replace(/\\\\/g, "\\");
 }
 
+/** True when candidate text is PDF structure / binary stream dump, not readable literals. */
+export function isPdfGarbageText(text: string): boolean {
+  if (text.length === 0) {
+    return false;
+  }
+  if (/%PDF|endstream|endobj/i.test(text)) {
+    return true;
+  }
+  let nonText = 0;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 9 || code === 10 || code === 13) {
+      continue;
+    }
+    if (code < 32 || code === 127 || (code >= 128 && code < 160)) {
+      nonText++;
+    }
+  }
+  return nonText / text.length > 0.05;
+}
+
 function extractPdfLiterals(bytes: Uint8Array): string {
   const source = Buffer.from(bytes).toString("latin1");
   const chunks: string[] = [];
@@ -54,18 +75,21 @@ function extractPdfLiterals(bytes: Uint8Array): string {
       chunks.push(text);
     }
   }
-  if (chunks.length > 0) {
-    return chunks.join(" ");
-  }
-  const any = /\((?:\\.|[^\\)])*\)/g;
-  while ((match = any.exec(source))) {
-    const inner = match[0].slice(1, -1);
-    const text = unescapePdfLiteral(inner);
-    if (/[A-Za-z]/.test(text)) {
-      chunks.push(text);
+  if (chunks.length === 0) {
+    const any = /\((?:\\.|[^\\)])*\)/g;
+    while ((match = any.exec(source))) {
+      const inner = match[0].slice(1, -1);
+      const text = unescapePdfLiteral(inner);
+      if (/[A-Za-z]/.test(text)) {
+        chunks.push(text);
+      }
     }
   }
-  return chunks.join(" ");
+  const joined = chunks.join(" ");
+  if (isPdfGarbageText(joined)) {
+    return "";
+  }
+  return joined;
 }
 
 export function extractPagesHaveText(pages: Array<{ text: string }>): boolean {
@@ -78,6 +102,13 @@ export function assertExtractHasText(
   pagesLimit: number = DEFAULT_EXTRACT_PAGES,
 ): void {
   if (extractPagesHaveText(extract.pages)) {
+    if (extract.pages.some((page) => isPdfGarbageText(page.text))) {
+      throw new AdamError(
+        "unsupported_type",
+        "This file has no extractable text. Open it in ADAM instead.",
+        false,
+      );
+    }
     return;
   }
   if (extract.truncated) {
