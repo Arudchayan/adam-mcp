@@ -17,7 +17,11 @@ export {
   normalizeMaxPages,
   sha256Hex,
 } from "./local-extract.ts";
-export { PRODUCTION_ADAM_ORIGIN, resolveAdamOrigin } from "./origin.ts";
+export {
+  isLiveBrowserProviderSelected,
+  PRODUCTION_ADAM_ORIGIN,
+  resolveAdamOrigin,
+} from "./origin.ts";
 export {
   isPdfSearchQuery,
   normalizeSearchNeedle,
