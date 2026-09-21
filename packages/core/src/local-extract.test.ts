@@ -5,6 +5,7 @@ import {
   assertExtractHasText,
   extractLocalFileText,
   extractPagesHaveText,
+  isPdfGarbageText,
   looksLikeHtml,
   MAX_EXTRACT_BYTES,
   MAX_EXTRACT_CHARS,
@@ -74,6 +75,47 @@ describe("extractLocalFileText", () => {
     await assert.rejects(
       () => extractLocalFileText(file, Buffer.from("%PDF-not-a-real-document"), "application/pdf"),
       (error: unknown) => error instanceof AdamError && error.code === "unsupported_type",
+    );
+  });
+
+  it("fails closed on PDF stream garbage instead of dumping binary as text", async () => {
+    // Synthetic compressed/stream-like bytes: paren-fallback would otherwise treat
+    // control-heavy stream junk (with endstream/endobj) as "extractable" text.
+    const streamJunk = Buffer.from(
+      [
+        "%PDF-1.4",
+        "1 0 obj<</Length 64>>stream",
+        `(\x00\x01\x02endstream\x03endobj\x04\x00BINARY\x01GARBAGE\x02withLetters)`,
+        "endstream",
+        "endobj",
+        "trailer<</Root 1 0 R>>",
+        "%%EOF",
+      ].join("\n"),
+      "latin1",
+    );
+    assert.equal(isPdfGarbageText("(\x00endstream\x01endobj\x02x)"), true);
+    assert.equal(isPdfGarbageText("Multimedia retrieval ranking"), false);
+    await assert.rejects(
+      () => extractLocalFileText(file, streamJunk, "application/pdf"),
+      (error: unknown) => {
+        assert.ok(error instanceof AdamError);
+        assert.equal(error.code, "unsupported_type");
+        assert.equal(error.retryable, false);
+        assert.match(error.message, /no extractable text/i);
+        assert.doesNotMatch(error.message, /endstream|endobj/i);
+        return true;
+      },
+    );
+    assert.throws(
+      () =>
+        assertExtractHasText({
+          pages: [{ page: 1, text: "\x00\x01endstream\x02endobj\x03binary dump withLetters" }],
+          truncated: true,
+        }),
+      (error: unknown) =>
+        error instanceof AdamError &&
+        error.code === "unsupported_type" &&
+        /no extractable text/i.test(error.message),
     );
   });
 
