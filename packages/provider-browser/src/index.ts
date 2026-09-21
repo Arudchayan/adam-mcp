@@ -14,9 +14,11 @@ export {
   exerciseDeadlineFromPage,
   inferDates,
   isAdamFailurePage,
+  isAdamPermissionDeniedPage,
   isLoggedInSnapshot,
   isLoginSnapshot,
 } from "./extract.ts";
+export { adamErrorForHttpStatus } from "./http-errors.ts";
 export { defaultProfileDir } from "./config.ts";
 export {
   createBrowserProvider,

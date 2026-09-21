@@ -22,6 +22,7 @@ import {
   isLoginSnapshot,
   mergeFrameLinks,
 } from "./extract.ts";
+import { adamErrorForHttpStatus } from "./http-errors.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
 import { boundHolderPid, holderStatus, startSessionHolder } from "./session-holder.ts";
 import { SerialQueue } from "./serial-queue.ts";
@@ -372,10 +373,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const response = await page.context().request.get(target, { timeout: 45_000, maxRedirects: 5 });
       assertUrlAllowed(response.url());
       if (!response.ok()) {
-        throw new AdamError(
-          "not_found",
-          `ADAM returned HTTP ${response.status()} for a file fetch.`,
-        );
+        throw adamErrorForHttpStatus(response.status(), "fetch");
       }
       const headers = response.headers();
       const contentType = headers["content-type"];
@@ -414,10 +412,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       });
       assertUrlAllowed(response.url());
       if (!response.ok()) {
-        throw new AdamError(
-          "not_found",
-          `ADAM returned HTTP ${response.status()} for a file probe.`,
-        );
+        throw adamErrorForHttpStatus(response.status(), "probe");
       }
       const headers = response.headers();
       return {

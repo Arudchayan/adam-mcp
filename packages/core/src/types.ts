@@ -216,6 +216,7 @@ export type ListOptions = {
 
 export const ADAM_ERROR_CODES = [
   "unauthorized",
+  "forbidden",
   "not_found",
   "stale_id",
   "unsupported_type",

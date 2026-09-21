@@ -9,7 +9,8 @@ import {
   fullSnapshotByteProxy,
   WALK_PARTIAL_NOTICE,
 } from "./browser-provider.ts";
-import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
+import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks, isAdamFailurePage, isAdamPermissionDeniedPage } from "./extract.ts";
+import { adamErrorForHttpStatus } from "./http-errors.ts";
 import { parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
@@ -258,6 +259,88 @@ describe("listing classification", () => {
     assert.equal(withRows.state, "ok");
     const htmlOnly = classifyListing(base, 2);
     assert.equal(htmlOnly.state, "ok");
+  });
+});
+
+describe("actionable upstream errors (ADR follow-up)", () => {
+  it("maps HTTP status from fetch/probe without labeling 429/5xx as not_found", () => {
+    const notFound = adamErrorForHttpStatus(404, "fetch");
+    assert.equal(notFound.code, "not_found");
+    assert.equal(notFound.retryable, false);
+
+    const unauthorized = adamErrorForHttpStatus(401, "probe");
+    assert.equal(unauthorized.code, "unauthorized");
+    assert.equal(unauthorized.retryable, false);
+
+    const forbidden = adamErrorForHttpStatus(403, "fetch");
+    assert.equal(forbidden.code, "forbidden");
+    assert.equal(forbidden.retryable, false);
+
+    const rateLimited = adamErrorForHttpStatus(429, "fetch");
+    assert.equal(rateLimited.code, "provider_unavailable");
+    assert.equal(rateLimited.retryable, true);
+    assert.match(rateLimited.message, /rate-limited|429/i);
+
+    const serverError = adamErrorForHttpStatus(500, "probe");
+    assert.equal(serverError.code, "provider_unavailable");
+    assert.equal(serverError.retryable, true);
+    assert.notEqual(serverError.code, "not_found");
+  });
+
+  it("classifies permission-denied pages separately from missing pages", () => {
+    const missing = {
+      title: "Failure Message",
+      text: "The requested page could not be found.",
+      html: "",
+    };
+    const permission = {
+      title: "Failure Message",
+      text: "Keine Berechtigung für dieses Objekt.",
+      html: "",
+    };
+    const permissionEn = {
+      title: "Fehler",
+      text: "Permission denied",
+      html: "",
+    };
+    assert.equal(isAdamFailurePage(missing), true);
+    assert.equal(isAdamPermissionDeniedPage(missing), false);
+    assert.equal(isAdamFailurePage(permission), false);
+    assert.equal(isAdamPermissionDeniedPage(permission), true);
+    assert.equal(isAdamFailurePage(permissionEn), false);
+    assert.equal(isAdamPermissionDeniedPage(permissionEn), true);
+  });
+
+  it("fetchAuthorized surfaces mapped HTTP codes via the memory session seam", async () => {
+    const download = "https://adam.unibas.ch/goto_adam_file_100011_download.html";
+    for (const [status, code, retryable] of [
+      [404, "not_found", false],
+      [429, "provider_unavailable", true],
+      [503, "provider_unavailable", true],
+      [403, "forbidden", false],
+    ] as const) {
+      const session = createMemorySession(
+        {
+          "https://adam.unibas.ch/go/file/100011": snapshotFromHtml(
+            "https://adam.unibas.ch/go/file/100011",
+            "00_Overview.pdf",
+            "<main><h1>00_Overview.pdf</h1><a href='/logout.php'>Abmelden</a></main>",
+            "00_Overview.pdf Abmelden",
+          ),
+        },
+        {
+          fetchStatus: (url) => (url === download ? status : undefined),
+          files: {
+            [download]: { bytes: new Uint8Array([1]), contentType: "application/pdf" },
+          },
+        },
+      );
+      await assert.rejects(
+        () => session.fetchAuthorized(download),
+        (error: unknown) =>
+          error instanceof AdamError && error.code === code && error.retryable === retryable,
+      );
+    }
   });
 });
 
@@ -562,6 +645,43 @@ describe("BrowserAdamProvider with a memory session", () => {
     await assert.rejects(
       () => locked.listChildren("999999", { type: "fold" }),
       (error: unknown) => error instanceof AdamError && error.code === "not_found",
+    );
+  });
+
+  it("throws forbidden on ADAM permission-denied pages (not not_found)", async () => {
+    const denied = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/999998": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/999998",
+          "Failure Message",
+          "<main><h1>Failure Message</h1><p>Keine Berechtigung</p></main>",
+          "Failure Message Keine Berechtigung für dieses Objekt.",
+        ),
+      }),
+    });
+    await assert.rejects(
+      () => denied.listChildren("999998", { type: "fold" }),
+      (error: unknown) =>
+        error instanceof AdamError && error.code === "forbidden" && error.retryable === false,
+    );
+  });
+
+  it("throws stale_id when ADAM redirects to a different typed ref_id", async () => {
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100099",
+          "Other folder",
+          "<main><h1>Other folder</h1><a href='/logout.php'>Abmelden</a></main>",
+          "Other folder Abmelden",
+        ),
+      }),
+    });
+    await assert.rejects(
+      () => provider.listChildren("100010", { type: "fold" }),
+      (error: unknown) => error instanceof AdamError && error.code === "stale_id" && error.retryable === false,
     );
   });
 

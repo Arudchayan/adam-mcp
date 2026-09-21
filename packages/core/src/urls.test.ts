@@ -140,7 +140,15 @@ describe("object policy", () => {
     assert.equal(new AdamError("provider_unavailable", "chrome missing").retryable, true);
     assert.equal(new AdamError("not_found", "gone").retryable, false);
     assert.equal(new AdamError("unauthorized", "login").retryable, false);
+    assert.equal(new AdamError("forbidden", "no access").retryable, false);
+    assert.equal(new AdamError("stale_id", "redirect").retryable, false);
     assert.equal(new AdamError("not_found", "gone", true).retryable, true);
+  });
+
+  it("ADAM_ERROR_CODES includes forbidden for permission denials", async () => {
+    const { ADAM_ERROR_CODES } = await import("./types.ts");
+    assert.ok(ADAM_ERROR_CODES.includes("forbidden"));
+    assert.ok(ADAM_ERROR_CODES.includes("stale_id"));
   });
 });
 

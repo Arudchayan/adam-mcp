@@ -35,6 +35,7 @@ import {
   classifyListing,
   listingItemsOrEmpty,
   isAdamFailurePage,
+  isAdamPermissionDeniedPage,
   isLoggedInSnapshot,
   isLoginSnapshot,
   type ExtractedCatalog,
@@ -636,7 +637,10 @@ export class BrowserAdamProvider implements AdamProvider {
           }
         }
       } catch (error) {
-        if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) {
+        if (
+          error instanceof AdamError &&
+          (error.code === "cancelled" || error.code === "unauthorized" || error.code === "forbidden")
+        ) {
           throw error;
         }
         skipped += 1;
@@ -756,12 +760,23 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(landed.type, landed.refId);
     }
     if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
-      throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
+      throw new AdamError(
+        "stale_id",
+        `ADAM redirected ref_id ${requested.refId} to ${landed.refId}; the cached id may be stale.`,
+        false,
+      );
     }
     if (isLoginSnapshot(snapshot)) {
       throw new AdamError(
         "unauthorized",
         "ADAM is showing the login page. Run adam_login or `npm run login` and complete SWITCH edu-ID in Chrome. Do not paste the password into chat.",
+      );
+    }
+    if (isAdamPermissionDeniedPage(snapshot)) {
+      throw new AdamError(
+        "forbidden",
+        `No permission to open ${requested?.refId ?? url} on ADAM.`,
+        false,
       );
     }
     if (looksMissing(snapshot)) {

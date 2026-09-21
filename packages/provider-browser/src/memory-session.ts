@@ -2,6 +2,7 @@ import { AdamError } from "adam-core";
 import { assertUrlAllowed } from "./allowlist.ts";
 import { defaultOrigin } from "./config.ts";
 import { collectLinksFromHtml, isLoggedInSnapshot } from "./extract.ts";
+import { adamErrorForHttpStatus } from "./http-errors.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 
 export type MemorySessionPages = Record<string, PageSnapshot>;
@@ -30,6 +31,10 @@ export function createMemorySession(
     onOpen?: (url: string) => void;
     /** Test seam: throw before resolving a page (e.g. simulate Playwright download abort). */
     openError?: (url: string) => Error | undefined;
+    /** Test seam: HTTP status for fetchAuthorized (non-2xx → adamErrorForHttpStatus). */
+    fetchStatus?: (url: string) => number | undefined;
+    /** Test seam: HTTP status for probeAuthorized. */
+    probeStatus?: (url: string) => number | undefined;
   } = {},
 ): AdamBrowserSession {
   const origin = defaultOrigin();
@@ -74,6 +79,10 @@ export function createMemorySession(
       contentLength?: number;
     }> {
       assertUrlAllowed(url);
+      const status = options.fetchStatus?.(url);
+      if (status !== undefined && (status < 200 || status >= 300)) {
+        throw adamErrorForHttpStatus(status, "fetch");
+      }
       const blob = options.files?.[url];
       if (!blob) {
         throw new AdamError("not_found", `No file bytes for ${url} in the memory session.`);
@@ -91,6 +100,10 @@ export function createMemorySession(
       contentLength?: number;
     }> {
       assertUrlAllowed(url);
+      const status = options.probeStatus?.(url);
+      if (status !== undefined && (status < 200 || status >= 300)) {
+        throw adamErrorForHttpStatus(status, "probe");
+      }
       const blob = options.files?.[url];
       if (!blob) {
         throw new AdamError("not_found", `No file bytes for ${url} in the memory session.`);

@@ -557,6 +557,9 @@ export function listingItemsOrEmpty<T>(items: T[], classified: ListingClassifica
 
 /** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). */
 export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" | "html">): boolean {
+  if (isAdamPermissionDeniedPage(snapshot)) {
+    return false;
+  }
   const title = snapshot.title ?? "";
   const text = snapshot.text ?? "";
   const haystack = `${title}\n${text}`;
@@ -572,11 +575,15 @@ export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" 
   if (/objekt konnte nicht gefunden/i.test(haystack) || /\bobject not found\b/i.test(haystack) || /\bkein objekt\b/i.test(haystack)) {
     return true;
   }
-  if (
-    (/keine berechtigung/i.test(haystack) || /permission denied/i.test(haystack)) &&
-    (/failure message/i.test(haystack) || /fehler/i.test(title) || /nicht gefunden/i.test(haystack))
-  ) {
-    return true;
-  }
   return false;
+}
+
+/** ILIAS permission-denied Failure Message — not the same as object-not-found. */
+export function isAdamPermissionDeniedPage(
+  snapshot: Pick<PageSnapshot, "text" | "title" | "html">,
+): boolean {
+  const title = snapshot.title ?? "";
+  const text = snapshot.text ?? "";
+  const haystack = `${title}\n${text}`;
+  return /keine berechtigung/i.test(haystack) || /permission denied/i.test(haystack);
 }
