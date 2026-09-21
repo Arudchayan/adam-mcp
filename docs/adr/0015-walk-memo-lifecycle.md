@@ -21,8 +21,12 @@ trees, and the `MAX_COURSE_CHILDREN` slice was silent.
 ## Decision
 
 1. **Ownership.** Memo + inflight live on the `BrowserAdamProvider` instance.
+   The same ownership covers `typeByRefId` and `fileByRefId`: process-lifetime
+   maps keyed by ref_id that are identity-sensitive across sessions.
 2. **Invalidation.** `login()` and `close()` clear memo and inflight and bump a
-   generation so a racing walk cannot rememoize after clear.
+   generation so a racing walk cannot rememoize after clear. They also clear the
+   type and file maps so type probes and download-abort titles cannot leak from a
+   prior session.
 3. **Never memoize.** Cancelled walks (ADR 0011) and mid-walk `unauthorized`,
    `forbidden`, and `stale_id` (ADR 0016) rethrow; they must not become
    `skipped` + memo. Ordinary per-page failures may still skip and set `partial`.
