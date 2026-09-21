@@ -26,7 +26,10 @@ trees, and the `MAX_COURSE_CHILDREN` slice was silent.
 2. **Invalidation.** `login()` and `close()` clear memo and inflight and bump a
    generation so a racing walk cannot rememoize after clear. They also clear the
    type and file maps so type probes and download-abort titles cannot leak from a
-   prior session.
+   prior session. Cache writes (`rememberTypes`, `typeByRefId` / `fileByRefId`
+   sets) stamp the generation observed when the open or walk started and no-op on
+   mismatch, so an in-flight walk that finishes after clear cannot repopulate those
+   maps either.
 3. **Never memoize.** Cancelled walks (ADR 0011) and mid-walk `unauthorized`,
    `forbidden`, and `stale_id` (ADR 0016) rethrow; they must not become
    `skipped` + memo. Ordinary per-page failures may still skip and set `partial`.

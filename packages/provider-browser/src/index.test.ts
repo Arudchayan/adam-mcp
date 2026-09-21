@@ -1580,6 +1580,63 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
     );
   });
 
+  it("in-flight walk after login() does not repopulate type cache", async () => {
+    let releaseHome!: () => void;
+    const homeGate = new Promise<void>((resolve) => {
+      releaseHome = resolve;
+    });
+    let signalHomeBlocked!: () => void;
+    const homeBlocked = new Promise<void>((resolve) => {
+      signalHomeBlocked = resolve;
+    });
+    let homeWaits = 0;
+    const opens: string[] = [];
+    const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
+      ...walkPages,
+      "https://adam.unibas.ch/go/crs/100010": snapshotFromHtml(
+        "https://adam.unibas.ch/go/crs/100010",
+        "Failure Message",
+        "<main><h1>Failure Message</h1><p>The requested page could not be found.</p></main>",
+        "Failure Message The requested page could not be found.",
+      ),
+    };
+    const base = createMemorySession(pages);
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: {
+        ...base,
+        async open(url: string) {
+          opens.push(url);
+          const normalized = url.replace(/\/$/, "");
+          if (normalized === "https://adam.unibas.ch") {
+            homeWaits += 1;
+            if (homeWaits === 1) {
+              signalHomeBlocked();
+              await homeGate;
+            }
+          }
+          return base.open(url);
+        },
+      },
+    });
+
+    const walkPromise = provider.search("exam");
+    await homeBlocked;
+    await provider.login();
+    releaseHome();
+    await walkPromise;
+
+    // Stale walk must not have re-seeded typeByRefId: untyped open starts at crs.
+    opens.length = 0;
+    await provider.listChildren("100010");
+    assert.ok(opens.length >= 1, "expected probe after overlapping login");
+    assert.match(
+      opens[0]!,
+      /\/go\/crs\/100010$/,
+      "in-flight walk must not repopulate type cache after login()",
+    );
+  });
+
   it("unauthorized mid-walk surfaces and is not memoized", async () => {
     const opens: string[] = [];
     const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
