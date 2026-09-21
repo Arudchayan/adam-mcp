@@ -90,7 +90,26 @@ export class FixtureAdamProvider implements AdamProvider {
     if (record.object.type !== "crs") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a course.`);
     }
-    return record.object;
+    const children = resolveChildren(refId);
+    const listingState = children.length > 0 ? "ok" : "empty";
+    return {
+      ...record.object,
+      children,
+      listingState,
+      listingSignals: {
+        contentItemCount: children.length,
+        emptyCopy: children.length === 0,
+        chromeOnly: false,
+      },
+      truncated: false,
+      childrenTotalHint: children.length,
+      ...(listingState === "empty"
+        ? {
+            notice:
+              "Listed successfully; this course has no child objects. Not a failure. Not 'no deadlines'.",
+          }
+        : {}),
+    };
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {

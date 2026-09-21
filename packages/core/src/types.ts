@@ -52,6 +52,22 @@ export type AdamObject = {
   provenance: Provenance;
   /** Present on course snapshots from getCourse (bounded). */
   children?: AdamObject[];
+  /**
+   * Honesty of embedded `children` on getCourse (ADR 0005/0015).
+   * Absent on ordinary listing rows. Never treat `children: []` as empty
+   * unless `listingState === "empty"`.
+   */
+  listingState?: ListingState;
+  listingSignals?: ListingSignals;
+  /** Listing honesty notice for getCourse (MCP relocates to listingNotice). */
+  notice?: string;
+  /**
+   * On getCourse: true when children were sliced at the course-children cap.
+   * On PageContent: true when page text was capped at MAX_PAGE_CHARS (ADR 0011).
+   */
+  truncated?: boolean;
+  /** Pre-slice child count when getCourse embeds children (set when truncated or always with a list). */
+  childrenTotalHint?: number;
 };
 
 export type InferredDate = {
@@ -63,8 +79,6 @@ export type InferredDate = {
 export type PageContent = AdamObject & {
   text: string;
   inferredDates: InferredDate[];
-  /** True when page text was capped at MAX_PAGE_CHARS (ADR 0011). */
-  truncated?: boolean;
 };
 
 export type FileObject = AdamObject & {

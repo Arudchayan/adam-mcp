@@ -103,7 +103,13 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
   /** Listing-derived file metadata for download-abort getFile fallback (title/mime/size). */
   private readonly fileByRefId = new Map<RefId, FileObject>();
-  /** PERF-1: shared enrolled walk memo; invalidated on close() (new provider = fresh). */
+  /**
+   * Enrolled-walk cache owned by this provider instance (ADR 0015).
+   * Valid only for the current auth epoch: login()/close() bump walkEpoch and
+   * drop memo + inflight so a stale in-flight walk cannot become the cache.
+   * Memo stores completed WalkResult only — never cancelled or unauthorized.
+   */
+  private walkEpoch = 0;
   private livePagesMemo: WalkResult | undefined;
   private livePagesInflight: Promise<WalkResult> | undefined;
 
@@ -118,17 +124,24 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async login(timeoutMs?: number): Promise<SessionStatus> {
+    this.invalidateLivePagesCache();
     return this.session().loginInteractively(timeoutMs);
   }
 
   async close(): Promise<void> {
-    this.livePagesMemo = undefined;
-    this.livePagesInflight = undefined;
+    this.invalidateLivePagesCache();
     this.fileByRefId.clear();
     this.typeByRefId.clear();
     if (this.sessionHandle) {
       await this.sessionHandle.close();
     }
+  }
+
+  /** Auth or provider teardown: memo and in-flight joins are no longer valid. */
+  private invalidateLivePagesCache(): void {
+    this.walkEpoch += 1;
+    this.livePagesMemo = undefined;
+    this.livePagesInflight = undefined;
   }
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -150,11 +163,21 @@ export class BrowserAdamProvider implements AdamProvider {
     if (!course) {
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a course in the browser session.`);
     }
-    const children = uniqueByRef(
+    const allChildren = uniqueByRef(
       catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type)),
-    ).slice(0, MAX_COURSE_CHILDREN);
-    const classified = classifyListing(snapshot, children.length);
-    return { ...course, children: listingItemsOrEmpty(children, classified) };
+    );
+    const classified = classifyListing(snapshot, allChildren.length);
+    const truncated = allChildren.length > MAX_COURSE_CHILDREN;
+    const bounded = allChildren.slice(0, MAX_COURSE_CHILDREN);
+    const children = listingItemsOrEmpty(bounded, classified);
+    return {
+      ...course,
+      children,
+      listingState: classified.state,
+      listingSignals: classified.signals,
+      ...(classified.notice ? { notice: classified.notice } : {}),
+      ...(truncated ? { truncated: true, childrenTotalHint: allChildren.length } : { truncated: false }),
+    };
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -510,9 +533,9 @@ export class BrowserAdamProvider implements AdamProvider {
 
   private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
     throwIfCancelled(signal);
-    // PERF-1 memo: reuse enrolled walk across search / calendar / news.
-    // Invalidation: close() (and a new provider instance). Memo hit emits no progress.
-    // Cancelled walks are never memoized (ADR 0011).
+    // Provider-owned memo (ADR 0015): reuse across search / calendar / news.
+    // Invalidation: login() / close() via walkEpoch. Memo hit emits no progress.
+    // Cancelled and unauthorized walks are never memoized (ADR 0011 / 0015).
     if (this.livePagesMemo) {
       throwIfCancelled(signal);
       return this.livePagesMemo;
@@ -520,15 +543,21 @@ export class BrowserAdamProvider implements AdamProvider {
     if (this.livePagesInflight) {
       return this.livePagesInflight;
     }
-    this.livePagesInflight = this.walkLivePages(onProgress, signal)
+    const epoch = this.walkEpoch;
+    const inflight = this.walkLivePages(onProgress, signal)
       .then((pages) => {
-        this.livePagesMemo = pages;
+        if (epoch === this.walkEpoch) {
+          this.livePagesMemo = pages;
+        }
         return pages;
       })
       .finally(() => {
-        this.livePagesInflight = undefined;
+        if (epoch === this.walkEpoch && this.livePagesInflight === inflight) {
+          this.livePagesInflight = undefined;
+        }
       });
-    return this.livePagesInflight;
+    this.livePagesInflight = inflight;
+    return inflight;
   }
 
   private async walkLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
@@ -607,7 +636,7 @@ export class BrowserAdamProvider implements AdamProvider {
           }
         }
       } catch (error) {
-        if (error instanceof AdamError && error.code === "cancelled") {
+        if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) {
           throw error;
         }
         skipped += 1;

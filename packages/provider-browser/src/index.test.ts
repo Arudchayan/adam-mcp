@@ -1278,6 +1278,146 @@ describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
     assert.ok(opens.length > afterSearch, "close() invalidates memo; next walk re-opens");
   });
 
+  it("login() invalidates enrolled walk memo (ADR 0015)", async () => {
+    const opens: string[] = [];
+    const session = createMemorySession(
+      {
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardHtml,
+          "Schreibtisch 00000-01 Written exam: 12 January 2027 News 00_Overview.pdf New file Abmelden",
+        ),
+        "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100001",
+          "00000-01 – Synthetic Multimedia Seminar",
+          courseHtml,
+          "00000-01 Written exam: 12 January 2027 Course Notes Exercises Exercise 1 Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100010",
+          "03 - Course & Notes",
+          folderHtml,
+          "03 - Course Notes 00_Overview.pdf Abmelden",
+        ),
+        "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+          "https://adam.unibas.ch/go/fold/100020",
+          "04 - Exercises",
+          emptyFolderHtml,
+          "04 - Exercises This folder is empty Abmelden",
+        ),
+        "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+          "https://adam.unibas.ch/go/exc/100021",
+          "Exercise 1 – Retrieval summary",
+          exerciseHtml,
+          "Exercise 1 Retrieval summary Deadline: 22 September 2026 Abmelden",
+        ),
+      },
+      { onOpen: (url) => opens.push(url) },
+    );
+    const provider = createBrowserProvider({ session, origin: "https://adam.unibas.ch" });
+
+    await provider.search("exam");
+    const afterSearch = opens.length;
+    assert.ok(afterSearch >= 2);
+
+    await provider.login();
+    await provider.search("exam");
+    assert.ok(opens.length > afterSearch, "login() must invalidate walk memo; next search re-walks");
+  });
+
+  it("mid-walk unauthorized surfaces to caller and is not memoized as partial", async () => {
+    const opens: string[] = [];
+    const loginPage = snapshotFromHtml(
+      "https://adam.unibas.ch/login.php",
+      "Bei ADAM anmelden: ADAM",
+      loginHtml,
+      "Bei ADAM anmelden Login mit Switch edu-ID",
+    );
+    const session = createMemorySession(
+      {
+        "https://adam.unibas.ch/": snapshotFromHtml(
+          "https://adam.unibas.ch/",
+          "Schreibtisch",
+          dashboardHtml,
+          "Schreibtisch 00000-01 Written exam: 12 January 2027 News 00_Overview.pdf New file Abmelden",
+        ),
+        // Session expired: enrolled course open redirects to login.
+        "https://adam.unibas.ch/go/crs/100001": loginPage,
+      },
+      { onOpen: (url) => opens.push(url) },
+    );
+    const provider = createBrowserProvider({ session, origin: "https://adam.unibas.ch" });
+
+    await assert.rejects(
+      () => provider.search("exam"),
+      (error: unknown) => error instanceof AdamError && error.code === "unauthorized",
+    );
+    const afterFirst = opens.length;
+    assert.ok(afterFirst >= 2, `expected dashboard + course open; got ${afterFirst}`);
+
+    await assert.rejects(
+      () => provider.search("exam"),
+      (error: unknown) => error instanceof AdamError && error.code === "unauthorized",
+    );
+    assert.ok(
+      opens.length > afterFirst,
+      "unauthorized walk must not be memoized; second search re-opens",
+    );
+  });
+
+  it("getCourse unknown listing is not children:[] without listingState", async () => {
+    const unknownCourse = snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100099",
+      "Content: Mystery course: ADAM",
+      `<nav aria-label="Hauptnavigationsleiste"><a href="/go/fold/888888">Chrome trap</a></nav>
+<main><h1>Mystery course</h1><p>Content Info</p></main>`,
+      "ADAM Search Dashboard Content (Selected) Info Accessibility Rendered by its-ilias-web-prod-04 - 10.11",
+    );
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100099": unknownCourse,
+      }),
+    });
+    const course = await provider.getCourse("100099");
+    assert.equal(course.listingState, "unknown");
+    assert.deepEqual(course.children, []);
+    assert.ok(course.notice);
+    assert.equal(course.truncated, false);
+  });
+
+  it("getCourse sets truncated when children exceed MAX_COURSE_CHILDREN", async () => {
+    const links = Array.from({ length: 101 }, (_, i) => {
+      const id = 200000 + i;
+      return `<a href="/go/fold/${id}">Folder ${id}</a>`;
+    }).join("\n");
+    const html = `
+<nav aria-label="Brotkrumen"><a href="/go/root/1">ADAM</a></nav>
+<main>
+  <h1>00000-99 – Crowded course</h1>
+  ${links}
+  <a href="/logout.php">Abmelden</a>
+</main>`;
+    const text = `00000-99 Crowded course ${Array.from({ length: 101 }, (_, i) => `Folder ${200000 + i}`).join(" ")} Abmelden`;
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100099": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100099",
+          "00000-99 – Crowded course",
+          html,
+          text,
+        ),
+      }),
+    });
+    const course = await provider.getCourse("100099");
+    assert.equal(course.listingState, "ok");
+    assert.equal(course.truncated, true);
+    assert.equal(course.childrenTotalHint, 101);
+    assert.equal(course.children?.length, 100);
+  });
+
   it("unknown list_children returns immediately; ≤1 retry; no TYPE_PROBE storm", async () => {
     const opens: string[] = [];
     const unknownFold = snapshotFromHtml(

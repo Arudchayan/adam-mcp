@@ -68,6 +68,23 @@ describe("FixtureAdamProvider", () => {
     });
   });
 
+  it("getCourse embeds children with listingState honesty (ADR 0015)", async () => {
+    const course = await provider.getCourse("100001");
+    assert.equal(course.listingState, "ok");
+    assert.equal(course.truncated, false);
+    assert.equal(course.childrenTotalHint, 4);
+    assert.deepEqual(
+      course.children?.map((item) => item.refId),
+      ["100010", "100020", "100021", "100040"],
+    );
+
+    const emptyCourse = await provider.getCourse("100201");
+    assert.equal(emptyCourse.listingState, "empty");
+    assert.deepEqual(emptyCourse.children, []);
+    assert.equal(emptyCourse.truncated, false);
+    assert.ok(emptyCourse.notice);
+  });
+
   it("searches titles and page text", async () => {
     const found = await provider.search("Fourier");
     assert.ok(found.items.some((item) => item.refId === "100001"));

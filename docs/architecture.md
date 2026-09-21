@@ -51,6 +51,7 @@ Every read tool result and every ADAM `resources/read` payload is wrapped as `Un
 - **Structured output:** `ok(data, outputSchema)` validates redacted `structuredContent`; mismatch is `provider_unavailable` non-retryable (shape bug).
 - **Bounds:** `MAX_PAGE_CHARS=50_000` (`adam-core`); `PageContent.truncated` + `untrustedPageOutputSchema.truncated?`; truncate after `inferDates`. Extract caps stay 8MiB / 40k chars / ≤20 pages; after `confirm:true`, empty extract text fails closed (ADR 0014) instead of a blank success.
 - **Cancellation:** `ObjectOpenOptions.signal` + `throwIfCancelled(signal)` (`cancelled`, non-retryable). MCP extracts via `signalFromContext(ctx)` and threads to every provider; browser walks check per iteration and never memoize cancelled walks.
+- **Walk cache (ADR 0015):** enrolled walk memo is owned by `BrowserAdamProvider`; `login()` / `close()` invalidate it; mid-walk `unauthorized` is not memoized as partial. `adam_get_course` carries `listingState` (+ truncation signals) so empty vs unknown children are not ambiguous.
 - **Retryability:** unknown bugs and `cancelled` are `retryable=false`; only `provider_unavailable` defaults true.
 - **Redaction:** `password/api_key/secret`/matriculation in text; `password/api_key/secret` query keys in URLs; `deepRedact` uses `redactUrl` for `*url` fields.
 
