@@ -7,21 +7,6 @@ const REF_ID_HELP =
 /** Digits-only after normalization (internal / legacy callers). */
 export const refIdSchema = z.string().regex(/^\d+$/).describe(REF_ID_HELP);
 
-/** Tool input: digits, adam:// handle, or pinned ADAM https URL — normalized to digits. */
-export const flexibleRefIdSchema = z
-  .string()
-  .min(1)
-  .describe(REF_ID_HELP)
-  .superRefine((value, ctx) => {
-    if (!parseAdamRef(value)) {
-      ctx.addIssue({
-        code: "custom",
-        message: REF_ID_HELP,
-      });
-    }
-  })
-  .transform((value) => parseAdamRef(value)!.refId);
-
 export const cursorSchema = z
   .string()
   .regex(/^\d+$/, "Cursor must be an opaque decimal offset from a previous listing")
@@ -314,12 +299,6 @@ export const exerciseOutputSchema = adamObjectOutputSchema.extend({
       instructionText: z.string().optional(),
     }),
   ),
-});
-
-/** Resource adam://exc/{refId}: metadata only — no instruction/page bodies (use adam_get_exercise + confirm). */
-export const exerciseResourceOutputSchema = adamObjectOutputSchema.extend({
-  type: z.literal("exc"),
-  units: z.array(exerciseUnitMetaSchema),
 });
 
 export const forumOutputSchema = adamObjectOutputSchema.extend({

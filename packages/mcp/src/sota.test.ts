@@ -15,12 +15,7 @@ import {
   paginatedObjectsOutputSchema,
   untrustedPageOutputSchema,
 } from "./schemas.ts";
-import {
-  fail,
-  ok,
-  signalFromContext,
-  throwIfCancelled as mcpThrowIfCancelled,
-} from "./results.ts";
+import { fail, ok, signalFromContext } from "./results.ts";
 
 describe("SOTA P0: cursor strictness (ADR 0010)", () => {
   it("accepts digits and undefined, rejects garbage at the MCP boundary", () => {
@@ -115,11 +110,7 @@ describe("SOTA P1: retryability fix (ADR 0011)", () => {
       assert.ok(error instanceof AdamError);
       assert.equal((error as AdamError).code, "cancelled");
       assert.equal((error as AdamError).retryable, false);
-      return true;
-    });
-    assert.throws(() => mcpThrowIfCancelled(controller.signal), (error: unknown) => {
-      assert.ok(error instanceof AdamError);
-      assert.equal((error as AdamError).code, "cancelled");
+      assert.equal((error as AdamError).message, "Request was cancelled by the client.");
       return true;
     });
   });
