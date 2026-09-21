@@ -28,7 +28,15 @@ Sign in to ADAM in the Chrome window. After success the window closes and a **de
 
 ADAM cookies live in RAM inside the headless Chrome process only. After a reboot or a SWITCH timeout, run `npm run login` again. `ADAM_BROWSER_HEADED=1 npm run login` keeps the headed window in-process for debugging instead of handing off to the headless session.
 
-After publish of `adam-mcp` 0.2.0, `npx -y adam-mcp` / `npm i -g adam-mcp` work: the pack is self-contained (`dist` bundles workspace code). Clone + `npm run setup` still prints absolute-path host snippets and `npm run login` helpers.
+**Install today:** Git tag `v0.2.0` may exist, but `adam-mcp` is **not** on the npm registry yet — `npx -y adam-mcp` / `npm i -g adam-mcp` do not work. Clone this repo and run `npm run setup` (absolute-path host snippets + login helpers). npm publish waits on the [SECURITY.md](../SECURITY.md) checklist. After a future publish, the pack is self-contained (`dist` bundles workspace code).
+
+## Operators (fixture, rebuild, incidents)
+
+- **Fixture** (default): no Chrome, no login. Confirm tools with the fixture snippet from `npm run setup`.
+- **Live ADAM:** Chrome is only for interactive login. Host config uses `--browser` or `ADAM_PROVIDER=browser` (see [AGENTS.md](../AGENTS.md)).
+- **After editing source:** if the host points at `packages/mcp/dist/adam-mcp.mjs`, rebuild (`npm run build` or `npm run setup`) so the host picks up changes.
+- **Live session broken?** Order: `npm run status` / `adam-mcp status` → note `holderPid` → `npm run login` again → if needed `ADAM_BROWSER_HEADED=1 npm run login` → for listing markup only, `ADAM_DEBUG_CAPTURE=1` (structure-only under `scratch/` / `ADAM_DEBUG_CAPTURE_DIR`; never commit captures).
+- **Telemetry:** each tool call logs one JSON line to stderr with a `runId` you can correlate with host errors (ADR 0008); stdout stays JSON-RPC only.
 
 ## Cursor, Claude Desktop, Windsurf
 

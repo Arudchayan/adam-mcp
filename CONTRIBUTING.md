@@ -19,7 +19,7 @@ npm run typecheck
 1. Fork the repo, then clone your fork.
 2. `npm install`
 3. `npm run setup` — use the **fixture** MCP snippet in your client and confirm tools respond.
-4. Optional live ADAM: `npm run login`, sign in in Chrome, then use the `--browser` snippet. Leave that Chrome window open. See [AGENTS.md](AGENTS.md) and [docs/setup.md](docs/setup.md).
+4. Optional live ADAM: `npm run login`, sign in in Chrome, then use the `--browser` snippet. After success the window closes; a detached headless session holder keeps ADAM alive. Check with `npm run status` (`holderPid`); stop with `npm run logout`. See [AGENTS.md](AGENTS.md), [docs/setup.md](docs/setup.md), and [ADR 0009](docs/adr/0009-headless-session-holder.md).
 
 ## What to open where
 
