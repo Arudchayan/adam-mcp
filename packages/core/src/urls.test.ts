@@ -67,6 +67,18 @@ describe("canonicalUrl and parseAdamRef", () => {
     assert.equal(parseAdamRef("http://["), undefined);
   });
 
+  it("parses adam:// resource handles", () => {
+    assert.deepEqual(parseAdamRef("adam://exc/100021"), { type: "exc", refId: "100021" });
+    assert.deepEqual(parseAdamRef("adam://crs/100001"), { type: "crs", refId: "100001" });
+  });
+
+  it("rejects foreign origins, titles, and non-https ADAM hosts", () => {
+    assert.equal(parseAdamRef("https://evil.example/go/crs/100001"), undefined);
+    assert.equal(parseAdamRef("http://adam.unibas.ch/go/crs/100001"), undefined);
+    assert.equal(parseAdamRef("Homework 1 — Fourier"), undefined);
+    assert.equal(parseAdamRef("https://github.com/Arudchayan/adam-mcp"), undefined);
+  });
+
   it("parses ADAM goto permalinks", () => {
     assert.deepEqual(
       parseAdamRef("https://adam.unibas.ch/goto_adam_file_1428835_download.html"),

@@ -944,6 +944,8 @@ describe("A6 resources for read-by-id", () => {
       assert.match(exerciseText, /"refId": "100021"/);
       assert.match(exerciseText, /"untrusted": true/);
       assert.match(exerciseText, /"notice":/);
+      assert.equal(/instructionText/.test(exerciseText), false);
+      assert.doesNotMatch(exerciseText, /cannot submit/i);
 
       // A1 tie-in: get-course tool result cites the same resource handle.
       const viaTool = await rpc(child, {
@@ -1160,9 +1162,14 @@ describe("AT3 adam_search enrolled-tree ranking", () => {
         type?: string;
         url?: string;
         resourceUri?: string;
+        match?: string;
       }>;
       assert.ok(Array.isArray(items));
       assert.ok(items.some((item) => item.refId === "100001"));
+      assert.ok(
+        items.every((item) => item.match === "title" || item.match === "body"),
+        "search hits expose match=title|body",
+      );
       assert.equal(
         items.some((item) => item.refId === CATALOG_ONLY_COURSE_ID),
         false,
@@ -1425,6 +1432,11 @@ describe("AT5 adam_get_exercise harden", () => {
       assert.equal(structured?.provenance?.freshness, "synthetic");
       assert.ok(structured?.provenance?.sourceUrl);
       assert.ok(structured?.provenance?.fetchedAt);
+      assert.match(
+        JSON.stringify(exercise.result?.structuredContent),
+        /instructionText/,
+        "tool with confirm still returns instruction bodies",
+      );
       assertAdamAndHttps(exercise.result?.structuredContent, exercise.result?.content?.[0]?.text ?? "");
       assert.equal(
         (exercise.result?.content ?? []).some(
@@ -1747,5 +1759,88 @@ describe("docs confirm-list alignment", () => {
     }
     assert.match(security, /threadId/);
     assert.match(agents, /threadId/);
+  });
+});
+
+describe("agent contracts over stdio", () => {
+  it("normalizes adam:// and /go/ refIds; rejects bad origin; exercise resource omits bodies", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "agent-contracts", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const viaHandle = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "adam_get_exercise",
+          arguments: { refId: "adam://exc/100021", confirm: true },
+        },
+      });
+      assert.equal(viaHandle.error, undefined, viaHandle.error?.message);
+      assert.equal(viaHandle.result?.isError, undefined);
+      assert.equal(viaHandle.result?.structuredContent?.refId, "100021");
+      assert.match(JSON.stringify(viaHandle.result?.structuredContent), /instructionText/);
+
+      const viaUrl = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_get_course",
+          arguments: { refId: "https://adam.unibas.ch/go/crs/100001" },
+        },
+      });
+      assert.equal(viaUrl.error, undefined, viaUrl.error?.message);
+      assert.equal(viaUrl.result?.structuredContent?.refId, "100001");
+
+      const badOrigin = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "adam_get_course",
+          arguments: { refId: "https://evil.example/go/crs/100001" },
+        },
+      });
+      assert.equal(badOrigin.error !== undefined || badOrigin.result?.isError === true, true);
+
+      const resource = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "resources/read",
+        params: { uri: "adam://exc/100021" },
+      });
+      const text =
+        (resource.result as { contents?: Array<{ text?: string }> } | undefined)?.contents?.[0]?.text ??
+        "";
+      assert.equal(/instructionText/.test(text), false);
+      assert.doesNotMatch(text, /cannot submit/i);
+      assert.match(text, /"refId": "100021"/);
+
+      const prompts = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "prompts/get",
+        params: { name: "study_this", arguments: { refId: "100021" } },
+      });
+      const promptText = JSON.stringify(prompts.result);
+      assert.match(promptText, /adam_get_exercise[^\n\\]*confirm\s*=\s*true/i);
+    } finally {
+      child.kill();
+    }
   });
 });

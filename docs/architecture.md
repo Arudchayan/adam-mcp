@@ -41,7 +41,7 @@ Real confirms and future writes → MCP **elicitation** when the host supports M
 
 ## Trust envelope (ADR 0008)
 
-Every read tool result and every ADAM `resources/read` payload is wrapped as `UntrustedContent` (`untrusted: true` + notice) and passed through `deepRedact`. Page/extract keep the page notice; listings, exercise, forum, and other structured reads use the data notice. `ConfirmGate.requireTrue` gates instruction/page bodies on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and forum posts (`threadId`).
+Every read tool result and every ADAM `resources/read` payload is wrapped as `UntrustedContent` (`untrusted: true` + notice) and passed through `deepRedact`. Page/extract keep the page notice; listings, exercise, forum, and other structured reads use the data notice. `ConfirmGate.requireTrue` gates instruction/page bodies on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and forum posts (`threadId`). Resource `adam://exc/{refId}` returns exercise metadata only (no `instructionText`); instruction bodies require the confirm-gated tool.
 
 ## SOTA hardening (ADR 0010 / 0011)
 

@@ -73,14 +73,30 @@ export function canonicalUrl(
   return `${host}/go/${type}/${refId}`;
 }
 
+const ADAM_HANDLE = /^adam:\/\/([a-z0-9]+)\/(\d+)\/?$/i;
+
+/**
+ * Parse digits, adam://{type}/{refId}, or pinned ADAM https URLs into {type, refId}.
+ * Rejects titles, non-ADAM origins, and non-https browser URLs (no generic URL fetch).
+ */
 export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefId } | undefined {
   const trimmed = input.trim();
   if (/^\d+$/.test(trimmed)) {
     return { type: "unknown", refId: trimmed };
   }
 
+  const handle = trimmed.match(ADAM_HANDLE);
+  if (handle) {
+    return typedRef(handle[1], handle[2]);
+  }
+
   try {
-    const url = new URL(trimmed, DEFAULT_ADAM_ORIGIN);
+    const looksAbsolute = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+    const url = looksAbsolute ? new URL(trimmed) : new URL(trimmed, DEFAULT_ADAM_ORIGIN);
+    if (url.protocol !== "https:" || url.hostname !== new URL(DEFAULT_ADAM_ORIGIN).hostname) {
+      return undefined;
+    }
+
     const goMatch = url.pathname.match(GO_PATH);
     if (goMatch) {
       return typedRef(goMatch[1], goMatch[2]);
