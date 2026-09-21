@@ -7,12 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `adam://exc/{refId}` resource is metadata only (deadline/status/title/url — no `instructionText`); use `adam_get_exercise` with `confirm:true` for instruction bodies
+- Tool `refId` accepts `adam://{type}/{id}` and pinned `https://adam.unibas.ch/go/{type}/{id}` (digits still work); titles and non-ADAM URLs are rejected
+- `adam_get_forum` requires `confirm:true` when `threadId` is set (post bodies); thread summaries without `threadId` do not
+- Default/fixture startup no longer loads Playwright; `adam-provider-browser` is dynamic-import only for `--browser`
+
 ### Fixed
 
 - `adam_session_status` / `adam-mcp status` report `holderPid` for a live bound session holder; stale/dead/unbound records stay null (ADR 0009)
 - `adam_search` for `pdf` / `PDF` / `.pdf` returns enrolled `type=file` hits (title/extension/mime; not only crs/fold page text)
 - After `confirm:true`, `adam_extract_file_text` never returns silent empty text; empty/whitespace or cap-window-empty extracts fail closed with a reason (ADR 0014)
 - Live `adam_get_forum` / `adam://frm` thread summaries parse from ILIAS forum HTML when present; missing HTML stays honest-empty; `threadId` posts fail closed instead of inventing bodies (ADR 0012)
+- Enrolled walk memo clears on `login()` / `close()`; mid-walk `forbidden` / `stale_id` / `unauthorized` abort and are not memoized (ADR 0015 / 0016)
+- `adam_get_course` reports `listingState` and truncation (`truncated` / `totalChildrenHint`) instead of a silent child cap (ADR 0015)
+- Upstream HTTP and `page.goto` status map to typed ADAM errors (`forbidden`, `stale_id`, `not_found`, retryable `provider_unavailable`) (ADR 0016)
+- `resources/read` failures reuse the tool `fail()` recovery line (`code: message (retryable=…)`) for `forbidden` / `stale_id` / `unauthorized` / `provider_unavailable`
+- Bare `ILIASSESSID=…` is redacted (not only `Cookie:`-prefixed forms)
+
+### Security
+
+- Browser mode refuses `ADAM_ALLOW_TEST_ORIGIN=1`; test origins stay fixture-only
 
 ## [0.2.0] - 2026-09-16
 
