@@ -1,11 +1,13 @@
 import { AdamError } from "adam-core";
 
-/** Map non-OK ADAM file fetch/probe HTTP status to the shared error taxonomy (ADR 0016). */
+export type AuthorizedHttpKind = "fetch" | "probe" | "goto";
+
+/** Map non-OK ADAM HTTP status to the shared error taxonomy (ADR 0016). */
 export function adamErrorFromAuthorizedHttpStatus(
   status: number,
-  kind: "fetch" | "probe",
+  kind: AuthorizedHttpKind,
 ): AdamError {
-  const noun = kind === "probe" ? "file probe" : "file fetch";
+  const noun = nounForKind(kind);
   if (status === 404) {
     return new AdamError("not_found", `ADAM returned HTTP 404 for a ${noun}.`);
   }
@@ -40,6 +42,22 @@ export function adamErrorFromAuthorizedHttpStatus(
 }
 
 /**
+ * After `page.goto`, map a main-document HTTP failure through ADR 0016.
+ * Missing response (download abort / ERR_ABORTED — ADR 0013) is not an HTTP
+ * denial — leave the throw path / caller to handle it.
+ */
+export function rejectIfGotoHttpFailed(
+  response: { ok(): boolean; status(): number } | null | undefined,
+): void {
+  if (!response) {
+    return;
+  }
+  if (!response.ok()) {
+    throw adamErrorFromAuthorizedHttpStatus(response.status(), "goto");
+  }
+}
+
+/**
  * Map typed Playwright navigation / network failures to retryable upstream errors.
  * Returns undefined for unexpected bugs so ADR 0011 keeps retryable=false.
  */
@@ -63,4 +81,19 @@ export function adamErrorFromNavigationFailure(error: unknown): AdamError | unde
     );
   }
   return undefined;
+}
+
+function nounForKind(kind: AuthorizedHttpKind): string {
+  switch (kind) {
+    case "fetch":
+      return "file fetch";
+    case "probe":
+      return "file probe";
+    case "goto":
+      return "page navigation";
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
 }

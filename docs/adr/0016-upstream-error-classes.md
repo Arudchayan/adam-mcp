@@ -21,7 +21,12 @@
 4. **Typed navigation failures** (Playwright timeout / `net::ERR_*`) →
    retryable `provider_unavailable`. Unknown bugs stay `retryable=false`
    (ADR 0011).
-5. **HEAD probe** semantics unchanged (ADR 0013).
+5. **`page.goto` main-document HTTP status** uses the same map as
+   fetch/probe when a response is present; a missing response (download
+   abort / `ERR_ABORTED`, ADR 0013) is not treated as forbidden. Permission
+   HTML heuristics remain a fallback when status is 200 but the body is a
+   denial page.
+6. **HEAD probe** semantics unchanged (ADR 0013).
 
 ## Consequences
 
