@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
-import { runLoginCli, runLogoutCli, runSessionHolder, runStatusCli } from "adam-provider-browser";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
 
@@ -9,8 +8,8 @@ export { createAdamMcpServer } from "./server.ts";
 export { READ_ONLY_ANNOTATIONS, READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 export { createConfiguredProvider, detectProviderName, parseProviderName } from "./providers.ts";
 
-export function createServer() {
-  return createAdamMcpServer(createConfiguredProvider());
+export async function createServer() {
+  return createAdamMcpServer(await createConfiguredProvider());
 }
 
 function isMainModule(): boolean {
@@ -57,7 +56,7 @@ Usage:
 }
 
 async function runStdio(): Promise<void> {
-  const configured = createConfiguredProvider();
+  const configured = await createConfiguredProvider();
   const name = detectProviderName();
   console.error(`adam-mcp running on stdio (${name} provider)`);
   if (name === "browser") {
@@ -77,21 +76,28 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     case "help":
       printHelp();
       return;
-    case "login":
+    case "login": {
+      const { runLoginCli } = await import("adam-provider-browser");
       await runLoginCli();
       return;
-    case "status":
+    }
+    case "status": {
+      const { runStatusCli } = await import("adam-provider-browser");
       await runStatusCli();
       return;
-    case "logout":
+    }
+    case "logout": {
+      const { runLogoutCli } = await import("adam-provider-browser");
       await runLogoutCli(argv);
       return;
+    }
     case "session-holder": {
       const seedIndex = argv.indexOf("session-holder");
       const seedFile = argv[seedIndex + 1];
       if (!seedFile) {
         throw new Error("session-holder requires a seed file path.");
       }
+      const { runSessionHolder } = await import("adam-provider-browser");
       await runSessionHolder(seedFile);
       return;
     }
