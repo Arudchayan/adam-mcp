@@ -52,6 +52,21 @@ export type AdamObject = {
   provenance: Provenance;
   /** Present on course snapshots from getCourse (bounded). */
   children?: AdamObject[];
+  /**
+   * Honesty of the embedded children listing on getCourse (ADR 0005 / 0015).
+   * Absent on ordinary listing rows; page-backed getCourse must set this.
+   */
+  listingState?: ListingState;
+  listingSignals?: ListingSignals;
+  /** Listing notice when state is empty/unknown (same copy as list_children). */
+  notice?: string;
+  /**
+   * True when getCourse embedded children were capped at the provider limit,
+   * or when page text was capped (PageContent). Not silent.
+   */
+  truncated?: boolean;
+  /** Pre-cap child count when getCourse truncated embedded children. */
+  totalChildrenHint?: number;
 };
 
 export type InferredDate = {
