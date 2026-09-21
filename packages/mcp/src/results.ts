@@ -8,6 +8,7 @@ import {
   redactUrl,
   resourceUri,
   type AdamProvider,
+  type ExerciseObject,
   type Paginated,
   type ProgressReporter,
   type ProgressUpdate,
@@ -380,6 +381,20 @@ export function resourceJsonText(data: object): string {
     UntrustedContent.DATA_NOTICE,
   );
   return redactText(JSON.stringify(enveloped, null, 2));
+}
+
+/**
+ * Resource adam://exc/{refId} mirrors forum: metadata only (deadline/status/title/url/refId).
+ * Instruction/page bodies stay on adam_get_exercise with confirm:true.
+ */
+export function stripExerciseInstructionBodies(exercise: ExerciseObject): ExerciseObject {
+  return {
+    ...exercise,
+    units: exercise.units.map((unit) => {
+      const { instructionText: _body, ...meta } = unit;
+      return meta;
+    }),
+  };
 }
 
 export function fail(error: unknown, runId?: string): ToolResponse {
