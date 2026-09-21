@@ -371,4 +371,54 @@ describe("resource error parity with tools (ADR 0016)", () => {
     );
     assert.equal((fail(deniedError).content[0] as { text: string }).text, expected);
   });
+
+  it("resources/read adam://me/courses unauthorized surfaces fail() code text, not ResourceNotFound", async () => {
+    const provider = createFixtureProvider();
+    const authError = new AdamError("unauthorized", "ADAM session is not signed in.", true);
+    provider.listCourses = async () => {
+      throw authError;
+    };
+
+    rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+
+    const denied = await rpc.request("resources/read", { uri: "adam://me/courses" });
+    assert.equal(denied.result, undefined);
+    assert.ok(denied.error, "unauthorized courses resource read must be an RPC error");
+    assert.notEqual(denied.error.code, -32602, "unauthorized must not look like not_found");
+    assert.match(denied.error.message, /unauthorized:/);
+
+    const expected = formatAdamFailText(authError);
+    assert.ok(
+      denied.error.message.includes(expected),
+      `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
+    );
+  });
+
+  it("resources/read stale_id surfaces fail() code text, not ResourceNotFound", async () => {
+    const provider = createFixtureProvider();
+    const staleError = new AdamError(
+      "stale_id",
+      "Object id is stale; refresh the listing before retrying.",
+      false,
+    );
+    provider.getCourse = async () => {
+      throw staleError;
+    };
+
+    rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+
+    const denied = await rpc.request("resources/read", { uri: "adam://crs/100001" });
+    assert.equal(denied.result, undefined);
+    assert.ok(denied.error, "stale_id resource read must be an RPC error");
+    assert.notEqual(denied.error.code, -32602, "stale_id must not look like not_found");
+    assert.match(denied.error.message, /stale_id:/);
+
+    const expected = formatAdamFailText(staleError);
+    assert.ok(
+      denied.error.message.includes(expected),
+      `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
+    );
+  });
 });
