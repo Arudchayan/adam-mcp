@@ -1844,3 +1844,146 @@ describe("agent contracts over stdio", () => {
     }
   });
 });
+
+describe("MCP boundary invariants", () => {
+  it("adam_list_children for empty fold 100020 returns listingState empty and items []", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "boundary-empty-fold", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const emptyFold = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100020" } },
+      });
+      assert.equal(emptyFold.error, undefined, emptyFold.error?.message);
+      assert.equal(emptyFold.result?.isError, undefined);
+      assert.equal(emptyFold.result?.structuredContent?.listingState, "empty");
+      assert.deepEqual(emptyFold.result?.structuredContent?.items, []);
+
+      // Domain lock: empty fold ≠ no deadlines (100021 remains the labeled exc).
+      const exercise = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "adam_get_exercise", arguments: { refId: "100021", confirm: true } },
+      });
+      assert.equal(exercise.result?.isError, undefined);
+      assert.equal(exercise.result?.structuredContent?.type, "exc");
+      assert.equal(exercise.result?.structuredContent?.refId, "100021");
+    } finally {
+      child.kill();
+    }
+  });
+
+  it("paginated adam_list_children follows nextCursor; bad cursor fails", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "boundary-pagination", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const page1 = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "adam_list_children", arguments: { refId: "100001", limit: 1 } },
+      });
+      assert.equal(page1.error, undefined, page1.error?.message);
+      assert.equal(page1.result?.isError, undefined);
+      const firstItems = page1.result?.structuredContent?.items as Array<{ refId?: string }> | undefined;
+      assert.equal(firstItems?.length, 1);
+      assert.equal(firstItems?.[0]?.refId, "100010");
+      const nextCursor = page1.result?.structuredContent?.nextCursor;
+      assert.equal(typeof nextCursor, "string");
+      assert.match(String(nextCursor), /^\d+$/);
+
+      const page2 = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "adam_list_children",
+          arguments: { refId: "100001", limit: 1, cursor: nextCursor },
+        },
+      });
+      assert.equal(page2.error, undefined, page2.error?.message);
+      assert.equal(page2.result?.isError, undefined);
+      const secondItems = page2.result?.structuredContent?.items as Array<{ refId?: string }> | undefined;
+      assert.equal(secondItems?.length, 1);
+      assert.equal(secondItems?.[0]?.refId, "100020");
+      assert.notEqual(secondItems?.[0]?.refId, firstItems?.[0]?.refId);
+
+      const badCursor = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "adam_list_children",
+          arguments: { refId: "100001", cursor: "abc" },
+        },
+      });
+      assert.equal(badCursor.result?.isError, true);
+      assert.match(badCursor.result?.content?.[0]?.text ?? "", /cursor/i);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it("resources/read of a missing adam:// URI maps to ResourceNotFound (-32602)", async () => {
+    const child = spawnFixtureServer();
+    child.stderr.resume();
+    try {
+      await rpc(child, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "boundary-resource-miss", version: "0.0.1" },
+        },
+      });
+      child.stdin.write(
+        `${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`,
+      );
+
+      const missing = await rpc(child, {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "resources/read",
+        params: { uri: "adam://crs/999999" },
+      });
+      assert.equal(missing.result, undefined);
+      assert.equal(missing.error?.code, -32602);
+      assert.match(missing.error?.message ?? "", /Resource not found|adam:\/\/crs\/999999/i);
+    } finally {
+      child.kill();
+    }
+  });
+});

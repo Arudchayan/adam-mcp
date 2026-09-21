@@ -89,4 +89,47 @@ describe("session tools", () => {
     assert.equal(typeof withSession, "object");
     assert.equal(typeof withoutSession, "object");
   });
+
+  it("fake session surfaces adam_login/adam_session_status without cookies/passwords/profile path", async () => {
+    const withSession = createAdamMcpServer({
+      provider: createFixtureProvider(),
+      session: {
+        async status() {
+          return {
+            loggedIn: true,
+            reason: "signed-in",
+            origin: "https://adam.unibas.ch",
+            checkedAt: "2026-01-01T00:00:00.000Z",
+            holderPid: 4242,
+          };
+        },
+        async login() {
+          return { loggedIn: true, reason: "signed-in" };
+        },
+      },
+    });
+    const withoutSession = createAdamMcpServer({ provider: createFixtureProvider() });
+
+    type ToolEntry = {
+      handler: (args: Record<string, unknown>) => Promise<{
+        content: Array<{ text?: string }>;
+        structuredContent?: Record<string, unknown>;
+      }>;
+    };
+    const withTools = withSession["_registeredTools"] as Record<string, ToolEntry>;
+    const withoutTools = withoutSession["_registeredTools"] as Record<string, ToolEntry>;
+    const withNames = Object.keys(withTools);
+    const withoutNames = Object.keys(withoutTools);
+
+    assert.equal(withNames.includes("adam_login"), true);
+    assert.equal(withNames.includes("adam_session_status"), true);
+    assert.equal(withoutNames.includes("adam_login"), false);
+    assert.equal(withoutNames.includes("adam_session_status"), false);
+
+    const status = await withTools.adam_session_status.handler({});
+    const blob = `${JSON.stringify(status.structuredContent ?? {})}\n${status.content[0]?.text ?? ""}`;
+    assert.doesNotMatch(blob, /cookie|password|profileDir|profile path|ILIASSESSID/i);
+    assert.equal(status.structuredContent?.loggedIn, true);
+    assert.equal(status.structuredContent?.origin, "https://adam.unibas.ch");
+  });
 });
