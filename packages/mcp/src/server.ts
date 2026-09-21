@@ -467,16 +467,20 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       mimeType: "application/json",
     },
     async (uri) => {
-      const listed = sanitizeListingItems(await provider.listCourses());
-      return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: "application/json",
-            text: resourceJsonText(listed),
-          },
-        ],
-      };
+      try {
+        const listed = sanitizeListingItems(await provider.listCourses());
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: "application/json",
+              text: resourceJsonText(listed),
+            },
+          ],
+        };
+      } catch (error) {
+        return mapResourceError(error, uri);
+      }
     },
   );
 
