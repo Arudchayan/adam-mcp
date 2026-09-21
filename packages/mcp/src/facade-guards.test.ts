@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { InMemoryTransport, type McpServer } from "@modelcontextprotocol/server";
-import type { AdamObject, Paginated } from "adam-core";
+import { AdamError, type AdamObject, type Paginated } from "adam-core";
 import { createFixtureProvider } from "adam-provider-fixture";
-import { sanitizeListingItems, sanitizeListingObject, UntrustedContent } from "./results.ts";
+import { fail, formatAdamFailText, sanitizeListingItems, sanitizeListingObject, UntrustedContent } from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
 
 const RPC_TIMEOUT_MS = 5_000;
@@ -331,5 +331,44 @@ describe("facade listing guards", () => {
     assert.deepEqual(crsChildren.map((item) => item.refId), ["100021"]);
     assert.equal("units" in crsChildren[0]!, false);
     assert.doesNotMatch(JSON.stringify(crs), /SECRET INSTRUCTION TEXT/);
+  });
+});
+
+describe("resource error parity with tools (ADR 0016)", () => {
+  let rpc: ProtocolHarness | undefined;
+
+  afterEach(async () => {
+    if (rpc) {
+      await rpc.close();
+      rpc = undefined;
+    }
+  });
+
+  it("resources/read forbidden surfaces fail() code text, not ResourceNotFound", async () => {
+    const provider = createFixtureProvider();
+    const deniedError = new AdamError(
+      "forbidden",
+      "Access is denied for this course (not reported as missing).",
+      false,
+    );
+    provider.getCourse = async () => {
+      throw deniedError;
+    };
+
+    rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+
+    const denied = await rpc.request("resources/read", { uri: "adam://crs/100001" });
+    assert.equal(denied.result, undefined);
+    assert.ok(denied.error, "forbidden resource read must be an RPC error");
+    assert.notEqual(denied.error.code, -32602, "forbidden must not look like not_found");
+    assert.doesNotMatch(denied.error.message, /Resource not found/i);
+
+    const expected = formatAdamFailText(deniedError);
+    assert.ok(
+      denied.error.message.includes(expected),
+      `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
+    );
+    assert.equal((fail(deniedError).content[0] as { text: string }).text, expected);
   });
 });

@@ -11,6 +11,7 @@ import {
 import * as z from "zod/v4";
 import {
   ConfirmGate,
+  formatAdamFailText,
   READ_ONLY_ANNOTATIONS,
   UntrustedContent,
   WalkProgress,
@@ -85,10 +86,27 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
   const { provider } = options;
 
   const mapResourceError = (error: unknown, uri: { href: string }): never => {
-    if ((isAdamError(error) || error instanceof AdamError) && error.code === "not_found") {
-      throw new ResourceNotFoundError(uri.href);
+    if (!(isAdamError(error) || error instanceof AdamError)) {
+      throw error;
     }
-    throw error;
+    switch (error.code) {
+      case "not_found":
+        throw new ResourceNotFoundError(uri.href);
+      case "unauthorized":
+      case "forbidden":
+      case "stale_id":
+      case "provider_unavailable":
+        // Resources cannot return tool-style isError payloads; throw the same fail() line.
+        throw new Error(formatAdamFailText(error));
+      case "unsupported_type":
+      case "confirmation_required":
+      case "cancelled":
+        throw error;
+      default: {
+        const _exhaustive: never = error.code;
+        throw _exhaustive;
+      }
+    }
   };
 
   server.registerTool(

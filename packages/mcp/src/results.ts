@@ -401,22 +401,19 @@ export function stripExerciseInstructionBodies(exercise: ExerciseObject): Exerci
   };
 }
 
-export function fail(error: unknown, runId?: string): ToolResponse {
+/** Same recovery line tools return via fail(); resource throws reuse this text. */
+export function formatAdamFailText(error: unknown, runId?: string): string {
   const suffix = runId ? ` (runId=${runId})` : "";
   if (isAdamError(error) || error instanceof AdamError) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `${error.code}: ${redactText(error.message)} (retryable=${error.retryable})${suffix}`,
-        },
-      ],
-      isError: true,
-    };
+    return `${error.code}: ${redactText(error.message)} (retryable=${error.retryable})${suffix}`;
   }
   const message = error instanceof Error ? error.message : "Unexpected provider error.";
+  return `${redactText(message)} (retryable=false)${suffix}`;
+}
+
+export function fail(error: unknown, runId?: string): ToolResponse {
   return {
-    content: [{ type: "text", text: `${redactText(message)} (retryable=false)${suffix}` }],
+    content: [{ type: "text", text: formatAdamFailText(error, runId) }],
     isError: true,
   };
 }
