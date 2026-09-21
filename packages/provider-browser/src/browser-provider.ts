@@ -102,12 +102,13 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly origin: string;
   private sessionHandle: AdamBrowserSession | undefined;
   private readonly injected: boolean;
+  /** Identity-sensitive; cleared on login() / close() (ADR 0015). */
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
-  /** Listing-derived file metadata for download-abort getFile fallback (title/mime/size). */
+  /** Listing-derived file metadata for download-abort getFile; cleared on login() / close(). */
   private readonly fileByRefId = new Map<RefId, FileObject>();
   /**
    * PERF-1 / ADR 0015: enrolled walk memo owned by this provider instance.
-   * Invalidated on login() and close(); cancelled/unauthorized/forbidden/stale_id walks never memoize.
+   * Invalidated on login() and close() with type/file maps; cancelled/unauthorized/forbidden/stale_id walks never memoize.
    */
   private livePagesMemo: WalkResult | undefined;
   private livePagesInflight: Promise<WalkResult> | undefined;
@@ -125,25 +126,28 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async login(timeoutMs?: number): Promise<SessionStatus> {
-    // ADR 0015: session change invalidates enrolled-walk memo + inflight ownership.
-    this.clearWalkCache();
+    // ADR 0015: session change invalidates walk memo + identity-sensitive type/file maps.
+    this.clearSessionCaches();
     return this.session().loginInteractively(timeoutMs);
   }
 
   async close(): Promise<void> {
-    this.clearWalkCache();
-    this.fileByRefId.clear();
-    this.typeByRefId.clear();
+    this.clearSessionCaches();
     if (this.sessionHandle) {
       await this.sessionHandle.close();
     }
   }
 
-  /** Drop memo + inflight; bump generation so a racing walk cannot rememoize. */
-  private clearWalkCache(): void {
+  /**
+   * Drop walk memo/inflight, type/file maps, and bump generation so a racing walk cannot rememoize.
+   * Ordinary reads must not call this.
+   */
+  private clearSessionCaches(): void {
     this.walkGeneration += 1;
     this.livePagesMemo = undefined;
     this.livePagesInflight = undefined;
+    this.typeByRefId.clear();
+    this.fileByRefId.clear();
   }
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {

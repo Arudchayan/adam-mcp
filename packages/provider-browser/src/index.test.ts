@@ -1535,6 +1535,51 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
     assert.ok(opens.length > afterSearch, "login() must clear walk memo");
   });
 
+  it("login() clears type and file caches so probes do not reuse the prior session", async () => {
+    const opens: string[] = [];
+    const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
+      "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+        "https://adam.unibas.ch/go/fold/100010",
+        "03 - Course & Notes",
+        folderHtml,
+        "03 - Course Notes 00_Overview.pdf Abmelden",
+      ),
+      "https://adam.unibas.ch/go/crs/100010": snapshotFromHtml(
+        "https://adam.unibas.ch/go/crs/100010",
+        "Failure Message",
+        "<main><h1>Failure Message</h1><p>The requested page could not be found.</p></main>",
+        "Failure Message The requested page could not be found.",
+      ),
+    };
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages, {
+        onOpen: (url) => opens.push(url),
+        openError: (url) => (/\/go\/file\/100011/.test(url) ? new Error("Download is starting") : undefined),
+      }),
+    });
+
+    // Seed typeByRefId (fold/100010) and fileByRefId title for download-abort.
+    const listed = await provider.listChildren("100010", { type: "fold" });
+    assert.equal(listed.items.find((item) => item.refId === "100011")?.title, "00_Overview.pdf");
+
+    await provider.login();
+
+    // fileByRefId must be empty: download-abort getFile falls back to refId, not the prior listing title.
+    const got = await provider.getFile("100011", { type: "file" });
+    assert.equal(got.title, "100011", "stale listing title must not survive login()");
+
+    // Without clearing, untyped list_children would prefer /go/fold from typeByRefId.
+    opens.length = 0;
+    await provider.listChildren("100010");
+    assert.ok(opens.length >= 1, "expected at least one probe after login");
+    assert.match(opens[0]!, /\/go\/crs\/100010$/, "cleared type cache must start TYPE_PROBE_ORDER at crs");
+    assert.ok(
+      opens.indexOf("https://adam.unibas.ch/go/fold/100010") > 0,
+      "fold must be a retry after crs, not a preferred stale type",
+    );
+  });
+
   it("unauthorized mid-walk surfaces and is not memoized", async () => {
     const opens: string[] = [];
     const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
