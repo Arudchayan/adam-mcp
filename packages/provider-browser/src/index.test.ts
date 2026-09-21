@@ -8,8 +8,18 @@ import {
   walkRetentionByteProxy,
   fullSnapshotByteProxy,
   WALK_PARTIAL_NOTICE,
+  MAX_COURSE_CHILDREN,
 } from "./browser-provider.ts";
-import { extractCatalog, exerciseDeadlineFromPage, inferDates, isLoginSnapshot, classifyListing, mergeFrameLinks } from "./extract.ts";
+import {
+  extractCatalog,
+  exerciseDeadlineFromPage,
+  inferDates,
+  isLoginSnapshot,
+  classifyListing,
+  mergeFrameLinks,
+  LISTING_EMPTY_NOTICE,
+  LISTING_UNKNOWN_NOTICE,
+} from "./extract.ts";
 import { parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
@@ -1428,6 +1438,193 @@ describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
     const page = await provider.readPage("100010", { type: "fold" });
     assert.match(page.text, /Course/);
     assert.equal(opens.length, 1);
+  });
+});
+
+describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
+  const walkPages = {
+    "https://adam.unibas.ch/": snapshotFromHtml(
+      "https://adam.unibas.ch/",
+      "Schreibtisch",
+      dashboardHtml,
+      "Schreibtisch 00000-01 Written exam: 12 January 2027 News 00_Overview.pdf New file Abmelden",
+    ),
+    "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "00000-01 – Synthetic Multimedia Seminar",
+      courseHtml,
+      "00000-01 Written exam: 12 January 2027 Course Notes Exercises Exercise 1 Abmelden",
+    ),
+    "https://adam.unibas.ch/go/fold/100010": snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100010",
+      "03 - Course & Notes",
+      folderHtml,
+      "03 - Course Notes 00_Overview.pdf Abmelden",
+    ),
+    "https://adam.unibas.ch/go/fold/100020": snapshotFromHtml(
+      "https://adam.unibas.ch/go/fold/100020",
+      "04 - Exercises",
+      emptyFolderHtml,
+      "04 - Exercises This folder is empty Abmelden",
+    ),
+    "https://adam.unibas.ch/go/exc/100021": snapshotFromHtml(
+      "https://adam.unibas.ch/go/exc/100021",
+      "Exercise 1 – Retrieval summary",
+      exerciseHtml,
+      "Exercise 1 Retrieval summary Deadline: 22 September 2026 Abmelden",
+    ),
+  };
+
+  it("login() after a memoized walk invalidates the memo", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(walkPages, { onOpen: (url) => opens.push(url) }),
+    });
+    await provider.search("exam");
+    const afterSearch = opens.length;
+    assert.ok(afterSearch >= 2);
+    await provider.listNews();
+    assert.equal(opens.length, afterSearch, "memo hit before login");
+    await provider.login();
+    await provider.search("exam");
+    assert.ok(opens.length > afterSearch, "login() must clear walk memo");
+  });
+
+  it("unauthorized mid-walk surfaces and is not memoized", async () => {
+    const opens: string[] = [];
+    const pages: Record<string, ReturnType<typeof snapshotFromHtml>> = {
+      "https://adam.unibas.ch/": snapshotFromHtml(
+        "https://adam.unibas.ch/",
+        "Schreibtisch",
+        dashboardHtml,
+        "Schreibtisch 00000-01 Written exam: 12 January 2027 News Abmelden",
+      ),
+      "https://adam.unibas.ch/go/crs/100001": snapshotFromHtml(
+        "https://adam.unibas.ch/go/crs/100001",
+        "00000-01 – Synthetic Multimedia Seminar",
+        courseHtml,
+        "00000-01 Written exam Course Notes Exercises Exercise 1 Abmelden",
+      ),
+      "https://adam.unibas.ch/go/fold/100010": walkPages["https://adam.unibas.ch/go/fold/100010"],
+      "https://adam.unibas.ch/go/fold/100020": walkPages["https://adam.unibas.ch/go/fold/100020"],
+      "https://adam.unibas.ch/go/exc/100021": walkPages["https://adam.unibas.ch/go/exc/100021"],
+    };
+    const loginPage = snapshotFromHtml(
+      "https://adam.unibas.ch/login.php",
+      "Login",
+      "<main><h1>Login</h1><form></form></main>",
+      "Login SWITCH edu-ID",
+    );
+    let expireCourse = true;
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages, {
+        onOpen: (url) => {
+          opens.push(url);
+          if (expireCourse && /\/go\/crs\/100001/.test(url)) {
+            pages["https://adam.unibas.ch/go/crs/100001"] = loginPage;
+          }
+        },
+      }),
+    });
+    await assert.rejects(() => provider.search("exam"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "unauthorized");
+      return true;
+    });
+    const afterAuthFail = opens.length;
+    pages["https://adam.unibas.ch/go/crs/100001"] = snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "00000-01 – Synthetic Multimedia Seminar",
+      courseHtml,
+      "00000-01 Written exam Course Notes Exercises Exercise 1 Abmelden",
+    );
+    expireCourse = false;
+    await provider.search("exam");
+    assert.ok(opens.length > afterAuthFail, "unauthorized walk must not be memoized");
+  });
+
+  it("cancelled walks are never memoized", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(walkPages, { onOpen: (url) => opens.push(url) }),
+    });
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(() => provider.search("exam", { signal: controller.signal }), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "cancelled");
+      return true;
+    });
+    const afterCancel = opens.length;
+    await provider.search("exam");
+    assert.ok(opens.length > afterCancel, "cancelled walk must not seed the memo");
+  });
+
+  it("getCourse unknown vs empty is distinguishable", async () => {
+    const unknownHtml = `<nav aria-label="Hauptnavigationsleiste"><a href="/go/fold/888888">Chrome</a></nav>
+<main><h1>Mystery course</h1><p>Content Info</p></main>`;
+    const emptyCourseHtml = `<nav aria-label="Brotkrumen"><a href="/go/root/1">ADAM</a></nav>
+<main><h1>Empty course</h1><p>This folder is empty</p><a href="/logout.php">Abmelden</a></main>`;
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100099": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100099",
+          "Content: Mystery course: ADAM",
+          unknownHtml,
+          "ADAM Search Dashboard Content (Selected) Info Accessibility Rendered by its-ilias-web-prod-04 - 10.11",
+        ),
+        "https://adam.unibas.ch/go/crs/100098": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100098",
+          "Empty course",
+          emptyCourseHtml,
+          "Empty course This folder is empty Abmelden",
+        ),
+      }),
+    });
+    const unknown = await provider.getCourse("100099");
+    assert.equal(unknown.listingState, "unknown");
+    assert.deepEqual(unknown.children, []);
+    assert.equal(unknown.notice, LISTING_UNKNOWN_NOTICE);
+    assert.notEqual(unknown.listingState, "empty");
+
+    const empty = await provider.getCourse("100098");
+    assert.equal(empty.listingState, "empty");
+    assert.deepEqual(empty.children, []);
+    assert.equal(empty.notice, LISTING_EMPTY_NOTICE);
+  });
+
+  it("getCourse signals truncation when children exceed the embed cap", async () => {
+    const links = Array.from({ length: MAX_COURSE_CHILDREN + 5 }, (_, i) => {
+      const id = 200000 + i;
+      return `<a href="/go/fold/${id}">Folder ${id}</a>`;
+    }).join("\n");
+    const hugeCourse = `
+<nav aria-label="Brotkrumen"><a href="/go/root/1">ADAM</a></nav>
+<main>
+  <h1>Huge course</h1>
+  ${links}
+  <a href="/logout.php">Abmelden</a>
+</main>`;
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/100050": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/100050",
+          "Huge course",
+          hugeCourse,
+          `Huge course ${Array.from({ length: MAX_COURSE_CHILDREN + 5 }, (_, i) => `Folder ${200000 + i}`).join(" ")} Abmelden`,
+        ),
+      }),
+    });
+    const course = await provider.getCourse("100050");
+    assert.equal(course.listingState, "ok");
+    assert.equal(course.truncated, true);
+    assert.equal(course.totalChildrenHint, MAX_COURSE_CHILDREN + 5);
+    assert.equal(course.children?.length, MAX_COURSE_CHILDREN);
   });
 });
 

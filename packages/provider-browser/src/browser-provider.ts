@@ -50,7 +50,8 @@ export type BrowserProviderOptions = {
 
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
 const MAX_LIVE_PAGES = 48;
-const MAX_COURSE_CHILDREN = 100;
+/** Cap for getCourse embedded children; truncation is signaled when the listing is larger. */
+export const MAX_COURSE_CHILDREN = 100;
 const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "file", "exc", "cat"];
 
 /** Walk cache entry: catalog + provenance URLs only (no HTML/aria PageSnapshot body). */
@@ -103,9 +104,14 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
   /** Listing-derived file metadata for download-abort getFile fallback (title/mime/size). */
   private readonly fileByRefId = new Map<RefId, FileObject>();
-  /** PERF-1: shared enrolled walk memo; invalidated on close() (new provider = fresh). */
+  /**
+   * PERF-1 / ADR 0015: enrolled walk memo owned by this provider instance.
+   * Invalidated on login() and close(); cancelled/unauthorized walks never memoize.
+   */
   private livePagesMemo: WalkResult | undefined;
   private livePagesInflight: Promise<WalkResult> | undefined;
+  /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
+  private walkGeneration = 0;
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -118,17 +124,25 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async login(timeoutMs?: number): Promise<SessionStatus> {
+    // ADR 0015: session change invalidates enrolled-walk memo + inflight ownership.
+    this.clearWalkCache();
     return this.session().loginInteractively(timeoutMs);
   }
 
   async close(): Promise<void> {
-    this.livePagesMemo = undefined;
-    this.livePagesInflight = undefined;
+    this.clearWalkCache();
     this.fileByRefId.clear();
     this.typeByRefId.clear();
     if (this.sessionHandle) {
       await this.sessionHandle.close();
     }
+  }
+
+  /** Drop memo + inflight; bump generation so a racing walk cannot rememoize. */
+  private clearWalkCache(): void {
+    this.walkGeneration += 1;
+    this.livePagesMemo = undefined;
+    this.livePagesInflight = undefined;
   }
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -150,11 +164,24 @@ export class BrowserAdamProvider implements AdamProvider {
     if (!course) {
       throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a course in the browser session.`);
     }
-    const children = uniqueByRef(
+    const allChildren = uniqueByRef(
       catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type)),
-    ).slice(0, MAX_COURSE_CHILDREN);
-    const classified = classifyListing(snapshot, children.length);
-    return { ...course, children: listingItemsOrEmpty(children, classified) };
+    );
+    // Classify on the full listing before the embed cap (ADR 0005 / 0015).
+    const classified = classifyListing(snapshot, allChildren.length);
+    const honest = listingItemsOrEmpty(allChildren, classified);
+    const truncated = honest.length > MAX_COURSE_CHILDREN;
+    const children = truncated ? honest.slice(0, MAX_COURSE_CHILDREN) : honest;
+    return {
+      ...course,
+      children,
+      listingState: classified.state,
+      listingSignals: classified.signals,
+      ...(classified.notice ? { notice: classified.notice } : {}),
+      ...(truncated
+        ? { truncated: true, totalChildrenHint: honest.length }
+        : {}),
+    };
   }
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
@@ -510,9 +537,9 @@ export class BrowserAdamProvider implements AdamProvider {
 
   private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
     throwIfCancelled(signal);
-    // PERF-1 memo: reuse enrolled walk across search / calendar / news.
-    // Invalidation: close() (and a new provider instance). Memo hit emits no progress.
-    // Cancelled walks are never memoized (ADR 0011).
+    // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
+    // Invalidation: login() + close(). Memo hit emits no progress.
+    // Cancelled and unauthorized walks are never memoized (ADR 0011 / 0015).
     if (this.livePagesMemo) {
       throwIfCancelled(signal);
       return this.livePagesMemo;
@@ -520,15 +547,21 @@ export class BrowserAdamProvider implements AdamProvider {
     if (this.livePagesInflight) {
       return this.livePagesInflight;
     }
-    this.livePagesInflight = this.walkLivePages(onProgress, signal)
+    const generation = this.walkGeneration;
+    const inflight = this.walkLivePages(onProgress, signal)
       .then((pages) => {
-        this.livePagesMemo = pages;
+        if (generation === this.walkGeneration) {
+          this.livePagesMemo = pages;
+        }
         return pages;
       })
       .finally(() => {
-        this.livePagesInflight = undefined;
+        if (this.livePagesInflight === inflight) {
+          this.livePagesInflight = undefined;
+        }
       });
-    return this.livePagesInflight;
+    this.livePagesInflight = inflight;
+    return inflight;
   }
 
   private async walkLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
@@ -607,7 +640,8 @@ export class BrowserAdamProvider implements AdamProvider {
           }
         }
       } catch (error) {
-        if (error instanceof AdamError && error.code === "cancelled") {
+        if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) {
+          // Do not skip+memoize auth expiry or cancel — surface to the agent (ADR 0015).
           throw error;
         }
         skipped += 1;
