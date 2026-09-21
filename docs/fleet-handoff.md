@@ -22,6 +22,8 @@
 
 ## Status (2026-09-09)
 
+> **Historical snapshot** (fleet continuity frozen around PR #22). Current engineering status: [CHANGELOG.md](../CHANGELOG.md), [docs/ROADMAP.md](ROADMAP.md), [docs/qa/open-pass-criteria.md](qa/open-pass-criteria.md).
+
 - **Merged:** PR1 docs, PR2 **B6**, PR #5 **B10** (`8af49c0`), PR #6 **B4** (`5982bdd`), PR #7 **B11/B12** (`21728f3`), PR #8 **A1/A2/A6** (`e52d947`), PR #9 **A3/A4** (`a5e1fd6`), PR #10 **AT1/AT2** (`533d5c5`), PR #11 **AT3** (`01069ef`), PR #12 **AT4** (`b3bb0c0`), PR #13 **AT5** (`ed40c2c`), PR #14 **AT6** (`16f08c8`), PR #16 A2-news-browser (`5593840`), PR #22 session-headless-handoff (`0f00720`, ADRs 0003–0005).
 - **Live:** 2026-09-09 pass recorded in capabilities.md — course listing `ok`, MM folds `unknown`, no live file/exc objects (pre-semester). Re-verify after HS 2026 uploads.
 - **Next:** perf follow-ups (slim snapshots, shared walk memo, unknown fast-fail); A5 deferred.
