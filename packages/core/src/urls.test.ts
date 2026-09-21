@@ -107,6 +107,16 @@ describe("redaction", () => {
     assert.match(redactText("_shibsession_abc123=xyz"), /\[redacted\]/);
     assert.match(redactUrl("https://adam.unibas.ch/login.php?SAMLRequest=abc"), /\[redacted\]/);
   });
+
+  it("redacts bare ILIASSESSID without leaving the value", () => {
+    const redacted = redactText("ILIASSESSID=abc123");
+    assert.match(redacted, /\[redacted\]/);
+    assert.equal(redacted.includes("abc123"), false);
+    assert.match(redactText("Cookie: PHPSESSID=sess-value"), /\[redacted\]/);
+    assert.equal(redactText("Cookie: PHPSESSID=sess-value").includes("sess-value"), false);
+    assert.match(redactText("PHPSESSID=php-value"), /PHPSESSID=\[redacted\]/);
+    assert.equal(redactText("PHPSESSID=php-value").includes("php-value"), false);
+  });
 });
 
 describe("origin pin", () => {
@@ -118,7 +128,78 @@ describe("origin pin", () => {
     assert.throws(() => resolveAdamOrigin("http://adam.unibas.ch"), AdamError);
     assert.throws(() => resolveAdamOrigin("https://evil.example"), AdamError);
   });
+
+  it("refuses ADAM_ALLOW_TEST_ORIGIN when the live browser provider is selected", () => {
+    const prevAllow = process.env.ADAM_ALLOW_TEST_ORIGIN;
+    const prevProvider = process.env.ADAM_PROVIDER;
+    const prevOrigin = process.env.ADAM_ORIGIN;
+    try {
+      process.env.ADAM_ALLOW_TEST_ORIGIN = "1";
+      process.env.ADAM_PROVIDER = "browser";
+      process.env.ADAM_ORIGIN = "https://adam-test.example";
+      assert.throws(
+        () => resolveAdamOrigin("https://adam-test.example"),
+        (error: unknown) => {
+          assert.ok(error instanceof AdamError);
+          assert.equal(error.code, "provider_unavailable");
+          assert.match(error.message, /ADAM_ALLOW_TEST_ORIGIN/);
+          assert.match(error.message, /browser/);
+          return true;
+        },
+      );
+
+      delete process.env.ADAM_PROVIDER;
+      process.argv.push("--browser");
+      try {
+        assert.throws(() => resolveAdamOrigin("https://adam-test.example"), AdamError);
+      } finally {
+        const idx = process.argv.lastIndexOf("--browser");
+        if (idx >= 0) {
+          process.argv.splice(idx, 1);
+        }
+      }
+    } finally {
+      restoreEnv("ADAM_ALLOW_TEST_ORIGIN", prevAllow);
+      restoreEnv("ADAM_PROVIDER", prevProvider);
+      restoreEnv("ADAM_ORIGIN", prevOrigin);
+    }
+  });
+
+  it("allows ADAM_ALLOW_TEST_ORIGIN with the fixture provider", () => {
+    const prevAllow = process.env.ADAM_ALLOW_TEST_ORIGIN;
+    const prevProvider = process.env.ADAM_PROVIDER;
+    try {
+      process.env.ADAM_ALLOW_TEST_ORIGIN = "1";
+      process.env.ADAM_PROVIDER = "fixture";
+      assert.equal(resolveAdamOrigin("https://adam-test.example"), "https://adam-test.example");
+    } finally {
+      restoreEnv("ADAM_ALLOW_TEST_ORIGIN", prevAllow);
+      restoreEnv("ADAM_PROVIDER", prevProvider);
+    }
+  });
+
+  it("keeps the production pin when the test-origin flag is unset", () => {
+    const prevAllow = process.env.ADAM_ALLOW_TEST_ORIGIN;
+    const prevProvider = process.env.ADAM_PROVIDER;
+    try {
+      delete process.env.ADAM_ALLOW_TEST_ORIGIN;
+      delete process.env.ADAM_PROVIDER;
+      assert.equal(resolveAdamOrigin("https://adam.unibas.ch"), "https://adam.unibas.ch");
+      assert.throws(() => resolveAdamOrigin("https://adam-test.example"), AdamError);
+    } finally {
+      restoreEnv("ADAM_ALLOW_TEST_ORIGIN", prevAllow);
+      restoreEnv("ADAM_PROVIDER", prevProvider);
+    }
+  });
 });
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+}
 
 describe("object policy", () => {
   it("blocks tests from reaching the model", () => {
