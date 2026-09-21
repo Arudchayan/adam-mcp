@@ -150,4 +150,28 @@ describe("agent contracts: server instructions", () => {
     assert.match(instructions, /adam-mcp login/);
     assert.match(instructions, /Resources are for handles/);
   });
+
+  it("covers error recovery and get_course listing honesty", () => {
+    const server = createAdamMcpServer({ provider: createFixtureProvider() });
+    const instructions = String(
+      (server.server as unknown as { _instructions?: unknown })._instructions ?? "",
+    );
+    assert.match(instructions, /unauthorized[^\n]*re-login|unauthorized → re-login/i);
+    assert.match(instructions, /do not keep searching/i);
+    assert.match(instructions, /forbidden[^\n]*not missing|forbidden → not missing/i);
+    assert.match(instructions, /not_found → absent/);
+    assert.match(instructions, /stale_id[^\n]*refresh the listing/i);
+    assert.match(instructions, /provider_unavailable[^\n]*retry once/i);
+    assert.match(instructions, /retryable=false → stop/);
+    assert.match(instructions, /listingState,\s*truncated,\s*totalChildrenHint/);
+    assert.match(instructions, /not 'no materials'/);
+
+    const tools = server["_registeredTools"] as Record<string, { description?: string }>;
+    assert.match(String(tools.adam_get_course?.description), /listingState,\s*truncated,\s*totalChildrenHint/);
+    assert.match(String(tools.adam_list_children?.description), /stale_id[^\n]*refresh the listing/i);
+    assert.doesNotMatch(
+      String(tools.adam_list_children?.description),
+      /not_found is the only missing-object error/,
+    );
+  });
 });
