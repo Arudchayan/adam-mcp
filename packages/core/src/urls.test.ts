@@ -233,6 +233,8 @@ describe("object policy", () => {
     assert.equal(new AdamError("provider_unavailable", "chrome missing").retryable, true);
     assert.equal(new AdamError("not_found", "gone").retryable, false);
     assert.equal(new AdamError("unauthorized", "login").retryable, false);
+    assert.equal(new AdamError("forbidden", "denied").retryable, false);
+    assert.equal(new AdamError("stale_id", "mismatch").retryable, false);
     assert.equal(new AdamError("not_found", "gone", true).retryable, true);
   });
 });

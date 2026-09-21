@@ -76,4 +76,36 @@ describe("serial queue", () => {
     await Promise.all([first, second]);
     assert.deepEqual(order, [1, 2, 3]);
   });
+
+  it("emits stderr telemetry when an op waits a long time", async () => {
+    const lines: string[] = [];
+    const original = console.error;
+    console.error = ((line?: unknown) => {
+      if (typeof line === "string") {
+        lines.push(line);
+      }
+    }) as typeof console.error;
+    const prev = SerialQueue.LONG_WAIT_MS;
+    try {
+      // Lower the threshold for a fast unit test without sleeping 5s.
+      (SerialQueue as { LONG_WAIT_MS: number }).LONG_WAIT_MS = 10;
+      const queue = new SerialQueue();
+      const first = queue.enqueue(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+      const second = queue.enqueue(async () => undefined);
+      await Promise.all([first, second]);
+      assert.ok(lines.some((line) => {
+        try {
+          const parsed = JSON.parse(line) as { event?: string; waitedMs?: number };
+          return parsed.event === "browser_queue_wait" && typeof parsed.waitedMs === "number" && parsed.waitedMs >= 10;
+        } catch {
+          return false;
+        }
+      }), `expected browser_queue_wait line; got ${lines.join(" | ")}`);
+    } finally {
+      (SerialQueue as { LONG_WAIT_MS: number }).LONG_WAIT_MS = prev;
+      console.error = original;
+    }
+  });
 });

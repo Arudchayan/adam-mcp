@@ -35,6 +35,7 @@ import {
   classifyListing,
   listingItemsOrEmpty,
   isAdamFailurePage,
+  isAdamPermissionPage,
   isLoggedInSnapshot,
   isLoginSnapshot,
   type ExtractedCatalog,
@@ -761,12 +762,22 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(landed.type, landed.refId);
     }
     if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
-      throw new AdamError("not_found", `ADAM did not return an object for ${requested.refId}.`);
+      throw new AdamError(
+        "stale_id",
+        `ADAM opened ${landed.type}/${landed.refId} instead of the requested ref_id ${requested.refId}. Refresh listings and retry with the current identity — this is not a missing object.`,
+      );
     }
     if (isLoginSnapshot(snapshot)) {
       throw new AdamError(
         "unauthorized",
         "ADAM is showing the login page. Run adam_login or `npm run login` and complete SWITCH edu-ID in Chrome. Do not paste the password into chat.",
+      );
+    }
+    if (isAdamPermissionPage(snapshot)) {
+      const parsed = parseAdamRef(url);
+      throw new AdamError(
+        "forbidden",
+        `ADAM denied access to ${parsed?.refId ?? url}. Permission denied for this account — the object is not reported as missing.`,
       );
     }
     if (looksMissing(snapshot)) {
