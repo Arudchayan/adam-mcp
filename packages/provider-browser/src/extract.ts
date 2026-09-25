@@ -140,29 +140,31 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
       )
     : undefined;
 
-  const seen = new Set<string>();
-  const objects: AdamObject[] = [];
+  const byRef = new Map<string, AdamObject>();
   for (const link of snapshot.links) {
     if (link.inChrome || link.inBreadcrumb || shouldSkipTitle(link.text)) {
       continue;
     }
-    const parsed = parseAdamRef(link.href);
+    const parsed = parseAdamRef(decodeAdamHref(link.href));
     if (!parsed || parsed.type === "impr" || parsed.type === "root") {
       continue;
     }
     if (current && parsed.refId === current.refId) {
       continue;
     }
-    const key = `${parsed.type}:${parsed.refId}`;
-    if (seen.has(key)) {
+    const existing = byRef.get(parsed.refId);
+    // Same ref can appear as ilias.php?ref_id (unknown) and again with a typed href.
+    // Keep the typed object so the citation is /go/{type}/{id}.
+    if (existing && (existing.type !== "unknown" || parsed.type === "unknown")) {
       continue;
     }
-    seen.add(key);
-    const crumbTrail = link.inBreadcrumb ? breadcrumbs : breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
-    objects.push(
+    const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
+    byRef.set(
+      parsed.refId,
       toObject(parsed.type, parsed.refId, cleanTitle(link.text) || parsed.refId, crumbTrail, provenanceBase(link.href)),
     );
   }
+  const objects = [...byRef.values()];
 
   const files = objects.filter((item): item is FileObject => item.type === "file").map((item) => ({
     ...item,
@@ -269,7 +271,7 @@ export function collectLinksFromHtml(html: string): SnapshotLink[] {
   const links: SnapshotLink[] = [];
   const pattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   for (const match of html.matchAll(pattern)) {
-    const href = match[1];
+    const href = decodeAdamHref(match[1]);
     const text = cleanTitle(stripTags(match[2]));
     const index = match.index ?? 0;
     const chromeByPosition = mainStart >= 0 && !inMain(index);
@@ -350,8 +352,9 @@ function extractNewsArticles(snapshot: PageSnapshot, provenance: Provenance): Ne
     if (!text) {
       continue;
     }
-    const href = html.match(/href=["']([^"']+)["']/i)?.[1];
-    const parsed = href ? parseAdamRef(href) : undefined;
+    const hrefs = [...html.matchAll(/href=["']([^"']+)["']/gi)].map((hrefMatch) => hrefMatch[1]);
+    const parsed =
+      hrefs.map((href) => typedAdamRef(href)).find((ref) => ref !== undefined) ?? typedAdamRef(snapshot.url);
     const datetime = html.match(/datetime=["']([^"']+)["']/i)?.[1];
     const url = parsed ? canonicalUrl(parsed.type, parsed.refId) : snapshot.url;
     if (seen.has(url + text)) {
@@ -373,6 +376,26 @@ function extractNewsArticles(snapshot: PageSnapshot, provenance: Provenance): Ne
     });
   }
   return items.slice(0, 20);
+}
+
+/** Undo href entities so `cmdClass` survives `&amp;` in captured HTML. */
+export function decodeAdamHref(href: string): string {
+  return href.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#0*39;|&apos;/gi, "'");
+}
+
+/**
+ * Typed ADAM ref from a href or page URL.
+ * `unknown` (ref_id with no type) is not a citation — callers must not invent `/go/unknown/`.
+ */
+function typedAdamRef(input: string | undefined): { type: AdamObjectType; refId: RefId } | undefined {
+  if (!input) {
+    return undefined;
+  }
+  const parsed = parseAdamRef(decodeAdamHref(input));
+  if (!parsed || parsed.type === "unknown" || parsed.type === "impr" || parsed.type === "root") {
+    return undefined;
+  }
+  return parsed;
 }
 
 function authorFrom(text: string): string | undefined {
