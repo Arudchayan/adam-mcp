@@ -9,8 +9,8 @@ AI client (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code)
         ▼
    packages/core         ref_id, /go/{type}/{id} URLs, errors
         │
-        ├── fixture      synthetic catalog (default)
-        └── browser      dedicated Chrome profile → https://adam.unibas.ch
+        ├── fixture      in-process test catalog (not a runtime provider)
+        └── browser      dedicated Chrome profile → https://adam.unibas.ch (default)
 ```
 
 ADAM MCP uses a local Chrome session for ADAM authentication. The MCP process talks to that browser; it is not a hosted ADAM proxy.

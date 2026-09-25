@@ -4,7 +4,8 @@ import { DEFAULT_ADAM_ORIGIN } from "./types.ts";
 export const PRODUCTION_ADAM_ORIGIN = DEFAULT_ADAM_ORIGIN;
 
 /**
- * Live browser is selected via ADAM_PROVIDER=browser or --browser.
+ * Live browser is the runtime default (unset, ADAM_PROVIDER=browser, or --browser).
+ * ADAM_PROVIDER=fixture is in-process tests only.
  * Kept in core so resolveAdamOrigin can refuse ADAM_ALLOW_TEST_ORIGIN without
  * depending on packages/mcp provider wiring.
  */
@@ -15,7 +16,7 @@ export function isLiveBrowserProviderSelected(
   if (argv.includes("--browser")) {
     return true;
   }
-  return (env.ADAM_PROVIDER ?? "").trim().toLowerCase() === "browser";
+  return (env.ADAM_PROVIDER ?? "").trim().toLowerCase() !== "fixture";
 }
 
 export function resolveAdamOrigin(raw?: string): string {
@@ -33,7 +34,7 @@ export function resolveAdamOrigin(raw?: string): string {
     if (isLiveBrowserProviderSelected()) {
       throw new AdamError(
         "provider_unavailable",
-        "ADAM_ALLOW_TEST_ORIGIN=1 is refused when the live browser provider is selected (ADAM_PROVIDER=browser or --browser). Use the fixture provider for test origins.",
+        "ADAM_ALLOW_TEST_ORIGIN=1 is refused when the live browser provider is selected (default, ADAM_PROVIDER=browser, or --browser). Use ADAM_PROVIDER=fixture only in tests.",
         false,
       );
     }

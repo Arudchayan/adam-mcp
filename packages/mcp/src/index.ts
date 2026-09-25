@@ -48,8 +48,8 @@ function printHelp(): void {
   console.error(`adam-mcp — ADAM MCP server (stdio)
 
 Usage:
-  adam-mcp              Fixture catalog
-  adam-mcp --browser    Live ADAM via a headless session (run login first)
+  adam-mcp              Live ADAM via a headless session (run login first)
+  adam-mcp --browser    Same as adam-mcp (kept for existing host JSON)
   adam-mcp login        Sign in to ADAM in Chrome, then close it
   adam-mcp status       Check the headless ADAM session
   adam-mcp logout       Stop the headless session (--purge removes the profile)`);
@@ -58,7 +58,11 @@ Usage:
 async function runStdio(): Promise<void> {
   const configured = await createConfiguredProvider();
   const name = detectProviderName();
-  console.error(`adam-mcp running on stdio (${name} provider)`);
+  const banner =
+    name === "fixture"
+      ? "adam-mcp running on stdio (fixture provider (test harness))"
+      : `adam-mcp running on stdio (${name} provider)`;
+  console.error(banner);
   if (name === "browser") {
     console.error("Live ADAM: run `adam-mcp login` once, then the session runs headless.");
   }

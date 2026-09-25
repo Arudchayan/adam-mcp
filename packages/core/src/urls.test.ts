@@ -161,6 +161,15 @@ describe("origin pin", () => {
       );
 
       delete process.env.ADAM_PROVIDER;
+      assert.throws(
+        () => resolveAdamOrigin("https://adam-test.example"),
+        (error: unknown) => {
+          assert.ok(error instanceof AdamError);
+          assert.match((error as AdamError).message, /ADAM_ALLOW_TEST_ORIGIN/);
+          return true;
+        },
+      );
+
       process.argv.push("--browser");
       try {
         assert.throws(() => resolveAdamOrigin("https://adam-test.example"), AdamError);

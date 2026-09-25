@@ -33,12 +33,14 @@ describe("adam_extract_file_text confirmation", () => {
 
 describe("stdio hygiene", () => {
   it("prints the banner on stderr and JSON-RPC on stdout", async () => {
+    const env: NodeJS.ProcessEnv = { ...process.env, ADAM_MCP_TEST_FIXTURE: "1" };
+    delete env.ADAM_PROVIDER;
     const child = spawn(
       process.execPath,
       [resolve(repoRoot, "node_modules/tsx/dist/cli.mjs"), resolve(here, "index.ts")],
       {
         cwd: repoRoot,
-        env: { ...process.env, ADAM_PROVIDER: "fixture" },
+        env,
         stdio: ["pipe", "pipe", "pipe"],
       },
     );
@@ -81,7 +83,7 @@ describe("stdio hygiene", () => {
       })}\n`,
     );
     await responded;
-    assert.match(stderr, /adam-mcp running on stdio/);
+    assert.match(stderr, /fixture provider \(test harness\)/);
     assert.equal(stdout.trim().startsWith("{"), true);
     assert.doesNotMatch(stdout, /adam-mcp running on stdio/);
     const line = stdout.trim().split(/\r?\n/)[0] ?? "";
@@ -117,12 +119,14 @@ type JsonRpc = {
 };
 
 function spawnFixtureServer(): ChildProcessWithoutNullStreams {
+  const env: NodeJS.ProcessEnv = { ...process.env, ADAM_MCP_TEST_FIXTURE: "1" };
+  delete env.ADAM_PROVIDER;
   return spawn(
     process.execPath,
     [resolve(repoRoot, "node_modules/tsx/dist/cli.mjs"), resolve(here, "index.ts")],
     {
       cwd: repoRoot,
-      env: { ...process.env, ADAM_PROVIDER: "fixture" },
+      env,
       stdio: ["pipe", "pipe", "pipe"],
     },
   );

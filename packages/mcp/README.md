@@ -10,6 +10,6 @@ For host JSON snippets and Chrome login helpers, clone the repo and follow the r
 npm run setup
 ```
 
-Default without `--browser` is a synthetic fixture catalog. `--browser` uses the local Chrome ADAM session.
+Default is live ADAM (`adam-mcp login` first). `--browser` is optional.
 
 License: GPL-3.0-or-later.

@@ -1,16 +1,16 @@
 # Providers
 
-Default is **fixture** (synthetic catalog). Live ADAM is **browser** (`--browser`). SOAP and HTML are in the repo and stay disabled.
+Default is **browser** (live ADAM via Chrome). `--browser` is a no-op alias. SOAP and HTML stay disabled. The synthetic catalog in `packages/provider-fixture` is for in-process tests only; `ADAM_PROVIDER=fixture` fail-closes at runtime (ADR 0017).
 
-| Capability | Fixture | Browser | SOAP | HTML |
+| Capability | Browser | Fixture (tests) | SOAP | HTML |
 | --- | --- | --- | --- | --- |
-| Enabled | Yes (default) | Yes | No | No |
-| Courses / folders / files | Synthetic | Live session | Disabled | Disabled |
-| Page text | Synthetic | Live; `confirm=true` | Disabled | Disabled |
-| File extract | Synthetic PDF literals | Local download → text | Disabled | Disabled |
-| Search | Catalog titles/text | Enrolled objects, capped | Disabled | Disabled |
-| Calendar / news | Catalog | Pages you can see | Disabled | Disabled |
-| Tests (`tst`) | Not in catalog | Denied | Disabled | Disabled |
+| Enabled | Yes (default) | In-process tests only | No | No |
+| Courses / folders / files | Live session | Synthetic | Disabled | Disabled |
+| Page text | Live; `confirm=true` | Synthetic | Disabled | Disabled |
+| File extract | Local download → text | Synthetic PDF literals | Disabled | Disabled |
+| Search | Enrolled objects, capped | Catalog titles/text | Disabled | Disabled |
+| Calendar / news | Pages you can see | Catalog | Disabled | Disabled |
+| Tests (`tst`) | Denied | Not in catalog | Disabled | Disabled |
 | Writes | No | No | No | No |
 
 SOAP `/soap/server.php` was HTTP 403 on production ADAM (5 Sep 2026). SOAP `login` would also be a local WS password, not SWITCH. HTML remains a last-resort parser, not a student path.
