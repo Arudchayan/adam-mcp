@@ -218,11 +218,12 @@ export type ListOptions = {
 /**
  * Shared provider/MCP error taxonomy (one set — do not invent parallel codes).
  * - unauthorized: session/login required
- * - not_found: object truly missing (HTTP 404 / ADAM failure page)
+ * - not_found: object truly missing (HTTP 404 / ADAM failure page / no resolved object)
  * - forbidden: authenticated but no access (HTTP 403 / permission page) — never “does not exist”
  * - stale_id: requested ref_id resolved to a different live object (identity mismatch)
  * - provider_unavailable: transient upstream (5xx, 429, typed nav/net timeouts) — only retryable default
- * - unsupported_type / confirmation_required / cancelled: policy / gates
+ * - unsupported_type: a resolved object of the wrong type (not an absent ref)
+ * - confirmation_required / cancelled: policy / gates
  */
 export const ADAM_ERROR_CODES = [
   "unauthorized",
