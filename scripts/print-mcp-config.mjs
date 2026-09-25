@@ -27,6 +27,15 @@ function snippet() {
   return { cursor, vscode, claude };
 }
 
+function tomlBasic(value) {
+  return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+function codexToml(entry) {
+  const rendered = entry.args.map((arg) => tomlBasic(arg)).join(", ");
+  return `[mcp_servers.adam]\ncommand = ${tomlBasic(entry.command)}\nargs = [${rendered}]`;
+}
+
 const live = snippet();
 
 console.error(`adam-mcp setup
@@ -45,3 +54,6 @@ console.log(JSON.stringify({ servers: { adam: live.vscode } }, null, 2));
 console.log("");
 console.log("Claude Code:");
 console.log(live.claude);
+console.log("");
+console.log("ChatGPT desktop / Codex (~/.codex/config.toml):");
+console.log(codexToml(live.cursor));

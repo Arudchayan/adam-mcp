@@ -160,6 +160,7 @@ describe("agent contracts: server instructions", () => {
     assert.match(instructions, /do not keep searching/i);
     assert.match(instructions, /forbidden[^\n]*not missing|forbidden → not missing/i);
     assert.match(instructions, /not_found → absent/);
+    assert.match(instructions, /unsupported_type → the ref resolved to a different object type/);
     assert.match(instructions, /stale_id[^\n]*refresh the listing/i);
     assert.match(instructions, /provider_unavailable[^\n]*retry once/i);
     assert.match(instructions, /retryable=false → stop/);

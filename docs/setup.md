@@ -36,6 +36,10 @@ After a reboot or a SWITCH timeout, run `npm run login` again if resume does not
 - **Live session broken?** Order: `npm run status` / `adam-mcp status` → note `holderPid` → `npm run login` again → if needed `ADAM_BROWSER_HEADED=1 npm run login` → for listing markup only, `ADAM_DEBUG_CAPTURE=1` (structure-only under `scratch/` / `ADAM_DEBUG_CAPTURE_DIR`; never commit captures).
 - **Telemetry:** each tool call logs one JSON line to stderr with a `runId` you can correlate with host errors (ADR 0008); stdout stays JSON-RPC only.
 
+## Hosts
+
+These hosts attach a local stdio server today: **Cursor**, **Claude Desktop**, **VS Code** (GitHub Copilot), **Windsurf**, **Claude Code**, the **ChatGPT desktop app**, **Codex CLI**, and the **Codex IDE extension**. Paste the snippet from `npm run setup` (sections below). Fully quit and reopen the host, then enable **adam**.
+
 ## Cursor, Claude Desktop, Windsurf
 
 Paste the JSON object printed by `npm run setup` (`mcpServers.adam`).
@@ -53,6 +57,18 @@ Reload the window and enable the server in Copilot MCP settings.
 ## Claude Code
 
 `npm run setup` prints a `claude mcp add` line with the absolute path.
+
+## ChatGPT desktop, Codex CLI, and the Codex IDE extension
+
+The ChatGPT desktop app, Codex CLI, and the Codex IDE extension share `~/.codex/config.toml` and can start this local stdio process. `npm run setup` prints:
+
+```toml
+[mcp_servers.adam]
+command = "node"
+args = ["<absolute path to packages/mcp/dist/adam-mcp.mjs from npm run setup>"]
+```
+
+Paste that table into `~/.codex/config.toml`. Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this). ADAM login stays `npm run login`.
 
 ## First checks
 

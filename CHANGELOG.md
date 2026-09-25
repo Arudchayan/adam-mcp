@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Repeated opens of the same typed page are reused until `login()` or `close()`. Unknown landings are not cached (ADR 0018)
+- Tool argument rejects (missing or false `confirm`, a bad cursor, a non-ADAM URL) are tool results with `isError: true`. This SDK does not emit JSON-RPC `-32602` for those rejects
+- The ChatGPT desktop app, Codex CLI, and the Codex IDE extension are documented as local stdio hosts (`~/.codex/config.toml`)
 - **Breaking:** runtime default is live browser. `ADAM_PROVIDER=fixture` fail-closes; in-process tests still use `createFixtureProvider()`. `--browser` is a no-op alias (ADR 0017)
 - **Breaking:** `adam://exc/{refId}` resource is metadata only (deadline/status/title/url — no `instructionText`); use `adam_get_exercise` with `confirm:true` for instruction bodies
 - Tool `refId` accepts `adam://{type}/{id}` and pinned `https://adam.unibas.ch/go/{type}/{id}` (digits still work); titles and non-ADAM URLs are rejected
@@ -16,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Absent course refs are `not_found`. A resolved object of another known type stays `unsupported_type`. A landing on a different typed ref stays `stale_id` (ADR 0018)
+- News items and `ilias.php` children cite `https://adam.unibas.ch/go/{type}/{id}` when the href or, for news, the open page parses to a known type. Untyped refs stay `unknown` (ADR 0018)
+- `ADAM_PROVIDER=fixture` stderr includes `provider_unavailable` and `retryable=false`
 - A dead session holder resumes headless Chrome on the existing profile when the dashboard is still signed in; a login page stays `unauthorized` (ADR 0017)
 - `adam_session_status` / `adam-mcp status` report `holderPid` for a live bound session holder; stale/dead/unbound records stay null (ADR 0009)
 - `adam_search` for `pdf` / `PDF` / `.pdf` returns enrolled `type=file` hits (title/extension/mime; not only crs/fold page text)

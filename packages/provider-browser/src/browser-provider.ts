@@ -114,6 +114,14 @@ export class BrowserAdamProvider implements AdamProvider {
   private livePagesInflight: Promise<WalkResult> | undefined;
   /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
   private walkGeneration = 0;
+  /**
+   * Typed same-ref page opens for this generation. get_course, list_children, and list_files
+   * often ask for the same URL; reuse the snapshot instead of navigating again.
+   * Unknown landings are not stored. Cleared with the walk memo on login()/close() (ADR 0015).
+   * Not a second walk memo: cancelled / unauthorized / forbidden / stale_id still throw and are not stored.
+   */
+  private pageByUrl = new Map<string, PageSnapshot>();
+  private pageInflight = new Map<string, Promise<PageSnapshot>>();
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -147,6 +155,8 @@ export class BrowserAdamProvider implements AdamProvider {
     this.walkGeneration += 1;
     this.livePagesMemo = undefined;
     this.livePagesInflight = undefined;
+    this.pageByUrl.clear();
+    this.pageInflight.clear();
     this.typeByRefId.clear();
     this.fileByRefId.clear();
   }
@@ -174,7 +184,14 @@ export class BrowserAdamProvider implements AdamProvider {
     this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
     if (!course) {
-      throw new AdamError("unsupported_type", `ref_id ${refId} did not resolve to a course in the browser session.`);
+      const sameRef =
+        catalog.current?.refId === refId
+          ? catalog.current
+          : catalog.objects.find((item) => item.refId === refId);
+      if (sameRef && sameRef.type !== "unknown" && sameRef.type !== "crs") {
+        throw new AdamError("unsupported_type", `ref_id ${refId} is ${sameRef.type}, not a course.`);
+      }
+      throw new AdamError("not_found", `ref_id ${refId} did not resolve to a course in the browser session.`);
     }
     const allChildren = uniqueByRef(
       catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type)),
@@ -801,20 +818,40 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   private async openAuthorized(url: string): Promise<PageSnapshot> {
+    const generation = this.walkGeneration;
+    const cached = this.pageByUrl.get(url);
+    if (cached && this.cachesCurrent(generation)) {
+      return cached;
+    }
+    const existing = this.pageInflight.get(url);
+    if (existing && this.cachesCurrent(generation)) {
+      return existing;
+    }
+    const pending = this.openAuthorizedOnce(url, generation);
+    this.pageInflight.set(url, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.pageInflight.get(url) === pending) {
+        this.pageInflight.delete(url);
+      }
+    }
+  }
+
+  private async openAuthorizedOnce(url: string, generation: number): Promise<PageSnapshot> {
     const parsed = parseAdamRef(url);
     if (parsed) {
       assertReadableObjectType(parsed.type, parsed.refId);
     }
     const snapshot = await this.session().open(url);
-    const requested = parseAdamRef(url);
     const landed = parseAdamRef(snapshot.url);
     if (landed) {
       assertReadableObjectType(landed.type, landed.refId);
     }
-    if (requested && landed && requested.refId !== landed.refId && landed.type !== "unknown") {
+    if (parsed && landed && parsed.refId !== landed.refId && landed.type !== "unknown") {
       throw new AdamError(
         "stale_id",
-        `ADAM opened ${landed.type}/${landed.refId} instead of the requested ref_id ${requested.refId}. Refresh listings and retry with the current identity — this is not a missing object.`,
+        `ADAM opened ${landed.type}/${landed.refId} instead of the requested ref_id ${parsed.refId}. Refresh listings and retry with the current identity — this is not a missing object.`,
       );
     }
     if (isLoginSnapshot(snapshot)) {
@@ -824,14 +861,12 @@ export class BrowserAdamProvider implements AdamProvider {
       );
     }
     if (isAdamPermissionPage(snapshot)) {
-      const parsed = parseAdamRef(url);
       throw new AdamError(
         "forbidden",
         `ADAM denied access to ${parsed?.refId ?? url}. Permission denied for this account — the object is not reported as missing.`,
       );
     }
     if (looksMissing(snapshot)) {
-      const parsed = parseAdamRef(url);
       throw new AdamError("not_found", `ADAM did not return an object for ${parsed?.refId ?? url}.`);
     }
     if (!this.injected && url.replace(/\/$/, "") === this.origin.replace(/\/$/, "") && !isLoggedInSnapshot(snapshot)) {
@@ -839,6 +874,16 @@ export class BrowserAdamProvider implements AdamProvider {
         "unauthorized",
         "The local Chrome profile is not signed in to ADAM. Run adam_login and complete SWITCH edu-ID in the browser window.",
       );
+    }
+    // Only a typed landing of this ref is reusable. An unknown landing must not
+    // confirm the probed type or skip the next probe (ADR 0005 / 0018).
+    if (
+      this.cachesCurrent(generation) &&
+      landed &&
+      landed.type !== "unknown" &&
+      (!parsed || parsed.refId === landed.refId)
+    ) {
+      this.pageByUrl.set(url, snapshot);
     }
     return snapshot;
   }
