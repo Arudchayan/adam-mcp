@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { AdamError, isAdamError } from "adam-core";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
@@ -115,10 +116,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
   }
 }
 
+/** Stderr line for a refused startup. Keeps the AdamError code and retryable flag. */
+export function formatCliError(error: unknown): string {
+  if (isAdamError(error) || error instanceof AdamError) {
+    return `${error.code}: ${error.message} (retryable=${error.retryable})`;
+  }
+  return error instanceof Error ? error.message : "adam-mcp failed.";
+}
+
 if (isMainModule()) {
   void runCli().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : "adam-mcp failed.";
-    console.error(message);
+    console.error(formatCliError(error));
     process.exitCode = 1;
   });
 }
