@@ -40,8 +40,6 @@ After a reboot or a SWITCH timeout, run `npm run login` again if resume does not
 
 These hosts attach a local stdio server today: **Cursor**, **Claude Desktop**, **VS Code** (GitHub Copilot), **Windsurf**, **Claude Code**, the **ChatGPT desktop app**, **Codex CLI**, and the **Codex IDE extension**. Paste the snippet from `npm run setup` (sections below). Fully quit and reopen the host, then enable **adam**.
 
-ChatGPT on the web cannot attach this server. It only uses remote plugin MCP and does not read `~/.codex/config.toml`. This repo does not ship a remote HTTP or SSE transport, and it does not put MCP OAuth on stdio. ADAM login stays `npm run login` and the local Chrome profile.
-
 ## Cursor, Claude Desktop, Windsurf
 
 Paste the JSON object printed by `npm run setup` (`mcpServers.adam`).
@@ -70,9 +68,7 @@ command = "node"
 args = ["<absolute path to packages/mcp/dist/adam-mcp.mjs from npm run setup>"]
 ```
 
-Paste that table into `~/.codex/config.toml`. Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this).
-
-There is no MCP OAuth. ADAM login stays `npm run login` and the local Chrome profile. Do not set `experimental_environment = "remote"` (that would start the process off the machine, away from the Chrome profile).
+Paste that table into `~/.codex/config.toml`. Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this). ADAM login stays `npm run login`.
 
 ## First checks
 

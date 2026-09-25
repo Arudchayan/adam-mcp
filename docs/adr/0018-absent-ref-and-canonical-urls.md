@@ -12,7 +12,7 @@ A live read of enrolled courses showed three contract misses:
 
 1. **Absence vs wrong type vs identity mismatch.** After a page opens, `getCourse` returns the course when the landed object is `crs` for that ref. A resolved object of another known type is `unsupported_type`. No resolved object (including a landing with type `unknown`) is `not_found`. A landed typed ref that is not the requested ref stays `stale_id` (ADR 0016). `listingState=unknown` is not reclassified as `empty`.
 2. **Canonical citation when a ref parses.** News and catalog links use `https://adam.unibas.ch/go/{type}/{id}` when `parseAdamRef` yields a known type from the href, or, for news with no typed href, from the open page URL. HTML `&amp;` in hrefs is decoded before parse. A ref whose type cannot be known stays `unknown` with `ilias.php?ref_id={id}`. Do not invent `/go/unknown/…` or a ref that was not in the href or page URL.
-3. **No remote transport.** stdio remains the only MCP transport. ChatGPT cannot attach it. A hosted HTTP or SSE server is not part of this change.
+3. **No remote transport.** stdio remains the only MCP transport. A hosted HTTP or SSE server is not part of this change.
 
 ## Consequences
 

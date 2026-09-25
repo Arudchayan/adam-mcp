@@ -91,7 +91,6 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this`.
 
 - No writes, mail, grades, or exam (`tst`) objects.
 - Search is not ADAM’s global search box. Dates are not the ILIAS calendar GUI.
-- ChatGPT on the web cannot attach this server. It only uses remote plugin MCP and does not read `~/.codex/config.toml`. The ChatGPT desktop app, Codex CLI, and the Codex IDE extension share `~/.codex/config.toml` and can start this local stdio process. There is no MCP OAuth. ADAM login stays `npm run login` and the local Chrome profile. This repo does not ship a remote HTTP server ([setup](docs/setup.md)). Do not set `experimental_environment = "remote"` (that would start the process off the machine, away from the Chrome profile).
 - Scanned PDFs are not OCR’d.
 
 ## Privacy
