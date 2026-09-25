@@ -11,7 +11,7 @@ rmSync(distDir, { recursive: true, force: true });
 mkdirSync(distDir, { recursive: true });
 
 // Code splitting keeps playwright-core behind the dynamic browser-provider import
-// so fixture/default MCP startup does not evaluate it.
+// so in-process fixture tests do not evaluate it.
 await esbuild.build({
   absWorkingDir: root,
   entryPoints: [resolve(root, "packages/mcp/src/index.ts")],

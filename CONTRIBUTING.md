@@ -12,14 +12,14 @@ npm test
 npm run typecheck
 ```
 
-**Fixture-first:** PRs must pass on the fixture catalog. Do not require production ADAM (or a live Chrome session) in CI.
+**Fixture-first CI:** PRs must pass on the in-process fixture catalog. Do not require production ADAM (or a live Chrome session) in CI. The running server is live ADAM only (ADR 0017).
 
 ## Setup
 
 1. Fork the repo, then clone your fork.
 2. `npm install`
-3. `npm run setup` — use the **fixture** MCP snippet in your client and confirm tools respond.
-4. Optional live ADAM: `npm run login`, sign in in Chrome, then use the `--browser` snippet. After success the window closes; a detached headless session holder keeps ADAM alive. Check with `npm run status` (`holderPid`); stop with `npm run logout`. See [AGENTS.md](AGENTS.md), [docs/setup.md](docs/setup.md), and [ADR 0009](docs/adr/0009-headless-session-holder.md).
+3. `npm run setup` — paste the MCP snippet, then `npm run login` for live ADAM.
+4. Check with `npm run status` (`holderPid`); stop with `npm run logout`. See [AGENTS.md](AGENTS.md), [docs/setup.md](docs/setup.md), and [ADR 0009](docs/adr/0009-headless-session-holder.md) / [ADR 0017](docs/adr/0017-live-runtime-only.md).
 
 ## What to open where
 

@@ -10,7 +10,7 @@ This file is for humans and coding agents working in the repo.
 | --- | --- |
 | `packages/core` | Types, canonical URLs, pagination, redaction, policy |
 | `packages/mcp` | Tools, resources, prompts, stdio entry |
-| `packages/provider-fixture` | Default synthetic catalog |
+| `packages/provider-fixture` | In-process test catalog (not a runtime provider) |
 | `packages/provider-browser` | Live ADAM via a dedicated Chrome profile |
 | `packages/provider-soap` | Fail closed |
 | `packages/provider-html` | Fail closed |
@@ -25,7 +25,7 @@ npm run setup    # build + print host JSON
 npm run login    # Chrome ADAM session
 ```
 
-Default provider is `fixture`. Live ADAM is `--browser` / `ADAM_PROVIDER=browser`.
+Default provider is `browser` (`--browser` is a no-op alias). `ADAM_PROVIDER=fixture` fail-closes at runtime. In-process tests still call `createFixtureProvider()`.
 
 ## Invariants
 

@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** runtime default is live browser. `ADAM_PROVIDER=fixture` fail-closes; in-process tests still use `createFixtureProvider()`. `--browser` is a no-op alias (ADR 0017)
 - **Breaking:** `adam://exc/{refId}` resource is metadata only (deadline/status/title/url — no `instructionText`); use `adam_get_exercise` with `confirm:true` for instruction bodies
 - Tool `refId` accepts `adam://{type}/{id}` and pinned `https://adam.unibas.ch/go/{type}/{id}` (digits still work); titles and non-ADAM URLs are rejected
-- Default/fixture startup no longer loads Playwright; `adam-provider-browser` is dynamic-import only for `--browser`
+- In-process fixture startup no longer loads Playwright; `adam-provider-browser` is dynamic-import only
 
 ### Fixed
 
+- A dead session holder resumes headless Chrome on the existing profile when the dashboard is still signed in; a login page stays `unauthorized` (ADR 0017)
 - `adam_session_status` / `adam-mcp status` report `holderPid` for a live bound session holder; stale/dead/unbound records stay null (ADR 0009)
 - `adam_search` for `pdf` / `PDF` / `.pdf` returns enrolled `type=file` hits (title/extension/mime; not only crs/fold page text)
 - After `confirm:true`, `adam_extract_file_text` never returns silent empty text; empty/whitespace or cap-window-empty extracts fail closed with a reason (ADR 0014)
@@ -27,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Browser mode refuses `ADAM_ALLOW_TEST_ORIGIN=1`; test origins stay fixture-only
+- Browser mode refuses `ADAM_ALLOW_TEST_ORIGIN=1`; test origins stay fixture-only (in-process tests)
 
 ## [0.2.0] - 2026-09-16
 

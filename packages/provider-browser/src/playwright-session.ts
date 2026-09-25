@@ -24,6 +24,7 @@ import {
 } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
 import { boundHolderPid, holderStatus, startSessionHolder } from "./session-holder.ts";
+import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import type {
   AdamBrowserSession,
@@ -266,7 +267,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      const page = await this.ensurePage();
+      const page = await this.ensurePage({ allowResume: true });
       // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
       // content wait with a real function predicate (arg undefined, options 3rd).
       try {
@@ -387,7 +388,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      const page = await this.ensurePage();
+      const page = await this.ensurePage({ allowResume: true });
       const response = await page.context().request.get(target, { timeout: 45_000, maxRedirects: 5 });
       assertUrlAllowed(response.url());
       if (!response.ok()) {
@@ -422,7 +423,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
-      const page = await this.ensurePage();
+      const page = await this.ensurePage({ allowResume: true });
       const response = await page.context().request.fetch(target, {
         method: "HEAD",
         timeout: 45_000,
@@ -483,7 +484,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     });
   }
 
-  private async ensurePage(options: { allowLaunch?: boolean } = {}): Promise<Page> {
+  private async ensurePage(options: { allowLaunch?: boolean; allowResume?: boolean } = {}): Promise<Page> {
     if (this.page && this.context && !this.page.isClosed()) {
       return this.page;
     }
@@ -508,32 +509,35 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
     const attached = await this.tryAttachCdp();
     if (!attached) {
-      if (!options.allowLaunch) {
+      if (options.allowLaunch) {
+        await mkdir(this.profileDir, { recursive: true });
+        try {
+          this.context = await chromium.launchPersistentContext(this.profileDir, {
+            channel: "chrome",
+            headless: !this.headed,
+            acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
+            viewport: { width: 1280, height: 900 },
+            locale: "de-CH",
+            args: chromeLaunchArgs(),
+          });
+          this.ownsChrome = true;
+        } catch (error) {
+          const retry = await this.tryAttachCdp();
+          if (!retry) {
+            const detail = error instanceof Error ? error.message : "unknown error";
+            throw new AdamError(
+              "provider_unavailable",
+              `Could not open Google Chrome with a local ADAM profile. Close other adam-mcp Chrome windows and try again. ${detail}`,
+            );
+          }
+        }
+      } else if (options.allowResume) {
+        await this.resumeDeadHolderOrUnauthorized();
+      } else {
         throw new AdamError(
           "unauthorized",
           "No ADAM session is running. Run `adam-mcp login` (or the adam_login tool) to sign in, then retry. Do not paste credentials into chat.",
         );
-      }
-      await mkdir(this.profileDir, { recursive: true });
-      try {
-        this.context = await chromium.launchPersistentContext(this.profileDir, {
-          channel: "chrome",
-          headless: !this.headed,
-          acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
-          viewport: { width: 1280, height: 900 },
-          locale: "de-CH",
-          args: chromeLaunchArgs(),
-        });
-        this.ownsChrome = true;
-      } catch (error) {
-        const retry = await this.tryAttachCdp();
-        if (!retry) {
-          const detail = error instanceof Error ? error.message : "unknown error";
-          throw new AdamError(
-            "provider_unavailable",
-            `Could not open Google Chrome with a local ADAM profile. Close other adam-mcp Chrome windows and try again. ${detail}`,
-          );
-        }
       }
     }
 
@@ -546,6 +550,91 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     this.page = this.context.pages()[0] ?? (await this.context.newPage());
     attachDownloadGuard(this.page);
     return this.page;
+  }
+
+  /**
+   * ADR 0017: when the holder is gone, briefly launch headless Chrome on the
+   * existing profile, verify the dashboard, then hand off to a new holder.
+   */
+  private async resumeDeadHolderOrUnauthorized(): Promise<void> {
+    const holder = await holderStatus(this.profileDir);
+    const outcome = await resumeDeadHolderSession({
+      holderRunning: holder.running,
+      profileDir: this.profileDir,
+      origin: this.origin,
+      launchHeadlessAndVerify: () => this.launchHeadlessResumeAndVerify(),
+      startHolder: startSessionHolder,
+    });
+    switch (outcome) {
+      case "already-attached":
+        return;
+      case "signed-in": {
+        const attached = await this.tryAttachCdp();
+        if (!attached) {
+          throw new AdamError(
+            "provider_unavailable",
+            "The headless session resumed but could not be attached. Retry, or run `adam-mcp login`.",
+          );
+        }
+        return;
+      }
+      case "login-required":
+      case "skipped":
+        throw new AdamError(
+          "unauthorized",
+          "No ADAM session is running. Run `adam-mcp login` (or the adam_login tool) to sign in, then retry. Do not paste credentials into chat.",
+        );
+      default: {
+        const exhaustive: never = outcome;
+        throw new AdamError("provider_unavailable", `Unhandled resume ${String(exhaustive)}`);
+      }
+    }
+  }
+
+  private async launchHeadlessResumeAndVerify(): Promise<ResumeLaunch> {
+    await mkdir(this.profileDir, { recursive: true });
+    try {
+      this.context = await chromium.launchPersistentContext(this.profileDir, {
+        channel: "chrome",
+        headless: true,
+        acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
+        viewport: { width: 1280, height: 900 },
+        locale: "de-CH",
+        args: chromeLaunchArgs(),
+      });
+      this.ownsChrome = true;
+    } catch (error) {
+      const retry = await this.tryAttachCdp();
+      if (retry) {
+        return {
+          alreadyAttached: true,
+          loggedIn: true,
+          exportSeed: async () => undefined,
+          close: async () => undefined,
+        };
+      }
+      const detail = error instanceof Error ? error.message : "unknown error";
+      throw new AdamError(
+        "provider_unavailable",
+        `Could not open Google Chrome with a local ADAM profile. Close other adam-mcp Chrome windows and try again. ${detail}`,
+      );
+    }
+    this.context.on("page", (opened) => {
+      attachDownloadGuard(opened);
+    });
+    this.page = this.context.pages()[0] ?? (await this.context.newPage());
+    attachDownloadGuard(this.page);
+    assertUrlAllowed(this.origin);
+    await this.page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 45_000 }).catch(() => undefined);
+    await this.waitForSessionSettled(this.page);
+    const snapshot = await this.readSnapshot(this.page);
+    return {
+      loggedIn: isLoggedInSnapshot(snapshot),
+      exportSeed: async () => this.exportSessionState(),
+      close: async () => {
+        await this.closeContext();
+      },
+    };
   }
 
   private async tryAttachCdp(): Promise<boolean> {

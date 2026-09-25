@@ -16,3 +16,6 @@
 | [0012](0012-forum-read.md) | Read-only forum thread read |
 | [0013](0013-getfile-download-metadata.md) | getFile download-abort metadata |
 | [0014](0014-no-silent-empty-extract.md) | No silent empty extract after confirm |
+| [0015](0015-walk-memo-lifecycle.md) | Walk memo lifecycle |
+| [0016](0016-upstream-error-classes.md) | Upstream error classes |
+| [0017](0017-live-runtime-only.md) | Live browser is the only runtime |

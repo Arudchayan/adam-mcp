@@ -7,7 +7,9 @@ import { AdamError } from "adam-core";
 import {
   closeConfiguredProvider,
   createConfiguredProvider,
+  detectProviderName,
   parseProviderName,
+  TEST_FIXTURE_HARNESS_ENV,
 } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
 import { createFixtureProvider } from "adam-provider-fixture";
@@ -27,11 +29,43 @@ describe("parseProviderName", () => {
     }
   });
 
-  it("defaults to fixture and rejects unknown names", () => {
-    assert.equal(parseProviderName(undefined), "fixture");
+  it("defaults to browser and rejects fixture and unknown names", () => {
+    assert.equal(parseProviderName(undefined), "browser");
+    assert.equal(parseProviderName(""), "browser");
     assert.equal(parseProviderName("browser"), "browser");
+    assert.throws(() => parseProviderName("fixture"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "provider_unavailable");
+      assert.equal(error.retryable, false);
+      assert.match(error.message, /not a runtime provider|test-only/i);
+      return true;
+    });
     assert.throws(() => parseProviderName("scrape-everything"), (error: unknown) => {
       assert.ok(error instanceof AdamError);
+      return true;
+    });
+  });
+});
+
+describe("detectProviderName", () => {
+  it("selects browser by default and treats --browser as an alias", () => {
+    assert.equal(detectProviderName({}, []), "browser");
+    assert.equal(detectProviderName({ ADAM_PROVIDER: "browser" }, []), "browser");
+    assert.equal(detectProviderName({ ADAM_PROVIDER: "fixture" }, ["--browser"]), "browser");
+  });
+
+  it("allows the test harness to select fixture", () => {
+    assert.equal(detectProviderName({ [TEST_FIXTURE_HARNESS_ENV]: "1" }, []), "fixture");
+    assert.equal(
+      detectProviderName({ [TEST_FIXTURE_HARNESS_ENV]: "1", ADAM_PROVIDER: "fixture" }, []),
+      "fixture",
+    );
+  });
+
+  it("refuses ADAM_PROVIDER=fixture without the test harness", () => {
+    assert.throws(() => detectProviderName({ ADAM_PROVIDER: "fixture" }, []), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "provider_unavailable");
       return true;
     });
   });
@@ -43,7 +77,7 @@ describe("lazy browser provider", () => {
     assert.doesNotMatch(
       source,
       /^import\s+[^;]*from\s+["']adam-provider-browser["']/m,
-      "static import would pull playwright-core on every fixture boot",
+      "static import would pull playwright-core on every in-process fixture boot",
     );
     assert.match(source, /await\s+import\(\s*["']adam-provider-browser["']\s*\)/);
   });

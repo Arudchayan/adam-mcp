@@ -9,7 +9,7 @@
 
 ## Principles
 
-1. **Fixture-first.** Default harness uses ADAM_PROVIDER=fixture (createFixtureProvider / spawn packages/mcp/src/index.ts). No live ADAM, SWITCH edu-ID, or Chrome session for Phase A gates.
+1. **Fixture-first.** Default harness uses `createFixtureProvider` / spawn `packages/mcp/src/index.ts` with `ADAM_MCP_TEST_FIXTURE=1`. No live ADAM, SWITCH edu-ID, or Chrome session for Phase A gates. `ADAM_PROVIDER=fixture` fail-closes on the real CLI (ADR 0017).
 2. **Clear pass/fail.** Every checklist ID maps to an executable case with binary PASS/FAIL criteria (see checklist SoT).
 3. **Extend existing suites** — do not rewrite:
    - packages/mcp/src/stdio.test.ts
@@ -85,7 +85,7 @@
 
 ## Fixture strategy
 
-- **Provider:** ADAM_PROVIDER=fixture only for Phase A gates.
+- **Provider:** in-process `createFixtureProvider` / `ADAM_MCP_TEST_FIXTURE=1` for Phase A gates.
 - **Golden IDs:** 100001 (course), 100011 (file/PDF), 100021 (exc with deadline), 100020 (empty Exercises fold), 100030 (tst deny / B10).
 - **100020 vs 100021 (ADAM Domain note):** Fixture SoT: 100020 = empty Exercises fold; 100021 = exercise (exc) with deadline (also on calendar). Never treat empty 100020 as no-deadlines. Phase A: assert list-empty for 100020 and getExercise for 100021; do not delete either ID.
 - **Deny objects:** exam/test (tst) must be present and fail closed (B10).

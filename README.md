@@ -37,7 +37,7 @@ npm install -g adam-mcp
 adam-mcp
 ```
 
-Default without `--browser` is the synthetic fixture catalog. For live ADAM, pass `--browser` after running `npm run login` once; the session then runs headless (see [docs/setup.md](docs/setup.md)).
+Default is live ADAM. Run `npm run login` once, then start the server (see [docs/setup.md](docs/setup.md)). `--browser` is optional.
 
 ### Clone (setup helpers + host snippets)
 
@@ -50,8 +50,7 @@ npm run setup
 
 `npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client.
 
-- **Try it now** (synthetic catalog, no ADAM login): use the fixture snippet.
-- **Your real courses:** `npm run login`, sign in to ADAM in Chrome, and use the `--browser` snippet. The window closes automatically; the session continues headless.
+- **Your real courses:** paste the snippet from `npm run setup`, then `npm run login` and sign in to ADAM in Chrome. The window closes automatically; the session continues headless.
 
 Restart the client, then ask:
 
@@ -65,7 +64,7 @@ Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code): [d
 AI client  --stdio MCP-->  adam-mcp  -->  Chrome session  -->  adam.unibas.ch
 ```
 
-ADAM MCP uses a local Chrome session for ADAM authentication. Default without `--browser` is a fixture catalog so a clone does not hit production ADAM.
+ADAM MCP uses a local Chrome session for ADAM authentication. The default runtime is live ADAM.
 
 [Architecture](docs/architecture.md) · [What is in scope](docs/scope.md) · [Capabilities](docs/capabilities.md) · [Roadmap](docs/ROADMAP.md)
 
