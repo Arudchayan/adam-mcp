@@ -38,9 +38,9 @@ After a reboot or a SWITCH timeout, run `npm run login` again if resume does not
 
 ## Hosts
 
-These hosts attach a local stdio server today: **Cursor**, **Claude Desktop**, **VS Code** (GitHub Copilot), **Windsurf**, and **Claude Code**. Paste the snippet from `npm run setup` (sections below). Fully quit and reopen the host, then enable **adam**.
+These hosts attach a local stdio server today: **Cursor**, **Claude Desktop**, **VS Code** (GitHub Copilot), **Windsurf**, **Claude Code**, the **ChatGPT desktop app**, **Codex CLI**, and the **Codex IDE extension**. Paste the snippet from `npm run setup` (sections below). Fully quit and reopen the host, then enable **adam**.
 
-ChatGPT cannot attach a local stdio server. This repo does not ship a remote HTTP or SSE transport, and it does not put MCP OAuth on stdio. Use one of the stdio hosts above.
+ChatGPT on the web cannot attach this server. It only uses remote plugin MCP and does not read `~/.codex/config.toml`. This repo does not ship a remote HTTP or SSE transport, and it does not put MCP OAuth on stdio. ADAM login stays `npm run login` and the local Chrome profile.
 
 ## Cursor, Claude Desktop, Windsurf
 
@@ -59,6 +59,20 @@ Reload the window and enable the server in Copilot MCP settings.
 ## Claude Code
 
 `npm run setup` prints a `claude mcp add` line with the absolute path.
+
+## ChatGPT desktop, Codex CLI, and the Codex IDE extension
+
+The ChatGPT desktop app, Codex CLI, and the Codex IDE extension share `~/.codex/config.toml` and can start this local stdio process. `npm run setup` prints:
+
+```toml
+[mcp_servers.adam]
+command = "node"
+args = ["<absolute path to packages/mcp/dist/adam-mcp.mjs from npm run setup>"]
+```
+
+Paste that table into `~/.codex/config.toml`. Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this).
+
+There is no MCP OAuth. ADAM login stays `npm run login` and the local Chrome profile. Do not set `experimental_environment = "remote"` (that would start the process off the machine, away from the Chrome profile).
 
 ## First checks
 

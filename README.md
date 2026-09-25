@@ -4,7 +4,7 @@
 
 ADAM MCP connects MCP-compatible AI clients to your University of Basel ADAM courses.
 
-It runs on your machine. Cursor, Claude Desktop, VS Code Copilot, Windsurf, and Claude Code can list courses, read pages, find files, and surface deadlines from ADAM.
+It runs on your machine. Cursor, Claude Desktop, VS Code Copilot, Windsurf, Claude Code, the ChatGPT desktop app, Codex CLI, and the Codex IDE extension can list courses, read pages, find files, and surface deadlines from ADAM.
 
 This is a community project, not a University of Basel service.
 
@@ -56,7 +56,7 @@ Restart the client, then ask:
 
 > What courses am I in? Include the ADAM URL for each.
 
-Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code): [docs/setup.md](docs/setup.md).
+Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code, ChatGPT desktop, Codex): [docs/setup.md](docs/setup.md).
 
 ## How it works
 
@@ -91,7 +91,7 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this`.
 
 - No writes, mail, grades, or exam (`tst`) objects.
 - Search is not ADAM’s global search box. Dates are not the ILIAS calendar GUI.
-- ChatGPT cannot attach a local stdio server. This repo does not ship a remote HTTP server; use Cursor, Claude Desktop, VS Code, Windsurf, or Claude Code ([setup](docs/setup.md)).
+- ChatGPT on the web cannot attach this server. It only uses remote plugin MCP and does not read `~/.codex/config.toml`. The ChatGPT desktop app, Codex CLI, and the Codex IDE extension share `~/.codex/config.toml` and can start this local stdio process. There is no MCP OAuth. ADAM login stays `npm run login` and the local Chrome profile. This repo does not ship a remote HTTP server ([setup](docs/setup.md)). Do not set `experimental_environment = "remote"` (that would start the process off the machine, away from the Chrome profile).
 - Scanned PDFs are not OCR’d.
 
 ## Privacy
