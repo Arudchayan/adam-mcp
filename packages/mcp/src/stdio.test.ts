@@ -332,6 +332,7 @@ describe("B4 confirm RPC", () => {
         method: "tools/call",
         params: { name: "adam_read_page", arguments: { refId: "100001" } },
       });
+      assert.equal(pageOmit.error, undefined, "confirm rejects are tool results, not JSON-RPC -32602");
       assert.equal(pageOmit.result?.isError, true);
       assert.match(pageOmit.result?.content?.[0]?.text ?? "", /confirm/i);
       assert.equal(pageOmit.result?.structuredContent, undefined);
@@ -342,6 +343,7 @@ describe("B4 confirm RPC", () => {
         method: "tools/call",
         params: { name: "adam_read_page", arguments: { refId: "100001", confirm: false } },
       });
+      assert.equal(pageFalse.error, undefined, "confirm:false is a tool result, not JSON-RPC -32602");
       assert.equal(pageFalse.result?.isError, true);
       assert.match(pageFalse.result?.content?.[0]?.text ?? "", /confirm/i);
       assert.equal(pageFalse.result?.structuredContent, undefined);
@@ -1952,6 +1954,7 @@ describe("MCP boundary invariants", () => {
           arguments: { refId: "100001", cursor: "abc" },
         },
       });
+      assert.equal(badCursor.error, undefined, "garbage cursors are tool results, not JSON-RPC -32602");
       assert.equal(badCursor.result?.isError, true);
       assert.match(badCursor.result?.content?.[0]?.text ?? "", /cursor/i);
     } finally {

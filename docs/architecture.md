@@ -46,7 +46,7 @@ Every read tool result and every ADAM `resources/read` payload is wrapped as `Un
 ## SOTA hardening (ADR 0010 / 0011)
 
 - **Instructions:** `McpServer(serverInfo, { instructions })` carries the read-only contract (handles vs live URLs, `confirm:true`, `empty` vs `unknown`, `tst` deny).
-- **Cursors:** `cursorSchema` is digits-only; garbage yields `InvalidParams (-32602)` at the SDK layer. Providers keep lenient `decodeCursor` internally.
+- **Tool arguments:** Zod rejects (missing or false `confirm`, a non-digit cursor, a non-ADAM URL) are tool results with `isError: true` and an input-validation message. `@modelcontextprotocol/server` 2.x does not emit JSON-RPC `-32602` for those rejects (ADR 0010). Providers keep lenient `decodeCursor` internally. Resource misses still use `ResourceNotFoundError`, which the SDK reports as `-32602`.
 - **Resources:** `not_found` maps to `ResourceNotFoundError`; `unauthorized` stays distinct.
 - **Structured output:** `ok(data, outputSchema)` validates redacted `structuredContent`; mismatch is `provider_unavailable` non-retryable (shape bug).
 - **Bounds:** `MAX_PAGE_CHARS=50_000` (`adam-core`); `PageContent.truncated` + `untrustedPageOutputSchema.truncated?`; truncate after `inferDates`. Extract caps stay 8MiB / 40k chars / ≤20 pages; after `confirm:true`, empty extract text fails closed (ADR 0014) instead of a blank success.

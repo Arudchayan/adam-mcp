@@ -19,3 +19,4 @@
 | [0015](0015-walk-memo-lifecycle.md) | Walk memo lifecycle |
 | [0016](0016-upstream-error-classes.md) | Upstream error classes |
 | [0017](0017-live-runtime-only.md) | Live browser is the only runtime |
+| [0018](0018-absent-ref-and-canonical-urls.md) | Absent refs vs wrong type, canonical `/go/` citations |

@@ -91,7 +91,7 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this`.
 
 - No writes, mail, grades, or exam (`tst`) objects.
 - Search is not ADAM’s global search box. Dates are not the ILIAS calendar GUI.
-- ChatGPT cannot attach a local stdio server.
+- ChatGPT cannot attach a local stdio server. This repo does not ship a remote HTTP server; use Cursor, Claude Desktop, VS Code, Windsurf, or Claude Code ([setup](docs/setup.md)).
 - Scanned PDFs are not OCR’d.
 
 ## Privacy
