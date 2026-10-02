@@ -179,7 +179,7 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     breadcrumbs,
     objects,
     files,
-    news: extractNews(snapshot, objects, provenanceBase(snapshot.url)),
+    news: extractNews(snapshot, objects, provenanceBase(snapshot.url), breadcrumbs),
     inferredDates: inferDates(text),
     iliasVersion: readIliasVersion(snapshot.text),
     text,
@@ -315,8 +315,9 @@ function extractNews(
   snapshot: PageSnapshot,
   objects: AdamObject[],
   provenance: Provenance,
+  breadcrumbs: Breadcrumb[] = [],
 ): NewsItem[] {
-  const articles = extractNewsArticles(snapshot, provenance);
+  const articles = extractNewsArticles(snapshot, provenance, breadcrumbs);
   if (articles.length > 0) {
     return articles;
   }
@@ -337,44 +338,131 @@ function extractNews(
     }));
 }
 
-function extractNewsArticles(snapshot: PageSnapshot, provenance: Provenance): NewsItem[] {
+/**
+ * ADR 0018 (2026-10-02 news sideblock replay): label-only `News` blocks are
+ * skipped, the headline wins over the first `<a>`, and the course comes only
+ * from a typed href, the page URL, or the breadcrumb — never invented.
+ * Honest-empty is preserved: no headlines means no items.
+ */
+function isNewsLabel(text: string): boolean {
+  const label = text.trim().toLowerCase();
+  return (
+    label === "news" ||
+    label === "nachrichten" ||
+    label === "aktuelles" ||
+    label === "neuigkeiten" ||
+    label === "news / aktuell"
+  );
+}
+
+function extractNewsArticles(
+  snapshot: PageSnapshot,
+  provenance: Provenance,
+  breadcrumbs: Breadcrumb[] = [],
+): NewsItem[] {
   const items: NewsItem[] = [];
   const seen = new Set<string>();
-  const blocks = [
-    ...snapshot.html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/gi),
-    ...snapshot.html.matchAll(
-      /<(?:section|div)[^>]*(?:news|nachricht|aktuell)[^>]*>([\s\S]*?)<\/(?:section|div)>/gi,
-    ),
-  ];
-  for (const match of blocks) {
-    const html = match[1];
+  const pageTyped = typedAdamRef(snapshot.url);
+  const breadcrumbCrs = breadcrumbs.find((crumb) => crumb.type === "crs")?.refId;
+  // Course only from typed href / page URL / breadcrumb — never invented (ADR 0018).
+  const pageCourseRefId = pageTyped?.type === "crs" ? pageTyped.refId : breadcrumbCrs;
+  const pageFolderRefId = pageTyped?.type === "fold" ? pageTyped.refId : undefined;
+
+  const pushItem = (title: string, summaryText: string, chunkHtml: string, chunkHrefs: string[]) => {
+    const headline = cleanTitle(title);
+    if (!headline || isNewsLabel(headline)) {
+      return;
+    }
+    const hrefTyped =
+      chunkHrefs.map((href) => typedAdamRef(href)).find((ref) => ref !== undefined) ?? pageTyped;
+    const datetime = chunkHtml.match(/datetime=["']([^"']+)["']/i)?.[1];
+    const bodyText = cleanTitle(stripTags(chunkHtml)) || headline;
+    const url = hrefTyped ? canonicalUrl(hrefTyped.type, hrefTyped.refId) : snapshot.url;
+    const key = `${url}\n${headline}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    items.push({
+      title: headline,
+      summary: bodyText.slice(0, 280),
+      url,
+      courseRefId: hrefTyped?.type === "crs" ? hrefTyped.refId : pageCourseRefId,
+      folderRefId: hrefTyped?.type === "fold" ? hrefTyped.refId : pageFolderRefId,
+      createdAt: datetime,
+      updatedAt: datetime,
+      accessClass: /authenticated users|registrierte nutzer/i.test(bodyText) ? "Authenticated Users" : undefined,
+      author: authorFrom(bodyText),
+      provenance: { ...provenance, sourceUrl: url },
+    });
+  };
+
+  const articleBlocks = [...snapshot.html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/gi)].map(
+    (match) => match[1] ?? "",
+  );
+  for (const html of articleBlocks) {
+    const headlines = [...html.matchAll(/<h[2-4]\b[^>]*>([\s\S]*?)<\/h[2-4]>/gi)];
+    if (headlines.length > 0) {
+      // Per-headline split: one item per h2-h4, label-only headlines skipped.
+      let cursor = 0;
+      const positions = headlines.map((headline) => headline.index ?? 0);
+      positions.push(html.length);
+      for (let index = 0; index < headlines.length; index += 1) {
+        const headlineHtml = headlines[index]?.[1] ?? "";
+        const headlineText = cleanTitle(stripTags(headlineHtml));
+        const chunk = html.slice(positions[index] ?? 0, positions[index + 1] ?? html.length);
+        const chunkHrefs = [...chunk.matchAll(/href=["']([^"']+)["']/gi)].map(
+          (hrefMatch) => hrefMatch[1],
+        );
+        // Headline wins over the first <a>: prefer an href inside the headline itself.
+        const headlineHrefs = [...headlineHtml.matchAll(/href=["']([^"']+)["']/gi)].map(
+          (hrefMatch) => hrefMatch[1],
+        );
+        pushItem(headlineText, chunk, chunk, [...headlineHrefs, ...chunkHrefs]);
+        cursor = positions[index + 1] ?? cursor;
+      }
+      continue;
+    }
     const text = cleanTitle(stripTags(html));
-    if (!text) {
+    if (!text || isNewsLabel(text)) {
       continue;
     }
     const hrefs = [...html.matchAll(/href=["']([^"']+)["']/gi)].map((hrefMatch) => hrefMatch[1]);
-    const parsed =
-      hrefs.map((href) => typedAdamRef(href)).find((ref) => ref !== undefined) ?? typedAdamRef(snapshot.url);
-    const datetime = html.match(/datetime=["']([^"']+)["']/i)?.[1];
-    const url = parsed ? canonicalUrl(parsed.type, parsed.refId) : snapshot.url;
-    if (seen.has(url + text)) {
+    const linkText = cleanTitle(stripTags(html.match(/<a\b[^>]*>([\s\S]*?)<\/a>/i)?.[1] ?? ""));
+    const title = linkText && !isNewsLabel(linkText) ? linkText : text.slice(0, 80);
+    pushItem(title, html, html, hrefs);
+  }
+
+  const sideblocks = [
+    ...snapshot.html.matchAll(
+      /<(?:section|div)[^>]*(?:news|nachricht|aktuell)[^>]*>([\s\S]*?)<\/(?:section|div)>/gi,
+    ),
+  ].map((match) => match[1] ?? "");
+  for (const html of sideblocks) {
+    const headlines = [...html.matchAll(/<h[2-4]\b[^>]*>([\s\S]*?)<\/h[2-4]>/gi)];
+    if (headlines.length === 0) {
+      // Honest-empty: a label-only News container without headlines invents nothing.
       continue;
     }
-    seen.add(url + text);
-    const linkText = cleanTitle(stripTags(html.match(/<a\b[^>]*>([\s\S]*?)<\/a>/i)?.[1] ?? ""));
-    items.push({
-      title: linkText || text.slice(0, 80),
-      summary: text.slice(0, 280),
-      url,
-      courseRefId: parsed?.type === "crs" ? parsed.refId : undefined,
-      folderRefId: parsed?.type === "fold" ? parsed.refId : undefined,
-      createdAt: datetime,
-      updatedAt: datetime,
-      accessClass: /authenticated users|registrierte nutzer/i.test(text) ? "Authenticated Users" : undefined,
-      author: authorFrom(text),
-      provenance: { ...provenance, sourceUrl: url },
-    });
+    const positions = headlines.map((headline) => headline.index ?? 0);
+    positions.push(html.length);
+    for (let index = 0; index < headlines.length; index += 1) {
+      const headlineHtml = headlines[index]?.[1] ?? "";
+      const headlineText = cleanTitle(stripTags(headlineHtml));
+      if (!headlineText || isNewsLabel(headlineText)) {
+        continue;
+      }
+      const chunk = html.slice(positions[index] ?? 0, positions[index + 1] ?? html.length);
+      const chunkHrefs = [...chunk.matchAll(/href=["']([^"']+)["']/gi)].map(
+        (hrefMatch) => hrefMatch[1],
+      );
+      const headlineHrefs = [...headlineHtml.matchAll(/href=["']([^"']+)["']/gi)].map(
+        (hrefMatch) => hrefMatch[1],
+      );
+      pushItem(headlineText, chunk, chunk, [...headlineHrefs, ...chunkHrefs]);
+    }
   }
+
   return items.slice(0, 20);
 }
 
@@ -578,13 +666,14 @@ export function listingItemsOrEmpty<T>(items: T[], classified: ListingClassifica
   return classified.state === "ok" ? items : [];
 }
 
-/** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). */
+/** Live ADAM English/German missing-object pages (ILIAS 10 Failure Message). ADR 0018. */
 export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" | "html">): boolean {
   if (isAdamPermissionPage(snapshot)) {
     return false;
   }
   const title = snapshot.title ?? "";
   const text = snapshot.text ?? "";
+  const html = snapshot.html ?? "";
   const haystack = `${title}\n${text}`;
   if (/the requested page could not be found/i.test(haystack)) {
     return true;
@@ -598,7 +687,49 @@ export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" 
   if (/objekt konnte nicht gefunden/i.test(haystack) || /\bobject not found\b/i.test(haystack) || /\bkein objekt\b/i.test(haystack)) {
     return true;
   }
+  // ADR 0018 live-findings 2026-10-02: absent-object copy seen on live failure pages.
+  if (/\bdoes not exist\b/i.test(haystack) && hasFailureHtml(title, html)) {
+    return true;
+  }
+  if (/\bno such (object|page|resource)\b/i.test(haystack)) {
+    return true;
+  }
+  // Bare "existiert nicht" is too broad (course prose can negate other subjects),
+  // so scope it to objekt/requested-page context agreeing with the failure page.
+  if (/(objekt|angeforderte? (seite|objekt|ressource)|requested (page|object|resource))[^.]{0,80}existiert nicht/i.test(haystack)) {
+    return true;
+  }
+  // Weak absent copy needs failure-HTML corroboration so course prose that
+  // mentions availability does not read as a missing object (ADR 0018).
+  if (/nicht vorhanden/i.test(haystack) && hasFailureHtml(title, html)) {
+    return true;
+  }
+  if (/nicht verf[üu]gbar/i.test(haystack) && hasFailureHtml(title, html)) {
+    return true;
+  }
+  if (/\binvalid\s+(ref|reference|object)\b/i.test(haystack) && hasFailureHtml(title, html)) {
+    return true;
+  }
+  if (/ung[üu]ltig/i.test(haystack) && hasFailureHtml(title, html)) {
+    return true;
+  }
+  // Failure-HTML corroboration: ILIAS failure chrome plus a weak missing hint.
+  if (
+    hasFailureHtml(title, html) &&
+    /\bnot found\b|nicht gefunden|existiert nicht|does not exist|no such object/i.test(haystack)
+  ) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * ADR 0018: failure-HTML corroboration for weak absent copy. ILIAS 10 renders
+ * missing-object pages inside a failure/alert container; course prose alone
+ * must not count without that chrome.
+ */
+function hasFailureHtml(title: string, html: string): boolean {
+  return /failure message/i.test(title) || /ilFailure|failure-message|alert-danger|failureMessage/i.test(html);
 }
 
 /**

@@ -16,16 +16,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 
 describe("adam_read_page confirmation", () => {
-  it("rejects missing or false confirm", () => {
-    assert.equal(readPageInputSchema.safeParse({ refId: "1" }).success, false);
+  it("allows omit for elicitation; rejects false confirm", () => {
+    // ADR 0019: confirm is optional so omit reaches the handler for elicitation.
+    assert.equal(readPageInputSchema.safeParse({ refId: "1" }).success, true);
     assert.equal(readPageInputSchema.safeParse({ refId: "1", confirm: false }).success, false);
     assert.equal(readPageInputSchema.safeParse({ refId: "1", confirm: true }).success, true);
   });
 });
 
 describe("adam_extract_file_text confirmation", () => {
-  it("rejects missing or false confirm", () => {
-    assert.equal(extractFileInputSchema.safeParse({ refId: "100011" }).success, false);
+  it("allows omit for elicitation; rejects false confirm", () => {
+    // ADR 0019: confirm is optional so omit reaches the handler for elicitation.
+    assert.equal(extractFileInputSchema.safeParse({ refId: "100011" }).success, true);
     assert.equal(extractFileInputSchema.safeParse({ refId: "100011", confirm: false }).success, false);
     assert.equal(extractFileInputSchema.safeParse({ refId: "100011", confirm: true }).success, true);
   });
@@ -322,7 +324,8 @@ describe("B4 confirm RPC", () => {
       for (const name of ["adam_read_page", "adam_extract_file_text", "adam_get_exercise"] as const) {
         const tool = (tools.result?.tools ?? []).find((entry) => entry.name === name);
         assert.ok(tool, `missing ${name}`);
-        assert.equal(tool.inputSchema?.required?.includes("confirm"), true, `${name} must require confirm`);
+        // ADR 0019: confirm is optional so omit reaches the handler for elicitation.
+        assert.equal(tool.inputSchema?.required?.includes("confirm") ?? false, false, `${name} confirm must be optional for elicitation`);
         assert.equal(tool.inputSchema?.properties?.confirm?.const, true, `${name} confirm const must be true`);
       }
 

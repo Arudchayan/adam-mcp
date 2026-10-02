@@ -13,10 +13,12 @@ Living sequencing for University of Basel ADAM coverage. Community project — n
 | --- | --- |
 | **Known** | In scope.md / shipped tools, and/or observed in a Course Member session |
 | **Live-unverified** | Tool or plan exists; not yet seen on live ADAM for this project |
-| **Unknown** | May exist on ADAM; no live sighting yet — **actively hunting** via deep walks, in-ADAM search, Magazin/public cats, ADAMtools (not “impossible”) |
+| **Unknown** | May exist on ADAM; **no live sighting yet — gated, not hunting**. Code unlock requires live refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored) + capabilities.md promotion + fixture mirror. No code without inventory |
 | **Wait-for-inventory** | Empty re-verify of enrolled courses found none; **parked** — not actively hunting; unlock when inventory/sighting appears |
 
 We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work. `sess` / `webr` remain **wait-for-inventory** after empty enrolled re-verify. `frm` is **Known/live** 2026-09-14 (tip 5099529).
+
+**Stop rule:** do not expand `sess` / `webr` / `htlm` / `lm` / Postbox / `grp` / `svy` / `wiki` / `blog` / Etherpad / LP without an enrolled-inventory sighting (live refId + scrubbed capture). No code without inventory.
 
 ## Phase A — Harden shipped reads (fixture-first)
 
@@ -48,20 +50,20 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 
 ## Phase B — valuable unread surfaces (reads only)
 
-After **live sighting** of each type (or honest synthetic fixture). Prefer resources for read-by-id; keep tool count tight.
+After **live sighting** of each type. Labeled synthetic mirrors allowed for an already-unlocked type only (e.g., AT5 `100021`, B-frm `100040`). Prefer resources for read-by-id; keep tool count tight.
 
 `sess` / `webr`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting; wait for inventory.
 
 | Item | Confidence | Gate |
 | --- | --- | --- |
 | Forum thread read (`frm`) | Known + live | Live `frm` Domain 2026-09-14 tip 5099529 `list_children`; live HTML threads when parse succeeds (ADR 0012) |
-| Session / timetable (`sess`) | Wait-for-inventory | Live `sess` (parked; not hunting) |
-| Web links (`webr`) | Wait-for-inventory | Live `webr`; no generic fetch (parked; not hunting) |
-| HTML / LM modules | Unknown → hunting | Live presence |
-| Postbox / MWA **list** | Unknown → hunting | Live labels; upload = Phase C |
-| ADAMtools `grp` / `svy` discover | Unknown → hunting | Live |
-| Wiki / blog / Etherpad **read** | Unknown → hunting | Live |
-| Own learning progress | Unknown | Optional; own data only |
+| Session / timetable (`sess`) | Wait-for-inventory | Live `sess` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (parked; not hunting) |
+| Web links (`webr`) | Wait-for-inventory | Live `webr` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror; no generic fetch (parked; not hunting) |
+| HTML / LM modules | Unknown | Live `htlm` / `lm` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
+| Postbox / MWA **list** | Unknown | Live Postbox / MWA refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror; upload = Phase C (gated; not hunting) |
+| ADAMtools `grp` / `svy` discover | Unknown | Live `grp` / `svy` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
+| Wiki / blog / Etherpad **read** | Unknown | Live `wiki` / `blog` / Etherpad refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
+| Own learning progress | Unknown | Optional; own data only; live LP refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
 
 ## Phase C — gated writes (not default)
 
@@ -88,7 +90,7 @@ Only after ToS / academic-integrity review, ADR, and host elicitation. Prefer de
 
 1. Phase A fixture gaps  
 2. Phase A-thin read quality  
-3. Phase B after live (or synthetic) gates  
+3. Phase B after live gates (synthetic mirrors for already-unlocked types only)  
 4. Phase C only with explicit review  
 
 SOAP/REST on public ADAM remain unavailable per historical notes — browser session stays the live path unless Uni Basel documents otherwise.

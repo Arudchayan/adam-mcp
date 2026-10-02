@@ -52,7 +52,8 @@ Usage:
   adam-mcp              Live ADAM via a headless session (run login first)
   adam-mcp --browser    Same as adam-mcp (kept for existing host JSON)
   adam-mcp login        Sign in to ADAM in Chrome, then close it
-  adam-mcp status       Check the headless ADAM session
+  adam-mcp status       Check the headless ADAM session (default mirrors adam_session_status keys: loggedIn/reason/holderPid/checkedAt)
+  adam-mcp status --verbose  Bug-report-only holder/profileDir detail (holder pid/generation/exe + profileDir)
   adam-mcp logout       Stop the headless session (--purge removes the profile)`);
 }
 
