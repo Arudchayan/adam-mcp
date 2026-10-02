@@ -688,7 +688,7 @@ export function isAdamFailurePage(snapshot: Pick<PageSnapshot, "text" | "title" 
     return true;
   }
   // ADR 0018 live-findings 2026-10-02: absent-object copy seen on live failure pages.
-  if (/\bdoes not exist\b/i.test(haystack)) {
+  if (/\bdoes not exist\b/i.test(haystack) && hasFailureHtml(title, html)) {
     return true;
   }
   if (/\bno such (object|page|resource)\b/i.test(haystack)) {
