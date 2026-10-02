@@ -370,6 +370,10 @@ describe("resource error parity with tools (ADR 0016)", () => {
       `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
     );
     assert.equal((fail(deniedError).content[0] as { text: string }).text, expected);
+    // ADR 0020 parity: same one-line carries retryable + runId.
+    assert.match(denied.error.message, /forbidden:/);
+    assert.match(denied.error.message, /retryable=false/);
+    assert.match(denied.error.message, /runId=[0-9a-f]{8}/);
   });
 
   it("resources/read adam://me/courses unauthorized surfaces fail() code text, not ResourceNotFound", async () => {
@@ -393,6 +397,9 @@ describe("resource error parity with tools (ADR 0016)", () => {
       denied.error.message.includes(expected),
       `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
     );
+    // ADR 0020 parity: retryable=true preserved with runId.
+    assert.match(denied.error.message, /retryable=true/);
+    assert.match(denied.error.message, /runId=[0-9a-f]{8}/);
   });
 
   it("resources/read stale_id surfaces fail() code text, not ResourceNotFound", async () => {
@@ -416,6 +423,32 @@ describe("resource error parity with tools (ADR 0016)", () => {
     assert.match(denied.error.message, /stale_id:/);
 
     const expected = formatAdamFailText(staleError);
+    assert.ok(
+      denied.error.message.includes(expected),
+      `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
+    );
+    assert.match(denied.error.message, /retryable=false/);
+    assert.match(denied.error.message, /runId=[0-9a-f]{8}/);
+  });
+
+  it("resources/read provider_unavailable surfaces retryable + runId, not ResourceNotFound", async () => {
+    const provider = createFixtureProvider();
+    const transient = new AdamError("provider_unavailable", "Chrome is not available.", true);
+    provider.getCourse = async () => {
+      throw transient;
+    };
+
+    rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+
+    const denied = await rpc.request("resources/read", { uri: "adam://crs/100001" });
+    assert.equal(denied.result, undefined);
+    assert.ok(denied.error, "provider_unavailable resource read must be an RPC error");
+    assert.notEqual(denied.error.code, -32602, "provider_unavailable must not look like not_found");
+    assert.match(denied.error.message, /provider_unavailable:/);
+    assert.match(denied.error.message, /retryable=true/);
+    assert.match(denied.error.message, /runId=[0-9a-f]{8}/);
+    const expected = formatAdamFailText(transient);
     assert.ok(
       denied.error.message.includes(expected),
       `expected host message to include tool fail() line "${expected}", got "${denied.error.message}"`,
