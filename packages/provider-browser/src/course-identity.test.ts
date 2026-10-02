@@ -69,4 +69,24 @@ describe("getCourse identity", () => {
       return true;
     });
   });
+
+  it("maps live failure copy (does not exist) to not_found, mirroring the absent case (ADR 0018)", async () => {
+    const bogus = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession({
+        "https://adam.unibas.ch/go/crs/999998": snapshotFromHtml(
+          "https://adam.unibas.ch/go/crs/999998",
+          "Failure Message",
+          "<main><h1>Failure Message</h1><p>The object does not exist.</p></main>",
+          "Failure Message The object does not exist.",
+        ),
+      }),
+    });
+    await assert.rejects(() => bogus.getCourse("999998"), (error: unknown) => {
+      assert.ok(error instanceof AdamError);
+      assert.equal(error.code, "not_found");
+      assert.equal(error.retryable, false);
+      return true;
+    });
+  });
 });

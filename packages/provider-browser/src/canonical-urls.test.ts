@@ -68,4 +68,35 @@ describe("canonical ADAM citations", () => {
     assert.equal(mystery?.type, "unknown");
     assert.equal(mystery?.url, "https://adam.unibas.ch/ilias.php?ref_id=100012");
   });
+
+  it("replays a news sideblock per headline with course from the page, never the News label (ADR 0018)", () => {
+    const sideblock = snapshotFromHtml(
+      "https://adam.unibas.ch/go/crs/100001",
+      "Course",
+      `<nav aria-label="Brotkrumen"><a href="https://adam.unibas.ch/go/crs/100001">Course</a></nav>
+<main>
+  <h1>Course</h1>
+  <div class="news-sideblock">
+    <h2>News</h2>
+    <h3><a href="https://adam.unibas.ch/go/file/100011">Lecture slides uploaded</a></h3>
+    <p>Slides for week 3 are online.</p>
+    <h3><a href="https://adam.unibas.ch/go/file/100012">Exercise sheet 2</a></h3>
+    <p>Please prepare before Friday.</p>
+  </div>
+  <a href="/logout.php">Abmelden</a>
+</main>`,
+      "Course News Lecture slides uploaded Slides for week 3 Exercise sheet 2 Please prepare Abmelden",
+    );
+    const replayed = extractCatalog(sideblock, "2026-10-02T00:00:00.000Z");
+    assert.ok(replayed.news.length >= 2, `expected per-headline items, got ${JSON.stringify(replayed.news)}`);
+    assert.equal(replayed.news.some((item) => item.title === "News"), false, "label-only News is not a title");
+    const slides = replayed.news.find((item) => item.title === "Lecture slides uploaded");
+    assert.ok(slides);
+    assert.equal(slides?.url, "https://adam.unibas.ch/go/file/100011");
+    assert.equal(slides?.courseRefId, "100001");
+    const sheet = replayed.news.find((item) => item.title === "Exercise sheet 2");
+    assert.ok(sheet);
+    assert.equal(sheet?.url, "https://adam.unibas.ch/go/file/100012");
+    assert.equal(sheet?.courseRefId, "100001");
+  });
 });

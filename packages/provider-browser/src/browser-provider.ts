@@ -184,6 +184,12 @@ export class BrowserAdamProvider implements AdamProvider {
     this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
     if (!course) {
+      // ADR 0018: a live failure page beats an uncorroborated same-ref hit — absent
+      // stays not_found. A resolved same-ref fold still reports unsupported_type below,
+      // and a different typed landing stays stale_id from openAuthorizedOnce (ADR 0016).
+      if (isAdamFailurePage(snapshot)) {
+        throw new AdamError("not_found", `ref_id ${refId} did not resolve to a course in the browser session.`);
+      }
       const sameRef =
         catalog.current?.refId === refId
           ? catalog.current
