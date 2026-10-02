@@ -17,11 +17,11 @@ Do not tag GitHub/npm until all of these hold:
 1. GPL-3.0 text in `LICENSE` plus `NOTICE` for Apache-2.0 dependencies.
 2. This file, `CODE_OF_CONDUCT.md`, `docs/threat-model.md`, `docs/scope.md`.
 3. CI on Windows, macOS, and Linux: `npm test`, `npm run typecheck`, `npm run build`, `npm run audit`.
-4. Default provider is `fixture`. SOAP and HTML stay fail closed.
-5. Chrome debugging is not a well-known localhost port.
+4. Default provider is `browser` (live ADAM); `--browser` is a no-op alias. `ADAM_PROVIDER=fixture` fail-closes at runtime (`provider_unavailable`, `retryable=false`); in-process tests call `createFixtureProvider()` / `createConfiguredProvider("fixture")` directly, while `ADAM_MCP_TEST_FIXTURE=1` selects fixture only for the spawned stdio test harness. SOAP and HTML stay fail-closed; enabling either requires an ADR.
+5. Chrome CDP uses an ephemeral loopback port with a detached headless session holder (no password, no persistent seed); dashboard is verified on start/resume; `adam_session_status` never launches a browser.
 6. HTTPS + pinned `https://adam.unibas.ch`; allowlist on start and final URL.
 7. Concurrency 1 (SerialQueue), size caps — tested.
-8. `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true`.
+8. `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true`. `confirm` is an interim schema gate after the student asked to read — not an OS permission, not elicitation, not equated to tool annotations alone. Real confirms / future writes → MCP elicitation when the host supports MRTR.
 9. Object type `tst` is denied. No write tools.
 10. No PDF bytes to the model. Download cancel is tested.
 11. Stdout is protocol-only. Redaction tests cover emails, cookies, and session query keys.

@@ -38,6 +38,8 @@ Bump the pin in this file when changing the server dependency major or the negot
 
 Real confirms and future writes → MCP **elicitation** when the host supports MRTR. Until then, keep the schema gate; do not document `confirm` or annotations as elicitation.
 
+Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [ADR 0019](adr/0019-elicitation-spike.md).
+
 
 ## Trust envelope (ADR 0008)
 
@@ -55,4 +57,23 @@ Every read tool result and every ADAM `resources/read` payload is wrapped as `Un
 - **Redaction:** `password/api_key/secret`/matriculation in text; `password/api_key/secret` query keys in URLs; `deepRedact` uses `redactUrl` for `*url` fields.
 
 Bounded live re-verify (no code): [live-reverify.md](live-reverify.md).
+
+## Session recovery (runbook)
+
+Full runbook: [session-recovery.md](session-recovery.md). `npm run login`
+(headed first sign-in) → holder owns headless Chrome → `adam_session_status`
+(never launches) → `npm run logout` (stops holder). A dead holder resumes once
+per read (headless verify → cookie handoff) or fails closed
+`unauthorized` / `login-required`.
+
+```
+tool ──► holder check ──► holder live? ──yes──► attach CDP ──► read
+                │                              ▲
+                no                 dashboard verifies
+                ▼                              │
+         resume? (headless Chrome              │
+         on existing profile) ──signed-in──► handoff to new holder
+                │
+                └──login page──► close Chrome ──► unauthorized (tool AdamError; status with no holder → reason: login-required)
+```
 

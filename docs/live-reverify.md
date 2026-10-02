@@ -20,6 +20,14 @@ For the post-population ADAM pass (new documents/files). No code changes. Phase 
 7. If a `file` appears: `list_files` → `get_file` (metadata only) → one `read_page`/`extract_file_text` with `confirm:true` (text only).
 8. If an `exc` appears: distinguish empty Exercises **fold** (`100020`-case) vs **exc** with deadline (`100021`-case). Check `source/confidence`, dedup `exc>calendar>page`.
 
+## Semester-start sweep targets (requires authenticated holder — do not run without live login)
+
+- Real `exc` with deadline/instructions (empty Exercises **fold** `100020`-case vs **exc** with deadline `100021`-case; check `source`/confidence, dedup `exc>calendar>page`).
+- Contentful `file` (`list_files` → `get_file` metadata only → single `read_page`/`extract_file_text` with `confirm:true`, text only).
+- News-on course (News sideblock enabled → `adam_list_news` with refs; honest empty when off).
+
+Promote rule per target: live refId (never commit) + scrubbed capture (`ADAM_DEBUG_CAPTURE=1` → `scratch/`, or `capture-fixtures.mjs --out scratch/live-candidate`) → `capabilities.md` dated `Live pass` promotion → fixture mirror by explicit PR (`packages/provider-browser/fixtures/live/` + `live-replay.test.ts` together). No code without all three; `unknown→ok` flips are `needs-review`, not silent.
+
 ## Capture / promote (never commit `scratch/`)
 
 - `node scripts/capture-fixtures.mjs --out scratch/live-candidate` (never default out). Targets are dashboard + known courses/folds; copy script to `scratch/` to add new URLs (do not commit real refIds).

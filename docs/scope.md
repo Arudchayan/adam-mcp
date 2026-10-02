@@ -16,6 +16,8 @@ Live search/calendar/news walk enrolled objects. They are not ADAM’s global se
 
 `confirm: true` is an **interim schema gate** after the student asked to read: a required tool argument so the host can show it. It is **not** an OS permission dialog, **not** MCP elicitation, and **not** equated to tool annotations alone. Real confirms and future writes → MCP **elicitation** when the host supports MRTR. See [architecture.md](architecture.md#confirm-vs-elicitation-a3).
 
+Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [ADR 0019](adr/0019-elicitation-spike.md).
+
 ## Does not ship
 
 Writes (submit, forum, mail, enroll). Exam taking (`tst` denied). File bytes/base64 to the model. Generic URL fetch. Hosted HTTP MCP. Gradebook. Member gallery. OCR for scanned PDFs.

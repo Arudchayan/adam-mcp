@@ -4,7 +4,7 @@ Living map of University of Basel ADAM student workflows to MCP coverage. Dated 
 
 Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live?** (Chrome verification)
 
-**Live pass (2026-09-06, Course Member session):** validated `crs`, standard `fold`, `file`, and News/what-changed on one contentful course; calendar widget present (agenda empty). **Not observed** then (do not invent fixtures): `exc`, `frm`, Postbox / Member Work Area, Etherpad, `sess`, `webr`, `htlm` / `lm`. Later: `frm` list_children **live-seen** (Domain tip `5099529`; B-frm #34/`1a7931f`); live thread summaries parse from forum HTML when present (posts still ConfirmGate; fail-closed if HTML missing); park `sess` / `webr` as **wait-for-inventory** (not actively hunting).
+**Live pass (2026-09-06, Course Member session):** validated `crs`, standard `fold`, `file`, and News/what-changed on one contentful course; calendar widget present (agenda empty). **Not observed** then (do not invent fixtures): `exc`, `frm`, Postbox / Member Work Area, Etherpad, `sess`, `webr`, `htlm` / `lm`. Later: `frm` list_children **live-seen** (Domain tip `5099529`; B-frm #34/`1a7931f`); live thread summaries parse from forum HTML when present (posts still ConfirmGate; fail-closed if HTML missing); `webr` **live-seen** 2026-10-02 (`2291288`, `2291289` — `read_page` page-text readable via `https://adam.unibas.ch/go/webr/{id}`, ~2.2KB payloads; no generic fetch); park `sess` as **wait-for-inventory** (not actively hunting).
 
 **Live pass (2026-09-09, ADR 0005 build):** 8 enrolled courses; only Multimedia Retrieval (`2206931`) exposes children — `list_children` → `ok` + 2 folds (`2291290`, `2291292`); the other 7 courses list zero children. Both MM folds report `listingState: unknown` (folder GUI served, no parseable items, no empty copy); `read_page` is chrome-only (538 chars). No `file`/`exc` reachable anywhere (`search pdf` → 0), so file-extract and exercise paths remain live-unverified for lack of live objects, not connector failure. Pre-semester timing (HS 2026) fits truly-empty folders. Re-verify after semester start.
 
@@ -16,7 +16,7 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Replay corpus (2026-09-10, W5):** five scrubbed captures of live ILIAS 10.11 pages (dashboard, two courses — one contentful, one blank, two blank folders) live under `packages/provider-browser/fixtures/live/`. Regenerate with `npm run capture:fixtures` against a running holder; the script strips scripts/styles/svg, remaps every ref_id to a stable fake id, keeps only UI/empty-copy text, and keeps `id/class/role/href/aria-label` structure. `live-replay.test.ts` replays them through the memory session; the HTML link parser now detects ILIAS 10 chrome positionally (links outside `<main>`, footer, mainbar nav, breadcrumbs), which is what made blank pages replay identically to live.
 
-**Live pass (2026-09-14, tip 5099529, deep enrolled walk):** 8 courses; `list_children`/`list_files` sighted live `file`×37 and `frm`×1; `get_file` ok; extract confirm (one over 8MiB, one truncated empty — now fail-closed, ADR 0014); `search(pdf|PDF|.pdf)` → crs/fold only (0 typed file hits); news×5 no refs; calendar×8; course-root rescan `exc`/`sess`/`webr`/`htlm`=0; some folds still unknown+blank (not empty); prior narrow 0-file probe superseded (incomplete, not parse-miss). Recording under `scratch/recordings/` gitignored.
+**Live pass (2026-09-14, tip 5099529, deep enrolled walk):** 8 courses; `list_children`/`list_files` sighted live `file`×37 and `frm`×1; `get_file` ok; extract confirm (one over 8MiB, one truncated empty — now fail-closed, ADR 0014); `search(pdf|PDF|.pdf)` → crs/fold only (0 typed file hits); news×5 no refs; calendar×8; course-root rescan `exc`/`sess`/`webr`/`htlm`=0; some folds still unknown+blank (not empty); prior narrow 0-file probe superseded (incomplete, not parse-miss). Recording under `scratch/recordings/` gitignored. 2026-10-02 news sideblock replay (ADR 0018): label-only `News` blocks skipped, headline over first-`<a>`, course from typed href/page-URL/breadcrumb only (scrubbed capture `scratch/`, gitignored).
 
 ## 1. Purpose
 
@@ -60,16 +60,16 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `crs` | Enrolled courses | yes | **done** (2026-09-06) |
 | `fold` Standard | Materials | yes | **done** (2026-09-06) |
 | `fold` Private | Tutor-only | n/a to members | confirm invisible |
-| `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | blocked — not observed |
+| `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **re-confirmed** live metadata 2026-09-14 tip 5099529 (file×37); extract confirm exercised |
 | `exc` | Instructions, deadline, status | tool bodies via `adam_get_exercise` + confirm; resource `adam://exc/{refId}` is metadata only (no instructionText) | labeled synthetic `100021` (AT5); live still unverified |
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
-| `webr` | External links | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
-| `htlm` / `lm` / SCORM | Learning modules | no/uncertain | blocked — not observed |
+| `webr` | External links | partial (read_page) | **live-seen** 2026-10-02 `2291288`/`2291289` via `https://adam.unibas.ch/go/webr/{id}` (`read_page` page-text, ~2.2KB; no generic fetch; no fixture invented) |
+| `htlm` / `lm` / SCORM | Learning modules | no/uncertain | gated — needs live refId + capture per §4 principle, parked until sighted |
 | `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live threads from HTML when parse succeeds; missing HTML honest-empty / fail-closed posts; fixture `threadId` posts OK |
-| `wiki` / `blog` / Etherpad | Collab | no | blocked — not observed |
-| `grp` / `svy` / ADAMtools | Groups, surveys | no | discoverability |
+| `wiki` / `blog` / Etherpad | Collab | no | gated — needs live refId + capture per §4 principle, parked until sighted |
+| `grp` / `svy` / ADAMtools | Groups, surveys | no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
 | calendar GUI | Agenda | partial→stronger (AT6 page walk) | widget seen; agenda empty; provenance honesty |
 | mail | Messaging | out | skip |
@@ -87,7 +87,7 @@ Fixture SoT (QA): `100020` = empty Exercises folder; `100021` = `exc` with deadl
 4. **Enrolled-tree search ranking** (AT3 — PR #11 / `01069ef`; not global search)  
 5. **Forum thread read** — **shipped** read-only fixture path (PR #34 / `1a7931f`; B-frm #35) plus live HTML thread parse; **no write**
 
-Principle: deepen P0 reliability before new object types; deep-link submit until gated write review.
+Principle: deepen P0 reliability before new object types; Phase B stays gated — no code without a live refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored) + capabilities.md promotion + fixture mirror. Deep-link submit until gated write review.
 
 ## 5. Access path note
 
