@@ -7,7 +7,7 @@ Default is **browser** (live ADAM via Chrome). `--browser` is a no-op alias. SOA
 | Enabled | Yes (default) | In-process tests only | No | No |
 | Courses / folders / files | Live session | Synthetic | Disabled | Disabled |
 | Page text | Live; `confirm=true` | Synthetic | Disabled | Disabled |
-| File extract | Local download → text | Synthetic PDF literals | Disabled | Disabled |
+| File extract | Bounded local transfer → page-aware PDF/text | Generated valid PDFs through the same parser | Disabled | Disabled |
 | Search | Enrolled objects, capped | Catalog titles/text | Disabled | Disabled |
 | Calendar / news | Pages you can see | Catalog | Disabled | Disabled |
 | Tests (`tst`) | Denied | Not in catalog | Disabled | Disabled |

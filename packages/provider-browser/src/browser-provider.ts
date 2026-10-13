@@ -6,7 +6,6 @@ import {
   looksLikeHtml,
   MAX_PAGE_CHARS,
   objectUrl,
-  paginate,
   preferCalendarEvents,
   parseAdamRef,
   searchTitleHit,
@@ -43,10 +42,13 @@ import {
 import { pageHeading, parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
+import { SnapshotPagination } from "./snapshot-pagination.ts";
 
 export type BrowserProviderOptions = {
   session?: AdamBrowserSession;
   origin?: string;
+  /** Test seam for deterministic cache expiry. */
+  clock?: () => number;
 };
 
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
@@ -87,6 +89,10 @@ function withWalkState<T>(page: Paginated<T>, walk: WalkResult): WalkPaginated<T
   return walk.partial ? { ...page, partial: true, skipped: walk.skipped, notice: WALK_PARTIAL_NOTICE } : page;
 }
 
+function walkMetadata(walk: WalkResult): object {
+  return walk.partial ? { partial: true, skipped: walk.skipped, notice: WALK_PARTIAL_NOTICE } : {};
+}
+
 /** Byte-ish proxy for retained walk pages (JSON length). */
 export function walkRetentionByteProxy(page: LivePage): number {
   return Buffer.byteLength(JSON.stringify(page), "utf8");
@@ -102,6 +108,10 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly origin: string;
   private sessionHandle: AdamBrowserSession | undefined;
   private readonly injected: boolean;
+  private readonly clock: () => number;
+  private readonly pagination: SnapshotPagination;
+  private livePagesFetchedAt = 0;
+  private metadataExpiresAt = 0;
   /** Identity-sensitive; cleared on login() / close() (ADR 0015). */
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
   /** Listing-derived file metadata for download-abort getFile; cleared on login() / close(). */
@@ -120,23 +130,28 @@ export class BrowserAdamProvider implements AdamProvider {
    * Unknown landings are not stored. Cleared with the walk memo on login()/close() (ADR 0015).
    * Not a second walk memo: cancelled / unauthorized / forbidden / stale_id still throw and are not stored.
    */
-  private pageByUrl = new Map<string, PageSnapshot>();
+  private pageByUrl = new Map<string, { snapshot: PageSnapshot; fetchedAt: number }>();
   private pageInflight = new Map<string, Promise<PageSnapshot>>();
+  private snapshotFetchedAt = new WeakMap<PageSnapshot, string>();
 
   constructor(options: BrowserProviderOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
     this.sessionHandle = options.session;
     this.injected = Boolean(options.session);
+    this.clock = options.clock ?? Date.now;
+    this.pagination = new SnapshotPagination(this.clock);
   }
 
   async status(): Promise<SessionStatus> {
-    return this.session().status();
+    const status = await this.session().status();
+    if (!status.loggedIn) this.clearSessionCaches();
+    return status;
   }
 
-  async login(timeoutMs?: number): Promise<SessionStatus> {
+  async login(timeoutMs?: number, signal?: AbortSignal): Promise<SessionStatus> {
     // ADR 0015: session change invalidates walk memo + identity-sensitive type/file maps.
     this.clearSessionCaches();
-    return this.session().loginInteractively(timeoutMs);
+    return this.session().loginInteractively(timeoutMs, { signal });
   }
 
   async close(): Promise<void> {
@@ -157,8 +172,11 @@ export class BrowserAdamProvider implements AdamProvider {
     this.livePagesInflight = undefined;
     this.pageByUrl.clear();
     this.pageInflight.clear();
+    this.snapshotFetchedAt = new WeakMap();
     this.typeByRefId.clear();
     this.fileByRefId.clear();
+    this.metadataExpiresAt = 0;
+    this.pagination.clear();
   }
 
   /** True when generation still matches — false after login()/close() cleared caches. */
@@ -166,21 +184,41 @@ export class BrowserAdamProvider implements AdamProvider {
     return generation === this.walkGeneration;
   }
 
+  private async assertSessionEnabled(): Promise<void> {
+    if (await this.session().explicitlyLoggedOut?.()) {
+      this.clearSessionCaches();
+      throw new AdamError("unauthorized", "ADAM was explicitly logged out. Run adam-mcp login to reconnect.", false);
+    }
+    if (this.clock() >= this.metadataExpiresAt) {
+      this.typeByRefId.clear();
+      this.fileByRefId.clear();
+      this.metadataExpiresAt = this.clock() + 60_000;
+    }
+  }
+
+  private fetchedAt(snapshot: PageSnapshot): string {
+    return this.snapshotFetchedAt.get(snapshot) ?? now();
+  }
+
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const continuation = this.pagination.continue<AdamObject>("courses", options);
+    if (continuation) return continuation;
     const snapshot = await this.openAuthorized(this.origin);
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     const courses = uniqueByRef(catalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type)));
     const classified = classifyListing(snapshot, courses.length);
-    const page = paginate(listingItemsOrEmpty(courses, classified), options);
+    const page = this.pagination.first("courses", listingItemsOrEmpty(courses, classified), options, { listingState: classified.state, listingSignals: classified.signals, notice: classified.notice });
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
     if (!course) {
@@ -221,24 +259,29 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const key = `children:${refId}:${options?.type ?? ""}`;
+    const continuation = this.pagination.continue<AdamObject>(key, options);
+    if (continuation) return continuation;
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type, {
       listingFastFail: true,
       cacheGeneration: generation,
     });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const children = catalog.objects.filter((item) => item.refId !== refId && !isDeniedObjectType(item.type));
     const classified = classifyListing(snapshot, children.length);
-    const page = paginate(listingItemsOrEmpty(children, classified), options);
+    const page = this.pagination.first(key, listingItemsOrEmpty(children, classified), options, { listingState: classified.state, listingSignals: classified.signals, notice: classified.notice });
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type, { cacheGeneration: generation });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
@@ -258,12 +301,16 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const key = `files:${refId}:${options?.type ?? ""}`;
+    const continuation = this.pagination.continue<FileObject>(key, options);
+    if (continuation) return continuation;
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type, {
       listingFastFail: true,
       cacheGeneration: generation,
     });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const direct = catalog.files.filter((item) => item.refId !== refId);
     const nested = catalog.objects.filter((item): item is FileObject => item.type === "file");
@@ -271,18 +318,19 @@ export class BrowserAdamProvider implements AdamProvider {
     // Files filtered to zero while the container list hydrated is complete + [] (ADR 0005).
     const hydrated = catalog.objects.filter((item) => item.refId !== refId).length;
     const classified = classifyListing(snapshot, hydrated);
-    const page = paginate(listingItemsOrEmpty(files, classified), options);
+    const page = this.pagination.first(key, listingItemsOrEmpty(files, classified), options, { listingState: classified.state, listingSignals: classified.signals, notice: classified.notice });
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
   async getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     const generation = this.walkGeneration;
     try {
       // Capture listing cache before rememberTypes overwrites with the page parse.
       const priorListing = this.fileByRefId.get(refId);
       const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation });
-      const catalog = extractCatalog(snapshot, now());
+      const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
       this.rememberTypes(catalog, generation);
       const file =
         catalog.files.find((item) => item.refId === refId) ??
@@ -354,6 +402,7 @@ export class BrowserAdamProvider implements AdamProvider {
     options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     const file = await this.getFile(refId, options);
     const origin = this.origin.replace(/\/$/, "");
     const candidates = uniqueUrls([`${origin}/goto_adam_file_${refId}_download.html`, file.url]);
@@ -361,14 +410,15 @@ export class BrowserAdamProvider implements AdamProvider {
     let lastError: unknown;
     for (const url of candidates) {
       try {
-        const fetched = await this.session().fetchAuthorized(url);
+        const fetched = await this.session().fetchAuthorized(url, { signal: options?.signal });
         const type = fetched.contentType ?? file.mimeType;
         if (looksLikeHtml(fetched.bytes, type) && !type?.toLowerCase().startsWith("text/plain")) {
           sawHtml = true;
           continue;
         }
-        return extractLocalFileText(file, fetched.bytes, type, options?.maxPages);
+        return extractLocalFileText(file, fetched.bytes, type, options?.maxPages, options?.signal);
       } catch (error) {
+        if (error instanceof AdamError && error.code === "cancelled") throw error;
         lastError = error;
       }
     }
@@ -386,9 +436,10 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
@@ -419,6 +470,7 @@ export class BrowserAdamProvider implements AdamProvider {
     options?: ObjectOpenOptions & { threadId?: string },
   ): Promise<ForumObject> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
     // Fail-closed on client type hint: wrong hint must not return forum posts/meta.
     if (options?.type !== undefined && options.type !== "frm") {
       throw new AdamError(
@@ -428,7 +480,7 @@ export class BrowserAdamProvider implements AdamProvider {
     }
     const generation = this.walkGeneration;
     const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation });
-    const catalog = extractCatalog(snapshot, now());
+    const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
     if (!object) {
@@ -493,6 +545,10 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const key = `search:${query.trim().toLowerCase()}`;
+    const continuation = this.pagination.continue<AdamObject>(key, options);
+    if (continuation) return continuation;
     const needle = query.trim().toLowerCase();
     const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const titleMatches: AdamObject[] = [];
@@ -520,13 +576,17 @@ export class BrowserAdamProvider implements AdamProvider {
       }
     }
     // AT3: title matches before page-body matches; enrolled walk only (collectLivePages).
-    return withWalkState(paginate(uniqueByRef([...titleMatches, ...bodyMatches]), options), walk);
+    return withWalkState(this.pagination.first(key, uniqueByRef([...titleMatches, ...bodyMatches]), options, walkMetadata(walk)), walk);
   }
 
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<WalkPaginated<CalendarEvent>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const key = `calendar:${options?.from ?? ""}:${options?.to ?? ""}`;
+    const continuation = this.pagination.continue<CalendarEvent>(key, options);
+    if (continuation) return continuation;
     const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const events: CalendarEvent[] = [];
     for (const page of walk.pages) {
@@ -570,11 +630,15 @@ export class BrowserAdamProvider implements AdamProvider {
       }
     }
     // AT6: same event prefers exc > calendar > page.
-    return withWalkState(paginate(preferCalendarEvents(filterRange(events, options?.from, options?.to)), options), walk);
+    return withWalkState(this.pagination.first(key, preferCalendarEvents(filterRange(events, options?.from, options?.to)), options, walkMetadata(walk)), walk);
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<WalkPaginated<NewsItem>> {
     throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled();
+    const key = `news:${options?.since ?? ""}`;
+    const continuation = this.pagination.continue<NewsItem>(key, options);
+    if (continuation) return continuation;
     // A2-news-browser: long enrolled walk reports progress when onProgress is set (fixture parity).
     const walk = await this.collectLivePages(options?.onProgress, options?.signal);
     const items = uniqueNews(walk.pages.flatMap((page) => page.catalog.news));
@@ -583,7 +647,7 @@ export class BrowserAdamProvider implements AdamProvider {
       const stamp = Date.parse(item.updatedAt ?? item.createdAt ?? "");
       return Number.isFinite(stamp) ? stamp >= since : true;
     });
-    return withWalkState(paginate(filtered, options), walk);
+    return withWalkState(this.pagination.first(key, filtered, options, walkMetadata(walk)), walk);
   }
 
   private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
@@ -591,7 +655,7 @@ export class BrowserAdamProvider implements AdamProvider {
     // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
     // Invalidation: login() + close(). Memo hit emits no progress.
     // Cancelled / unauthorized / forbidden / stale_id walks are never memoized (ADR 0011 / 0015 / 0016).
-    if (this.livePagesMemo) {
+    if (this.livePagesMemo && this.clock() - this.livePagesFetchedAt < 60_000) {
       throwIfCancelled(signal);
       return this.livePagesMemo;
     }
@@ -601,8 +665,9 @@ export class BrowserAdamProvider implements AdamProvider {
     const generation = this.walkGeneration;
     const inflight = this.walkLivePages(onProgress, signal, generation)
       .then((pages) => {
-        if (generation === this.walkGeneration) {
+        if (generation === this.walkGeneration && !pages.partial) {
           this.livePagesMemo = pages;
+          this.livePagesFetchedAt = this.clock();
         }
         return pages;
       })
@@ -632,7 +697,7 @@ export class BrowserAdamProvider implements AdamProvider {
     };
 
     const home = await this.openAuthorized(this.origin);
-    const homeCatalog = extractCatalog(home, now());
+    const homeCatalog = extractCatalog(home, this.fetchedAt(home));
     this.rememberTypes(homeCatalog, generation);
     const pages: LivePage[] = [retainWalkPage(home, homeCatalog)];
     await report(pages.length);
@@ -679,7 +744,7 @@ export class BrowserAdamProvider implements AdamProvider {
           listingFastFail: true,
           cacheGeneration: generation,
         });
-        const catalog = extractCatalog(snapshot, now());
+        const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
         this.rememberTypes(catalog, generation);
         pages.push(retainWalkPage(snapshot, catalog));
         await report(pages.length);
@@ -688,6 +753,9 @@ export class BrowserAdamProvider implements AdamProvider {
           (item) => item.refId !== catalog.current?.refId && !isDeniedObjectType(item.type),
         ).length;
         const listing = classifyListing(snapshot, childCount);
+        if (listing.state === "unknown" && (catalog.current?.type === "crs" || catalog.current?.type === "fold")) {
+          skipped += 1;
+        }
         // PERF-1 / ADR 0005: unknown (and empty) — prune branch; never deepen from untrustworthy list.
         if (listing.state !== "ok") {
           continue;
@@ -826,8 +894,8 @@ export class BrowserAdamProvider implements AdamProvider {
   private async openAuthorized(url: string): Promise<PageSnapshot> {
     const generation = this.walkGeneration;
     const cached = this.pageByUrl.get(url);
-    if (cached && this.cachesCurrent(generation)) {
-      return cached;
+    if (cached && this.cachesCurrent(generation) && this.clock() - cached.fetchedAt < 60_000) {
+      return cached.snapshot;
     }
     const existing = this.pageInflight.get(url);
     if (existing && this.cachesCurrent(generation)) {
@@ -850,6 +918,7 @@ export class BrowserAdamProvider implements AdamProvider {
       assertReadableObjectType(parsed.type, parsed.refId);
     }
     const snapshot = await this.session().open(url);
+    this.snapshotFetchedAt.set(snapshot, now());
     const landed = parseAdamRef(snapshot.url);
     if (landed) {
       assertReadableObjectType(landed.type, landed.refId);
@@ -889,7 +958,13 @@ export class BrowserAdamProvider implements AdamProvider {
       landed.type !== "unknown" &&
       (!parsed || parsed.refId === landed.refId)
     ) {
-      this.pageByUrl.set(url, snapshot);
+      const catalog = extractCatalog(snapshot, this.fetchedAt(snapshot));
+      const container = catalog.current?.type === "crs" || catalog.current?.type === "fold";
+      const children = catalog.objects.filter((item) => item.refId !== catalog.current?.refId);
+      if (!container || classifyListing(snapshot, children.length).state !== "unknown") {
+        this.pageByUrl.set(url, { snapshot, fetchedAt: this.clock() });
+        while (this.pageByUrl.size > 128) this.pageByUrl.delete(this.pageByUrl.keys().next().value!);
+      }
     }
     return snapshot;
   }

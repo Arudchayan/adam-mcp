@@ -176,7 +176,7 @@ describe("session holder races R1-R10 (mocked-process only)", () => {
       } catch {
         // Already consumed.
       }
-      return { unref: () => undefined, pid: process.pid } as never;
+      return { once: () => undefined, unref: () => undefined, pid: process.pid } as never;
     };
     try {
       const first = queue.enqueue(() =>
@@ -603,7 +603,7 @@ describe("session holder races R1-R10 (mocked-process only)", () => {
     const dashboardUrl = origin;
     const courseUrl = `${origin}/go/crs/100001`;
     const dashboardHtml = `<main><h1>Schreibtisch</h1><a href="/go/crs/100001">Synthetic course</a><a href="/logout.php">Abmelden</a></main>`;
-    const courseHtml = `<main><h1>Synthetic course</h1><p>Written exam.</p><a href="/logout.php">Abmelden</a></main>`;
+    const courseHtml = `<main><h1>Synthetic course</h1><p>Keine Objekte vorhanden</p><a href="/logout.php">Abmelden</a></main>`;
     const opens: string[] = [];
     let failCourseOnce = true;
     const provider = createBrowserProvider({
@@ -616,7 +616,7 @@ describe("session holder races R1-R10 (mocked-process only)", () => {
             dashboardHtml,
             "Schreibtisch Synthetic course Abmelden",
           ),
-          [courseUrl]: snapshotFromHtml(courseUrl, "Synthetic course", courseHtml, "Synthetic course Abmelden"),
+          [courseUrl]: { ...snapshotFromHtml(courseUrl, "Synthetic course", courseHtml, "Synthetic course Keine Objekte vorhanden Abmelden"), dom: { itemRows: 0, emptyCopy: true } },
         },
         {
           onOpen: (url) => opens.push(url),

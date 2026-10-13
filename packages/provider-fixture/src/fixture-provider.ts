@@ -171,7 +171,7 @@ export class FixtureAdamProvider implements AdamProvider {
     if (file.refId !== "100011") {
       throw new AdamError("unsupported_type", `Fixture extract is only defined for 00_Overview.pdf, not ${refId}.`);
     }
-    return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages);
+    return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages, options?.signal);
   }
 
   async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {

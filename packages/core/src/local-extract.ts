@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { AdamError } from "./errors.ts";
+import { AdamError, throwIfCancelled } from "./errors.ts";
+import { extractPdfText } from "./pdf-extract.ts";
 import type { FileExtract, FileObject } from "./types.ts";
 
 export const MAX_EXTRACT_BYTES = 8 * 1024 * 1024;
@@ -38,10 +39,6 @@ function isPdf(bytes: Uint8Array, mimeType?: string): boolean {
   return bytes.length >= 5 && Buffer.from(bytes.slice(0, 5)).toString("ascii") === "%PDF-";
 }
 
-function unescapePdfLiteral(inner: string): string {
-  return inner.replace(/\\n/g, "\n").replace(/\\r/g, "\r").replace(/\\\)/g, ")").replace(/\\\\/g, "\\");
-}
-
 /** True when candidate text is PDF structure / binary stream dump, not readable literals. */
 export function isPdfGarbageText(text: string): boolean {
   if (text.length === 0) {
@@ -61,35 +58,6 @@ export function isPdfGarbageText(text: string): boolean {
     }
   }
   return nonText / text.length > 0.05;
-}
-
-function extractPdfLiterals(bytes: Uint8Array): string {
-  const source = Buffer.from(bytes).toString("latin1");
-  const chunks: string[] = [];
-  const tj = /\((?:\\.|[^\\)])*\)\s*Tj/g;
-  let match: RegExpExecArray | null;
-  while ((match = tj.exec(source))) {
-    const inner = match[0].slice(1, match[0].lastIndexOf(")"));
-    const text = unescapePdfLiteral(inner);
-    if (/[A-Za-z]/.test(text)) {
-      chunks.push(text);
-    }
-  }
-  if (chunks.length === 0) {
-    const any = /\((?:\\.|[^\\)])*\)/g;
-    while ((match = any.exec(source))) {
-      const inner = match[0].slice(1, -1);
-      const text = unescapePdfLiteral(inner);
-      if (/[A-Za-z]/.test(text)) {
-        chunks.push(text);
-      }
-    }
-  }
-  const joined = chunks.join(" ");
-  if (isPdfGarbageText(joined)) {
-    return "";
-  }
-  return joined;
 }
 
 export function extractPagesHaveText(pages: Array<{ text: string }>): boolean {
@@ -130,7 +98,9 @@ export async function extractLocalFileText(
   bytes: Uint8Array,
   mimeType?: string,
   maxPages = DEFAULT_EXTRACT_PAGES,
+  signal?: AbortSignal,
 ): Promise<FileExtract> {
+  throwIfCancelled(signal);
   if (bytes.byteLength > MAX_EXTRACT_BYTES) {
     throw new AdamError("provider_unavailable", `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`, false);
   }
@@ -139,12 +109,17 @@ export async function extractLocalFileText(
   const type = mimeType ?? file.mimeType ?? "";
   let pages: Array<{ page: number; text: string }> = [];
 
+  let pdfPageCount: number | undefined;
+  let pdfTruncated = false;
   if (type.startsWith("text/") && !type.includes("html")) {
     pages = [{ page: 1, text: Buffer.from(bytes).toString("utf8") }];
   } else if (type === "application/json") {
     pages = [{ page: 1, text: Buffer.from(bytes).toString("utf8") }];
   } else if (isPdf(bytes, type)) {
-    pages = [{ page: 1, text: extractPdfLiterals(bytes) }];
+    const extracted = await extractPdfText(bytes, pagesLimit, MAX_EXTRACT_CHARS, signal);
+    pages = extracted.pages;
+    pdfPageCount = extracted.pageCount;
+    pdfTruncated = extracted.truncated;
   } else {
     throw new AdamError(
       "unsupported_type",
@@ -152,7 +127,7 @@ export async function extractLocalFileText(
     );
   }
 
-  let truncated = pages.length > pagesLimit;
+  let truncated = pdfTruncated || pages.length > pagesLimit;
   pages = pages.slice(0, pagesLimit);
   let used = 0;
   const bounded: Array<{ page: number; text: string }> = [];
@@ -186,7 +161,7 @@ export async function extractLocalFileText(
     title: file.title,
     url: file.url,
     mimeType: file.mimeType ?? mimeType,
-    pageCount: file.pageCount ?? bounded.length,
+    pageCount: pdfPageCount ?? bounded.length,
     pages: bounded,
     truncated,
     sha256: digest,

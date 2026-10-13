@@ -357,9 +357,12 @@ export function ok(data: unknown, schema?: { safeParse: (value: unknown) => { su
 
 /** Redact secrets inside structured payloads, not just the text block (T4). */
 export function deepRedact(value: unknown, keyHint?: string): unknown {
+  if (keyHint && /^(?:password|passwd|passwort|api[_-]?key|secret|token|access_token|cookie|authorization|jsessionid|phpsessid|iliassessid|otp|totp|recovery[_-]?code|eduid|aai)$/i.test(keyHint) && (typeof value === "string" || typeof value === "number")) {
+    return "[redacted]";
+  }
   if (typeof value === "string") {
     // URL-shaped fields get query-aware redaction; everything else gets text redaction.
-    if (keyHint && /url$/i.test(keyHint)) {
+    if (keyHint && /(?:url$|^(?:href|src|download)$)/i.test(keyHint)) {
       return redactUrl(value);
     }
     return redactText(value);

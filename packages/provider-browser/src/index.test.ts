@@ -833,7 +833,7 @@ describe("login snapshot detection", () => {
 describe("AT5 getExercise browser harden", () => {
   it("extracts deadline only when labeled; omits unlabeled page dates", () => {
     const labeled = exerciseDeadlineFromPage("Deadline: 22 September 2026, 23:59.\nWrite a summary.");
-    assert.equal(labeled, "2026-09-22T00:00:00.000Z");
+    assert.equal(labeled, "2026-09-22T21:59:00.000Z");
     const unlabeled = exerciseDeadlineFromPage(
       "Published: 1 September 2026\nWritten exam: 12 January 2027\nWrite a summary.",
     );

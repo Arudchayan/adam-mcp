@@ -10,7 +10,7 @@ import {
   MAX_EXTRACT_BYTES,
   MAX_EXTRACT_CHARS,
 } from "./local-extract.ts";
-import { syntheticPdfWithText } from "./synthetic-pdf.ts";
+import { syntheticPdfWithText, syntheticPdfWithPages } from "./synthetic-pdf.ts";
 import type { FileObject } from "./types.ts";
 
 const file: FileObject = {
@@ -28,6 +28,45 @@ const file: FileObject = {
 };
 
 describe("extractLocalFileText", () => {
+  it("extracts compressed pages with real page numbers and an accurate page cap", async () => {
+    const bytes = syntheticPdfWithPages(["First page", "Second page", "Third page"], true);
+    const extracted = await extractLocalFileText({ ...file, pageCount: 99 }, bytes, "application/pdf", 2);
+    assert.equal(extracted.pageCount, 3);
+    assert.equal(extracted.truncated, true);
+    assert.deepEqual(extracted.pages.map((page) => [page.page, page.text.trim()]), [[1, "First page"], [2, "Second page"]]);
+    assert.doesNotMatch(JSON.stringify(extracted.pages), /Metadata|Third page/);
+  });
+  it("does not return PDF metadata when pages contain no text", async () => {
+    await assert.rejects(() => extractLocalFileText(file, syntheticPdfWithPages([""]), "application/pdf"),
+      (error: unknown) => error instanceof AdamError && error.code === "unsupported_type");
+  });
+  it("enforces the real 20-page maximum", async () => {
+    const extracted = await extractLocalFileText(file, syntheticPdfWithPages(Array.from({ length: 21 }, (_, i) => `Page ${i + 1}`)), "application/pdf", 100);
+    assert.equal(extracted.pages.length, 20);
+    assert.equal(extracted.pageCount, 21);
+    assert.equal(extracted.truncated, true);
+  });
+  it("cancels active PDF parsing", async () => {
+    const controller = new AbortController();
+    const operation = extractLocalFileText(file, syntheticPdfWithText("Synthetic text"), "application/pdf", 8, controller.signal);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    controller.abort();
+    await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  });
+  it("cancels a queued PDF without waiting for the active parser", async () => {
+    const active = extractLocalFileText(file, syntheticPdfWithText("Active document"), "application/pdf");
+    const controller = new AbortController();
+    const queued = extractLocalFileText(file, syntheticPdfWithText("Queued document"), "application/pdf", 8, controller.signal);
+    controller.abort();
+    await assert.rejects(queued, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+    assert.match((await active).pages[0]!.text, /Active document/);
+  });
+  it("caps characters across real compressed PDF pages", async () => {
+    const extracted = await extractLocalFileText(file, syntheticPdfWithPages(["first ".repeat(2400), "second ".repeat(2200), "third ".repeat(2500), "must not reach fourth"], true), "application/pdf");
+    assert.equal(extracted.pages.reduce((sum, page) => sum + page.text.length, 0), MAX_EXTRACT_CHARS);
+    assert.equal(extracted.truncated, true);
+    assert.deepEqual(extracted.pages.map((page) => page.page), [1, 2, 3]);
+  });
   it("returns bounded page text and sha256, never file bytes", async () => {
     const bytes = syntheticPdfWithText("Multimedia retrieval ranking");
     const extracted = await extractLocalFileText(file, bytes, "application/pdf");

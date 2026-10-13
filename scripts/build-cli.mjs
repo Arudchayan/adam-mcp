@@ -29,6 +29,7 @@ await esbuild.build({
     "@modelcontextprotocol/server/stdio",
     "zod",
     "zod/v4",
+    "pdfjs-dist/*",
   ],
 });
 
@@ -40,5 +41,6 @@ if (!entryBody.startsWith("#!")) {
 
 copyFileSync(resolve(root, "LICENSE"), resolve(mcpDir, "LICENSE"));
 copyFileSync(resolve(root, "NOTICE"), resolve(mcpDir, "NOTICE"));
+copyFileSync(resolve(root, "packages/core/src/pdf-extract-worker.mjs"), resolve(distDir, "pdf-extract-worker.mjs"));
 
 console.error("wrote packages/mcp/dist/adam-mcp.mjs (+ lazy browser chunks)");

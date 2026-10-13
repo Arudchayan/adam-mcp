@@ -10,5 +10,8 @@
   "scripts": {
     "test": "node ../../scripts/run-tests.mjs",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "pdfjs-dist": "4.10.38"
   }
 }

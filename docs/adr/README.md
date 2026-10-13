@@ -20,3 +20,8 @@
 | [0016](0016-upstream-error-classes.md) | Upstream error classes |
 | [0017](0017-live-runtime-only.md) | Live browser is the only runtime |
 | [0018](0018-absent-ref-and-canonical-urls.md) | Absent refs vs wrong type, canonical `/go/` citations |
+| [0019](0019-elicitation-spike.md) | Elicitation confirmation fallback |
+| [0020](0020-usability-errors-session.md) | Usability and session status alignment |
+| [0021](0021-read-freshness-and-completeness.md) | Read freshness, deadlines and snapshot pagination |
+| [0022](0022-bounded-page-aware-extraction.md) | Bounded transfer and page-aware PDF extraction |
+| [0023](0023-login-and-logout-lifecycle.md) | Predictable login windows and explicit logout |
