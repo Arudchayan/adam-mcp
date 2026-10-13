@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Guided packaged setup previews or installs one client configuration with a backup and explicit sign-in/course verification; passive `doctor` checks installation and connection prerequisites (ADR 0025)
+- Generated client entries use absolute Node paths; Codex timeout covers the maximum interactive login budget
+- Session status explains disconnected/unverified profiles, explicit logout and sign-in windows; login emits safe progress stages
+- Search/calendar/news support enrolled-course scope and explicit refresh; browser listings carry immutable snapshot timestamps and partial coverage reasons
+- Tool errors include structured, redacted recovery actions alongside existing error text; confirmation prompts explain sharing the selected object's text with the connected model
+
 - Concurrent reads share navigation, catalog parsing and enrolled walks while retaining independent cancellation/progress; abandoned work is stopped and not cached (ADR 0024)
 - Cross-course reads have a two-minute elapsed budget; browser waiting is capped at 32 operations and 30 seconds, with cancelled entries removed immediately
 - News cutoff queries exclude undated items; the change-summary prompt no longer claims a file inventory diff

@@ -11,6 +11,7 @@ export class SnapshotPagination {
   clear(): void { this.cursors.clear(); }
 
   continue<T>(key: string, options?: ListOptions): Paginated<T> | undefined {
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
     if (options?.cursor === undefined) return undefined;
     this.prune();
     const snapshot = this.cursors.get(options.cursor);
@@ -34,7 +35,7 @@ export class SnapshotPagination {
       this.cursors.set(nextCursor, { ...snapshot, offset });
       while (this.cursors.size > 256) this.cursors.delete(this.cursors.keys().next().value!);
     }
-    return { ...snapshot.metadata, items, totalHint: snapshot.items.length, nextCursor };
+    return { ...snapshot.metadata, snapshotAt: new Date(snapshot.createdAt).toISOString(), items, totalHint: snapshot.items.length, nextCursor };
   }
 
   private prune(): void {

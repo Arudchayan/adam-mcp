@@ -15,6 +15,7 @@ import {
   type ProgressUpdate,
 } from "adam-core";
 import { createRunId, logToolCall, type ToolCallLog } from "./telemetry.ts";
+import { toolErrorOutputSchema } from "./schemas.ts";
 
 /** Re-export core cancellation helper so MCP callers keep a single import path. */
 export { throwIfCancelled };
@@ -415,8 +416,25 @@ export function formatAdamFailText(error: unknown, runId?: string): string {
 }
 
 export function fail(error: unknown, runId?: string): ToolResponse {
+  const known = isAdamError(error);
+  const code = known ? error.code : "provider_unavailable";
+  const retryable = known ? error.retryable : false;
+  const recoveryAction = code === "unauthorized" ? "login"
+    : code === "stale_id" ? "restart_listing"
+    : code === "confirmation_required" ? "confirm_selected_object"
+    : code === "forbidden" ? "check_access_in_adam"
+    : code === "unsupported_type" ? "check_object_or_format"
+    : code === "not_found" ? "refresh_listing"
+    : code === "cancelled" ? "none"
+    : retryable ? "retry_once" : "check_installation";
+  const message = known ? error.message : "Unexpected provider failure. Check installation or report the run ID.";
+  const structuredContent = toolErrorOutputSchema.parse(deepRedact({ error: { code, message, retryable, recoveryAction, ...(runId ? { runId } : {}) } }));
   return {
-    content: [{ type: "text", text: formatAdamFailText(error, runId) }],
+    content: [
+      { type: "text", text: formatAdamFailText(error, runId) },
+      { type: "text", text: JSON.stringify(structuredContent) },
+    ],
+    structuredContent,
     isError: true,
   };
 }

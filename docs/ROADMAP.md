@@ -97,6 +97,12 @@ SOAP/REST on public ADAM remain unavailable per historical notes — browser ses
 
 ## How to pick up work
 
+Local onboarding and read controls (ADR 0025) now include guided setup, passive
+diagnostics, portable client configuration/timeouts, clear session states,
+structured errors, course-scoped discovery and explicit refresh. See the
+[production-readiness record](qa/production-readiness.md) for verified outcomes
+and outstanding release/client gates.
+
 1. Read [AGENTS.md](../AGENTS.md) and [scope.md](scope.md).  
 2. Prefer fixture PRs that close a Phase A checkbox.  
 3. Record new live object sightings in [capabilities.md](capabilities.md).

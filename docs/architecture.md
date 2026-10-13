@@ -68,8 +68,21 @@ claiming a known deadline clock. Unknown child containers propagate `partial`.
 Page and complete-walk caches expire after 60 seconds. Partial walks and unknown
 container pages are not memoized. Opaque decimal browser cursors reference fixed
 query-bound snapshots for ten minutes (maximum 256 tokens); page snapshots are
-capped at 128. Restart the server to refresh immediately. Login, close and a
+capped at 128. Search/calendar/news accept `refresh:true` without a cursor to
+start fresh discovery while preserving existing cursors. Other reads refresh
+after a minute or server restart. Login, close and a
 logged-out status clear cached identity and pagination state.
+
+Discovery accepts an enrolled `courseRefId`, checked against dashboard evidence
+before scoped navigation. Snapshot results carry `snapshotAt`; item provenance
+retains fetch times. `partialReasons` identifies time/page caps, unreadable pages
+and unknown listings. See [ADR 0025](adr/0025-production-onboarding-and-read-controls.md).
+
+Provider/confirmation failures return a redacted error envelope with code,
+retryability, recovery action and optional run ID alongside the legacy error line.
+Advertised output schemas accept successes or errors; success payload validation
+remains strict. SDK-generated schema validation rejects retain the SDK's text
+format. Setup and doctor are local CLI commands, not new MCP tools.
 
 PDF.js extracts actual pages in a local worker with a 20-second timeout, a
 128 MiB JavaScript heap limit and captured diagnostics. Eval/XFA/rendering are
