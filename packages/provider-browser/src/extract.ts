@@ -11,6 +11,8 @@ import {
   type Provenance,
   type RefId,
 } from "adam-core";
+import { inferDates } from "./deadlines.ts";
+export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
 export const MAX_PAGE_TEXT = 50_000;
@@ -38,50 +40,6 @@ const CHROME_TITLES = new Set([
   "baumansicht ...",
   "link in zwischenablage kopieren",
 ]);
-
-const MONTHS: Record<string, number> = {
-  january: 0,
-  february: 1,
-  march: 2,
-  april: 3,
-  may: 4,
-  june: 5,
-  july: 6,
-  august: 7,
-  september: 8,
-  october: 9,
-  november: 10,
-  december: 11,
-  jan: 0,
-  feb: 1,
-  mar: 2,
-  apr: 3,
-  jun: 5,
-  jul: 6,
-  aug: 7,
-  sep: 8,
-  sept: 8,
-  oct: 9,
-  nov: 10,
-  dec: 11,
-  januar: 0,
-  februar: 1,
-  marz: 2,
-  märz: 2,
-  mär: 2,
-  mai: 4,
-  juni: 5,
-  juli: 6,
-  oktober: 9,
-  okt: 9,
-  dezember: 11,
-  dez: 11,
-};
-
-/** Longest-first so "September" wins over "Sep". */
-const MONTH_PATTERN = Object.keys(MONTHS)
-  .sort((a, b) => b.length - a.length)
-  .join("|");
 
 export type ExtractedCatalog = {
   current?: AdamObject;
@@ -186,70 +144,6 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
   };
 }
 
-export function inferDates(text: string): InferredDate[] {
-  const found: InferredDate[] = [];
-  const seen = new Set<string>();
-
-  const push = (raw: string, iso: string | undefined, confidence: InferredDate["confidence"]) => {
-    const key = raw.trim();
-    if (!key || seen.has(key)) {
-      return;
-    }
-    seen.add(key);
-    found.push({ raw: key, iso, confidence });
-  };
-
-  for (const match of text.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)) {
-    push(match[1], `${match[1]}T00:00:00.000Z`, "explicit");
-  }
-  for (const match of text.matchAll(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g)) {
-    const iso = toIso(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-    push(match[0], iso, "explicit");
-  }
-  const dayFirst = new RegExp(`\\b(\\d{1,2})\\.?\\s+(${MONTH_PATTERN})\\.?\\s+(\\d{4})\\b`, "gi");
-  for (const match of text.matchAll(dayFirst)) {
-    const month = MONTHS[match[2].toLowerCase().replace("ä", "a")];
-    const iso = month === undefined ? undefined : toIso(Number(match[3]), month, Number(match[1]));
-    push(match[0], iso, iso ? "explicit" : "inferred");
-  }
-  const monthFirst = new RegExp(`\\b(${MONTH_PATTERN})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})\\b`, "gi");
-  for (const match of text.matchAll(monthFirst)) {
-    const month = MONTHS[match[1].toLowerCase().replace("ä", "a")];
-    const iso = month === undefined ? undefined : toIso(Number(match[3]), month, Number(match[2]));
-    push(match[0], iso, iso ? "explicit" : "inferred");
-  }
-
-  return found.slice(0, 20);
-}
-
-/**
- * AT5: only surface a unit deadline when the page labels one (Deadline/Abgabe/Due).
- * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
- */
-export function exerciseDeadlineFromPage(text: string, inferredDates: InferredDate[] = inferDates(text)): string | undefined {
-  const labeled = [
-    ...text.matchAll(/(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:\s+date)?)\s*(?::|bis)\s*([^\n.;]{3,80})/gi),
-  ];
-  if (labeled.length === 0) {
-    return undefined;
-  }
-  for (const match of labeled) {
-    const raw = match[1].trim();
-    const fromLabel = inferDates(raw).find((date) => date.iso)?.iso;
-    if (fromLabel) {
-      return fromLabel;
-    }
-    const lowered = raw.toLowerCase();
-    const hit = inferredDates.find(
-      (date) => date.iso && (lowered.includes(date.raw.toLowerCase()) || date.raw.toLowerCase().includes(lowered.slice(0, 12))),
-    );
-    if (hit?.iso) {
-      return hit.iso;
-    }
-  }
-  // Labeled but unparseable — honest omit (do not invent).
-  return undefined;
-}
 
 export function collectLinksFromHtml(html: string): SnapshotLink[] {
   const mainStart = html.search(/<main\b/i);
@@ -368,7 +262,7 @@ function extractNewsArticles(
   const pageCourseRefId = pageTyped?.type === "crs" ? pageTyped.refId : breadcrumbCrs;
   const pageFolderRefId = pageTyped?.type === "fold" ? pageTyped.refId : undefined;
 
-  const pushItem = (title: string, summaryText: string, chunkHtml: string, chunkHrefs: string[]) => {
+  const pushItem = (title: string, _summaryText: string, chunkHtml: string, chunkHrefs: string[]) => {
     const headline = cleanTitle(title);
     if (!headline || isNewsLabel(headline)) {
       return;
@@ -564,13 +458,6 @@ function fileHints(title: string, pageText: string): Pick<FileObject, "mimeType"
     hints.pageCount = Number.parseInt(pages[1], 10);
   }
   return hints;
-}
-
-function toIso(year: number, monthIndex: number, day: number): string | undefined {
-  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) {
-    return undefined;
-  }
-  return new Date(Date.UTC(year, monthIndex, day)).toISOString();
 }
 
 function stripTags(value: string): string {

@@ -9,9 +9,9 @@ export const refIdSchema = z.string().regex(/^\d+$/).describe(REF_ID_HELP);
 
 export const cursorSchema = z
   .string()
-  .regex(/^\d+$/, "Cursor must be an opaque decimal offset from a previous listing")
+  .regex(/^\d+$/, "Cursor must be an opaque decimal token from a previous listing")
   .optional()
-  .describe("Decimal offset token — copy nextCursor verbatim into cursor, do not invent offsets");
+  .describe("Opaque decimal token — copy nextCursor verbatim into cursor, do not invent offsets. Expired browser cursors require restarting the listing without cursor.");
 export const limitSchema = z.number().int().min(1).max(100).optional().describe("Page size, default 20, max 100");
 export const confirmReadSchema = z
   .literal(true)

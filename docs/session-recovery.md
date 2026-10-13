@@ -17,12 +17,26 @@ resume (ADR 0017). Background: [architecture.md](architecture.md),
 `ADAM_BROWSER_HEADED=1` is a debug escape hatch that keeps the headed session
 in-process instead of handing off to the holder.
 
+Login checks for a valid session first and reuses it without a browser window.
+For a fresh window use `npm run login -- --force`; for a shorter interactive wait
+use `npm run login -- --timeout-ms 120000`. Close the window, cancel the tool call,
+or press Ctrl+C to cancel. Failed attempts close their owned window. Normal success
+skips the former five-second feedback pause; debug headed mode retains feedback.
+
+Logout disables automatic resume using a non-secret `session-disabled` marker.
+Only explicit login enables reconnection. This disconnects the local MCP session,
+not SWITCH sessions in other browsers. `--purge` removes the dedicated profile;
+deletion failures are reported honestly. If a sign-in window has no verified holder,
+close it before retrying logout: unbound processes are never killed. Logout during
+a sign-in wait cancels that wait.
+
 ## Dead-holder resume (ADR 0017)
 
 Resume runs **only** when a read tool needs a page (`open` / `fetchAuthorized` /
 `probeAuthorized` via `ensurePage({ allowResume: true })`), no holder is
 running, and CDP is not attached. It never runs when a holder is already
 running, and `adam_session_status` never triggers it.
+Explicit logout also prevents resume, even when the profile still has valid cookies.
 
 1. Launch **headless** Chrome on the existing profile (no window, no seed file,
    no password).
@@ -35,14 +49,18 @@ running, and `adam_session_status` never triggers it.
 5. Login page → **close Chrome** and fail closed with the existing
    `unauthorized` / `login-required` text. No holder record is written.
 
-## Caches invalidated on login / close
+## Cache freshness and recovery
 
 `login()` and `close()` call `clearSessionCaches`: the enrolled walk memo and
 inflight walk are dropped, the per-URL page map is cleared, the
 `typeByRefId` / `fileByRefId` maps are cleared, and the walk generation is
 bumped so a racing in-flight walk cannot re-seed the memo. Ordinary reads never
-clear. Cancelled / `unauthorized` / `forbidden` / `stale_id` walks are never
-memoized.
+clear. A logged-out status also clears caches. Page and complete-walk caches expire
+after one minute; partial walks and unknown container pages are not memoized.
+Restart the MCP server for an immediate refresh without disconnecting the holder.
+Pagination uses immutable snapshots for ten minutes, then returns `stale_id`:
+restart that listing without cursor. Cancelled / `unauthorized` / `forbidden` /
+`stale_id` walks are never memoized. See [ADR 0021](adr/0021-read-freshness-and-completeness.md).
 
 ## Error taxonomy and recovery copy
 

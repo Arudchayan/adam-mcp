@@ -31,6 +31,13 @@ After a reboot or a SWITCH timeout, run `npm run login` again if resume does not
 
 ## Operators (rebuild, incidents)
 
+When already signed in, login returns without opening a window. Close the sign-in
+window or press Ctrl+C to cancel. `npm run login -- --force` opens a fresh window;
+`npm run login -- --timeout-ms 120000` limits the interactive wait to two minutes.
+`npm run logout` disables automatic reconnection until explicit login. Add
+`-- --purge` to remove the dedicated profile. These local commands do not sign you
+out of SWITCH in other browsers. See [session recovery](session-recovery.md).
+
 - **Live ADAM** is the only runtime. Chrome is for interactive login and the headless holder. Host config is the snippet from `npm run setup` (see [AGENTS.md](../AGENTS.md)).
 - **After editing source:** if the host points at `packages/mcp/dist/adam-mcp.mjs`, rebuild (`npm run build` or `npm run setup`) so the host picks up changes.
 - **Live session broken?** Order: `npm run status` / `adam-mcp status` → note `holderPid` → `npm run login` again → if needed `ADAM_BROWSER_HEADED=1 npm run login` → for listing markup only, `ADAM_DEBUG_CAPTURE=1` (structure-only under `scratch/` / `ADAM_DEBUG_CAPTURE_DIR`; never commit captures).

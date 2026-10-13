@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AdamError, isAdamError } from "adam-core";
+import { AdamError, isAdamError, redactText } from "adam-core";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
@@ -42,7 +42,8 @@ function commandFromArgv(argv: string[]): "login" | "status" | "logout" | "sessi
   if (command === "session-holder") {
     return "session-holder";
   }
-  return "mcp";
+  if (command === undefined) return "mcp";
+  throw new AdamError("provider_unavailable", `Unknown command: ${redactText(command)}. Use login, status, logout, or --help.`, false);
 }
 
 function printHelp(): void {
@@ -52,6 +53,8 @@ Usage:
   adam-mcp              Live ADAM via a headless session (run login first)
   adam-mcp --browser    Same as adam-mcp (kept for existing host JSON)
   adam-mcp login        Sign in to ADAM in Chrome, then close it
+  adam-mcp login --force  Open a fresh sign-in window instead of reusing a session
+  adam-mcp login --timeout-ms 120000  Limit the sign-in wait (close window or Ctrl+C to cancel)
   adam-mcp status       Check the headless ADAM session (default mirrors adam_session_status keys: loggedIn/reason/holderPid/checkedAt)
   adam-mcp status --verbose  Bug-report-only holder/profileDir detail (holder pid/generation/exe + profileDir)
   adam-mcp logout       Stop the headless session (--purge removes the profile)`);
@@ -84,7 +87,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
       return;
     case "login": {
       const { runLoginCli } = await import("adam-provider-browser");
-      await runLoginCli();
+      await runLoginCli(undefined, argv);
       return;
     }
     case "status": {
@@ -120,9 +123,9 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
 /** Stderr line for a refused startup. Keeps the AdamError code and retryable flag. */
 export function formatCliError(error: unknown): string {
   if (isAdamError(error) || error instanceof AdamError) {
-    return `${error.code}: ${error.message} (retryable=${error.retryable})`;
+    return `${error.code}: ${redactText(error.message)} (retryable=${error.retryable})`;
   }
-  return error instanceof Error ? error.message : "adam-mcp failed.";
+  return error instanceof Error ? redactText(error.message) : "adam-mcp failed.";
 }
 
 if (isMainModule()) {

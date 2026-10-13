@@ -17,4 +17,9 @@ Licensed under the MIT License
 Zod
 Licensed under the MIT License
 
+PDF.js / pdfjs-dist
+Copyright Mozilla Foundation
+Licensed under the Apache License, Version 2.0
+https://github.com/mozilla/pdf.js
+
 Apache License 2.0 is compatible with GPLv3 in this direction. Do not relicense Playwright.

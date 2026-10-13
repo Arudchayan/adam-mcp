@@ -30,7 +30,7 @@ Default tested path: clone → `npm run setup` (absolute path) → `npm run logi
 
 ### From the registry (after publish, untested until publish)
 
-`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are only `@modelcontextprotocol/server`, `playwright-core`, and `zod`. Once `adam-mcp@0.2.0` is published:
+`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are `@modelcontextprotocol/server`, `playwright-core`, `pdfjs-dist`, and `zod`. Once `adam-mcp@0.2.0` is published:
 
 ```bash
 npx -y adam-mcp
@@ -57,6 +57,14 @@ npm run setup
 Restart the client, then ask:
 
 > What courses am I in? Include the ADAM URL for each.
+
+Login reuses a valid session without opening Chrome. Close the sign-in window or
+press Ctrl+C to cancel; failed attempts close their window. Use
+`npm run login -- --force` for a fresh window, or `npm run login -- --timeout-ms 120000` for a
+two-minute sign-in wait. `npm run logout` stops the local session and disables
+automatic reconnection until explicit login. `npm run logout -- --purge` also
+removes the dedicated profile; local logout does not sign you out of SWITCH in
+other browsers.
 
 Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code, ChatGPT desktop, Codex): [docs/setup.md](docs/setup.md).
 
@@ -125,6 +133,15 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this` — bodies need student
 - No writes, mail, grades, or exam (`tst`) objects.
 - Search is not ADAM’s global search box. Dates are not the ILIAS calendar GUI.
 - Scanned PDFs are not OCR’d.
+- Supported PDFs are parsed by actual page, with an 8 MiB transfer cap, 40,000
+  text characters, and at most 20 pages (default eight). Empty/malformed files
+  fail closed. Formula interpretation and exact visual layout are not guaranteed.
+- Course pages and complete cross-course walks refresh after one minute. Restart
+  the MCP server for an immediate refresh. Existing pagination retains its
+  original snapshot for ten minutes; expired cursors require restarting the list.
+- Deadline clock times without an offset use Europe/Zurich. Ambiguous or invalid
+  dates/times are omitted. Date-only evidence uses UTC midnight as a representation,
+  and does not establish a midnight deadline.
 
 ## Privacy
 
@@ -137,6 +154,7 @@ Tool results go to the model your client is already using. Course content is cop
 ```bash
 npm test
 npm run typecheck
+npm run check  # tests, typecheck, build, built-package verification, dependency audit
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md)

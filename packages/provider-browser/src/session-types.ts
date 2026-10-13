@@ -62,10 +62,12 @@ export type AuthorizedProbeResult = {
 };
 
 export type AdamBrowserSession = {
+  /** Cheap local logout check, without launching or probing Chrome. */
+  explicitlyLoggedOut?(): Promise<boolean>;
   status(): Promise<SessionStatus>;
   open(url: string): Promise<PageSnapshot>;
-  loginInteractively(timeoutMs?: number): Promise<SessionStatus>;
-  fetchAuthorized(url: string): Promise<AuthorizedFetchResult>;
+  loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean }): Promise<SessionStatus>;
+  fetchAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedFetchResult>;
   /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
   probeAuthorized?(url: string): Promise<AuthorizedProbeResult>;
   close(): Promise<void>;

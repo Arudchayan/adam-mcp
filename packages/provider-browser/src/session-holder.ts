@@ -5,7 +5,7 @@ import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { AdamError } from "adam-core";
+import { AdamError, throwIfCancelled } from "adam-core";
 import { chromium, type BrowserContext } from "playwright-core";
 import { assertUrlAllowed } from "./allowlist.ts";
 import { localCdpEndpoint, parseDevToolsActivePort } from "./cdp.ts";
@@ -147,13 +147,8 @@ function readWindowsIdentity(pid: number): ProcessIdentity | undefined {
   if (process.platform !== "win32") {
     return undefined;
   }
-  // One quick retry: freshly spawned processes can lag in WMIC/Get-Process.
-  return (
-    readWindowsWmicIdentity(pid) ??
-    readWindowsPowerShellIdentity(pid) ??
-    readWindowsWmicIdentity(pid) ??
-    readWindowsPowerShellIdentity(pid)
-  );
+  // Modern Windows often lacks WMIC. Avoid repeated multi-second failed probes.
+  return readWindowsPowerShellIdentity(pid) ?? readWindowsWmicIdentity(pid);
 }
 
 function readWindowsWmicIdentity(pid: number): ProcessIdentity | undefined {
@@ -168,7 +163,7 @@ function readWindowsWmicIdentity(pid: number): ProcessIdentity | undefined {
         "CreationDate,ExecutablePath",
         "/VALUE",
       ],
-      { encoding: "utf8", timeout: 5_000, windowsHide: true },
+      { encoding: "utf8", timeout: 1_000, windowsHide: true },
     );
     let startTime = "";
     let exe = "";
@@ -204,7 +199,7 @@ function readWindowsPowerShellIdentity(pid: number): ProcessIdentity | undefined
     const out = execFileSync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-      { encoding: "utf8", timeout: 15_000, windowsHide: true },
+      { encoding: "utf8", timeout: 3_000, windowsHide: true },
     ).trim();
     const sep = out.indexOf("|");
     if (sep <= 0 || sep >= out.length - 1) {
@@ -411,6 +406,9 @@ export async function stopSessionHolder(profileDir = defaultProfileDir()): Promi
   const record = await readHolderRecord(profileDir);
   const filePresent = record !== undefined || (await holderRecordFilePresent(profileDir));
   if (!filePresent) {
+    if (await isCdpAlive(profileDir)) {
+      throw new AdamError("provider_unavailable", "A sign-in window is still open without a verified session holder. Close that ADAM window, then retry adam-mcp logout.", false);
+    }
     return false;
   }
   if (!record) {
@@ -493,11 +491,14 @@ export type StartHolderOptions = {
   /** Test seam: returns the detached holder process. */
   spawnHolder?: (seedFile: string) => ChildProcess | undefined;
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 export async function startSessionHolder(options: StartHolderOptions): Promise<HolderRecord> {
+  throwIfCancelled(options.signal);
   const profileDir = options.profileDir ?? defaultProfileDir();
   const origin = options.origin ?? defaultOrigin();
+  assertUrlAllowed(origin);
   await mkdir(profileDir, { recursive: true });
 
   // Re-login: stop + await the prior holder before writing a new seed.
@@ -512,26 +513,46 @@ export async function startSessionHolder(options: StartHolderOptions): Promise<H
     { encoding: "utf8", mode: 0o600 },
   );
   const spawnHolder = options.spawnHolder ?? defaultHolderSpawn;
-  spawnHolder(seedFile)?.unref();
+  const child = spawnHolder(seedFile);
+  let spawnError: Error | undefined;
+  child?.once("error", (error) => { spawnError = error; });
+  child?.unref();
+  const childIdentity = child?.pid ? readProcessIdentity(child.pid) : undefined;
   const deadline = Date.now() + (options.timeoutMs ?? 45_000);
-  while (Date.now() < deadline) {
-    await delay(300);
-    const status = await holderStatus(profileDir);
-    // Only accept a NEW verified record for this generation — never the prior holder.
-    if (
-      status.running &&
-      status.record?.generation === generation &&
-      status.record.verifiedAt &&
-      status.record.startedAt
-    ) {
-      return status.record;
+  try {
+    while (Date.now() < deadline) {
+      throwIfCancelled(options.signal);
+      if (spawnError) throw new AdamError("provider_unavailable", "Could not start the background ADAM session. Run adam-mcp login to retry.", false);
+      await delay(300);
+      const status = await holderStatus(profileDir);
+      // Only accept a NEW verified record for this generation — never the prior holder.
+      if (
+        status.running &&
+        status.record?.generation === generation &&
+        status.record.verifiedAt &&
+        status.record.startedAt
+      ) {
+        throwIfCancelled(options.signal);
+        return status.record;
+      }
     }
+    throw new AdamError(
+      "provider_unavailable",
+      "The headless ADAM session did not start in time. Retry adam-mcp login.",
+    );
+  } catch (error) {
+    const record = await readHolderRecord(profileDir);
+    if (record?.generation === generation) {
+      await stopSessionHolder(profileDir);
+    } else {
+      if (childIdentity && matchesProcessIdentity(childIdentity.pid, { startTime: childIdentity.startTime, exe: childIdentity.exe })) {
+        signalProcessGroup(childIdentity.pid, "SIGKILL");
+      }
+      // Never erase ownership evidence while an unverified Chrome endpoint is live.
+      if (!(await isCdpAlive(profileDir))) await clearHolderFiles(profileDir);
+    }
+    throw error;
   }
-  await clearHolderFiles(profileDir);
-  throw new AdamError(
-    "provider_unavailable",
-    "The headless ADAM session did not start in time. Retry adam-mcp login.",
-  );
 }
 
 function defaultHolderSpawn(seedFile: string): ChildProcess {

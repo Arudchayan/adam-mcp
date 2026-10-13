@@ -373,7 +373,7 @@ describe("agent contracts: usability behavior (fix-15 / ADR 0020)", () => {
     assert.match(source, /Errors return code \(retryable=\) like tools/);
     assert.match(source, /Pins type=crs/);
     assert.match(source, /Pins type=frm/);
-    assert.match(String(cursorSchema.description ?? ""), /Decimal offset token — copy nextCursor verbatim into cursor, do not invent offsets/);
+    assert.match(String(cursorSchema.description ?? ""), /Opaque decimal token — copy nextCursor verbatim into cursor, do not invent offsets/);
   });
 
   it("index help documents the verbose bug-report split", () => {

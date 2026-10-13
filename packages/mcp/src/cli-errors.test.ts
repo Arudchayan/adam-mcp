@@ -4,12 +4,15 @@ import { dirname, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { AdamError } from "adam-core";
-import { formatCliError } from "./index.ts";
+import { formatCliError, runCli } from "./index.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "../../..");
 
 describe("CLI startup errors", () => {
+  it("rejects misspelled session commands rather than silently starting an idle server", async () => {
+    await assert.rejects(() => runCli(["loguot"]), /Unknown command: loguot/);
+  });
   it("includes the AdamError code and retryable flag", () => {
     const line = formatCliError(
       new AdamError(

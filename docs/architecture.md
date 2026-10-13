@@ -48,7 +48,7 @@ Every read tool result and every ADAM `resources/read` payload is wrapped as `Un
 ## SOTA hardening (ADR 0010 / 0011)
 
 - **Instructions:** `McpServer(serverInfo, { instructions })` carries the read-only contract (handles vs live URLs, `confirm:true`, `empty` vs `unknown`, `tst` deny).
-- **Tool arguments:** Zod rejects (missing or false `confirm`, a non-digit cursor, a non-ADAM URL) are tool results with `isError: true` and an input-validation message. `@modelcontextprotocol/server` 2.x does not emit JSON-RPC `-32602` for those rejects (ADR 0010). Providers keep lenient `decodeCursor` internally. Resource misses still use `ResourceNotFoundError`, which the SDK reports as `-32602`.
+- **Tool arguments:** Zod rejects (`confirm:false`, a non-digit cursor, a non-ADAM URL) are tool results with `isError: true` and an input-validation message. Omitted confirmation reaches the elicitation handler (ADR 0019). The SDK does not emit JSON-RPC `-32602` for those rejects (ADR 0010). Fixture offsets use `decodeCursor`; browser cursors bind to snapshots (ADR 0021). Resource misses use `ResourceNotFoundError`, reported as `-32602`.
 - **Resources:** `not_found` maps to `ResourceNotFoundError`; `unauthorized` stays distinct.
 - **Structured output:** `ok(data, outputSchema)` validates redacted `structuredContent`; mismatch is `provider_unavailable` non-retryable (shape bug).
 - **Bounds:** `MAX_PAGE_CHARS=50_000` (`adam-core`); `PageContent.truncated` + `untrustedPageOutputSchema.truncated?`; truncate after `inferDates`. Extract caps stay 8MiB / 40k chars / ≤20 pages; after `confirm:true`, empty extract text fails closed (ADR 0014) instead of a blank success.
@@ -57,6 +57,38 @@ Every read tool result and every ADAM `resources/read` payload is wrapped as `Un
 - **Redaction:** `password/api_key/secret`/matriculation in text; `password/api_key/secret` query keys in URLs; `deepRedact` uses `redactUrl` for `*url` fields.
 
 Bounded live re-verify (no code): [live-reverify.md](live-reverify.md).
+
+## Read reliability (ADRs 0021–0023)
+
+Labelled deadline parsing validates real calendar days and preserves supported
+clock times. Unzoned clocks use Europe/Zurich; ambiguous or nonexistent DST
+times are omitted. Date-only values retain UTC-midnight representation without
+claiming a known deadline clock. Unknown child containers propagate `partial`.
+
+Page and complete-walk caches expire after 60 seconds. Partial walks and unknown
+container pages are not memoized. Opaque decimal browser cursors reference fixed
+query-bound snapshots for ten minutes (maximum 256 tokens); page snapshots are
+capped at 128. Restart the server to refresh immediately. Login, close and a
+logged-out status clear cached identity and pagination state.
+
+PDF.js extracts actual pages in a local worker with a 20-second timeout, a
+128 MiB JavaScript heap limit and captured diagnostics. Eval/XFA/rendering are
+disabled. Limits apply to actual pages and text; page count comes from the PDF.
+File transfers stream through a pinned-origin fetch, checking every redirect
+before credentials are sent and cancelling at the byte cap. HEAD responses
+are disposed. See [ADR 0022](adr/0022-bounded-page-aware-extraction.md).
+
+Redaction covers session/OTP/recovery identifiers, auth headers, query/fragment/
+matrix carriers, URL-shaped fields and explicit sensitive scalar fields. The
+former adversarial TODO tests now block CI. This is pattern-based hygiene, not
+general detection of personal information or arbitrary prose secrets: ambiguous
+human titles and unlabeled secrets remain outside the guarantee.
+
+Login reuses a verified session, otherwise releases headless Chrome before opening
+a visible sign-in window. Cancellation/closed windows stop waiting and failures
+close owned windows. Explicit logout prevents automatic resume until login.
+The host signal reaches interactive login and holder startup; holder failure
+cleanup keeps ownership evidence when Chrome/CDP remains live.
 
 ## Session recovery (runbook)
 
