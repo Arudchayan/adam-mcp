@@ -47,7 +47,7 @@ Reproduce the current workload with `npm run benchmark:reads`.
 
 ## Local gate result — 2026-10-13
 
-`npm run release:check` passed on Windows / Node 24.19.0: **430 tests** passed
+`npm run release:check` passed on Windows / Node 24.19.0: **432 tests** passed
 with no skipped/TODO tests, strict typechecking passed, build passed, legacy and
 modern distribution checks passed, the production audit reported zero known
 vulnerabilities, and the clean installed tarball passed both protocol modes.
@@ -55,6 +55,11 @@ The holder-race suite also passed after removing repeated self-identity OS probe
 The remote default branch was re-fetched after implementation and remained at
 `da409b7`. The local reliability/performance milestone is complete; this is not
 a claim that the remaining live checks have passed.
+
+PR review added regressions for cancelling a stalled progress subscriber and
+waiting for tab close before advancing the queue. The clean-install CI gate
+also exposed macOS symlinked temporary paths; CLI entry detection now compares
+real paths, with a directory-symlink regression.
 
 ## Remaining verification limits
 

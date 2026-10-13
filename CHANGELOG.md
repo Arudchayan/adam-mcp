@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CLI startup recognizes symlinked install paths (including macOS temporary directories); cancellation waits for tab cleanup and detaches cancelled progress delivery
+
 - Forum bodies must match both the requested forum and thread identity; wrong/unidentified thread landings fail closed
 - Empty News labels no longer turn existing file/blog rows into announcements; distinct headlines on one course URL remain distinct
 - Known non-PDF formats no longer match `pdf` / `.pdf`, and whitespace search/invalid ISO filter arguments are rejected at the tool boundary

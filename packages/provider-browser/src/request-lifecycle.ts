@@ -68,7 +68,9 @@ export class SharedOperation<T> {
     this.latest = update;
     // One host's failed notification must not fail another subscriber's read.
     await waitForSignal(Promise.allSettled([...this.subscribers].map(async (subscriber) => {
-      if (this.subscribers.has(subscriber) && !subscriber.signal?.aborted) await subscriber.progress?.(update);
+      if (this.subscribers.has(subscriber) && !subscriber.signal?.aborted) {
+        await waitForSignal(Promise.resolve(subscriber.progress?.(update)), subscriber.signal);
+      }
     })), this.controller.signal);
   }
 }

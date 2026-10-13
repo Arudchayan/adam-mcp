@@ -6,14 +6,15 @@ import { snapshotFromHtml } from "./memory-session.ts";
 
 it("cancels active navigation by closing only its tab and recovers the queue", async () => {
   const session = createPlaywrightSession();
-  let entered!: () => void, rejectNavigation!: (error: Error) => void;
+  let entered!: () => void, rejectNavigation!: (error: Error) => void, finishClose!: () => void;
   const navigating = new Promise<void>((done) => { entered = done; });
   const blocked = new Promise<null>((_resolve, reject) => { rejectNavigation = reject; });
+  const closeGate = new Promise<void>((done) => { finishClose = done; });
   const order: string[] = [];
   let ensures = 0;
   const first = {
     async goto() { order.push("first.goto"); entered(); return blocked; },
-    async close() { order.push("first.close"); rejectNavigation(new Error("Target closed")); },
+    async close() { order.push("first.close"); rejectNavigation(new Error("Target closed")); await closeGate; },
   };
   const second = {
     async goto() { order.push("second.goto"); return null; },
@@ -36,7 +37,11 @@ it("cancels active navigation by closing only its tab and recovers the queue", a
   await navigating;
   controller.abort();
   await cancelled;
-  const recovered = await session.open("https://adam.unibas.ch/go/fold/100010");
+  const next = session.open("https://adam.unibas.ch/go/fold/100010");
+  await new Promise<void>((done) => setImmediate(done));
+  assert.equal(ensures, 1, "the queue must retain its slot until tab close finishes");
+  finishClose();
+  const recovered = await next;
   assert.equal(recovered.title, "Folder");
   assert.deepEqual(order, ["first.goto", "first.close", "second.goto"]);
 });

@@ -1,5 +1,4 @@
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isMainModule } from "./main-entry.ts";
 import { AdamError, isAdamError, redactText } from "adam-core";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
@@ -11,14 +10,6 @@ export { createConfiguredProvider, detectProviderName, parseProviderName } from 
 
 export async function createServer() {
   return createAdamMcpServer(await createConfiguredProvider());
-}
-
-function isMainModule(): boolean {
-  const entry = process.argv[1];
-  if (!entry) {
-    return false;
-  }
-  return fileURLToPath(import.meta.url).toLowerCase() === resolve(entry).toLowerCase();
 }
 
 function commandFromArgv(argv: string[]): "login" | "status" | "logout" | "session-holder" | "help" | "mcp" {
@@ -128,7 +119,7 @@ export function formatCliError(error: unknown): string {
   return error instanceof Error ? redactText(error.message) : "adam-mcp failed.";
 }
 
-if (isMainModule()) {
+if (isMainModule(import.meta.url)) {
   void runCli().catch((error: unknown) => {
     console.error(formatCliError(error));
     process.exitCode = 1;

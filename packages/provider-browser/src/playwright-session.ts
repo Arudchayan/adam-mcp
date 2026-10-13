@@ -285,9 +285,10 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const page = await this.ensurePage({ allowResume: true });
       throwIfAborted(signal);
       // Stop only this navigation tab; retain the authenticated context/holder.
+      let closing: Promise<void> | undefined;
       const abort = () => {
         if (this.page === page) this.page = undefined;
-        void page.close({ runBeforeUnload: false }).catch(() => undefined);
+        closing = page.close({ runBeforeUnload: false }).catch(() => undefined);
       };
       signal.addEventListener("abort", abort, { once: true });
       try {
@@ -331,6 +332,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         throw error;
       } finally {
         signal.removeEventListener("abort", abort);
+        await closing;
       }
     }, options?.signal);
   }

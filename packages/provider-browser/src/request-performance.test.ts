@@ -163,3 +163,19 @@ it("bounds a walk even when the host's progress callback never resolves", async 
     (error: unknown) => error instanceof AdamError && error.code === "provider_unavailable" && error.retryable);
   assert.ok((await provider.search("Notes")).items.length > 0);
 });
+
+it("a cancelled caller's stuck progress callback does not hold up another subscriber", async () => {
+  const reporting = deferred();
+  const provider = createBrowserProvider({ session: createMemorySession({ [origin]: home(), [url]: course() }) });
+  const controller = new AbortController();
+  const first = provider.search("Notes", { signal: controller.signal, onProgress: () => {
+    reporting.resolve();
+    return new Promise<void>(() => {});
+  } });
+  const rejected = assert.rejects(first, cancelled);
+  await reporting.promise;
+  const second = provider.search("Notes");
+  await new Promise<void>((done) => setImmediate(done));
+  controller.abort(); await rejected;
+  assert.ok((await second).items.some((item) => item.refId === "100011"));
+});
