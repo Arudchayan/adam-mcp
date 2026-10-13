@@ -49,6 +49,7 @@
     "@modelcontextprotocol/server": "^2.0.0",
     "pdfjs-dist": "4.10.38",
     "playwright-core": "^1.55.0",
+    "smol-toml": "1.9.1",
     "zod": "^4.5.4"
   },
   "devDependencies": {

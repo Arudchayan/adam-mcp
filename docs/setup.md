@@ -4,10 +4,26 @@ Need Node.js 20+ and Google Chrome. From the repo:
 
 ```bash
 npm install
-npm run setup
+npm run setup -- --client codex --write --login
 ```
 
-That builds `packages/mcp/dist/adam-mcp.mjs` and prints snippets with **absolute** paths. Paste into the host. No `cwd` required.
+Choose `codex`, `cursor`, `claude-desktop`, `windsurf`, or `vscode`. This builds the server, checks prerequisites, installs the selected configuration with a backup, and verifies sign-in and the course listing. Restart the client and enable **adam**.
+
+`npm run setup -- --client codex` previews only. `--output <path>` chooses a configuration file; it is written only with `--write`. Existing malformed files, directories and symlink targets are refused. Unrelated settings and per-tool approval preferences are preserved. Existing configuration is copied to an adjacent `.adam-backup-<id>` file before installation. TOML/JSON formatting and comments may change; the backup keeps the original bytes. Protect backups as carefully as the original configuration, since other servers may have credentials in it.
+
+To restore, close the client and copy the backup over its configuration file. `--login` can be used separately from `--write`. No sign-in or configuration change is triggered by diagnostics or preview.
+
+For a packaged install, use `adam-mcp setup --client codex --write --login`. The registry release remains pending. The old all-snippet/manual setup path is still available with `npm run setup` in a noninteractive terminal.
+
+## Diagnose a connection
+
+Run `npm run doctor -- --client codex` (packaged: `adam-mcp doctor --client codex`). Add `--json` for machine-readable checks. Doctor checks Node, Chrome in standard locations, the server entry, profile accessibility, the selected config and passive session status. It never starts Chrome. Missing sign-in is a warning, not a broken installation. Fix prerequisite errors before installing configuration.
+
+Session states: `connected` is verified; `disconnected` may have an unverified saved profile; `signing-in` means finish or close the existing window; `signed-out` means explicit local logout. `reason` remains available for existing clients. Run login to verify saved sign-in or open a fresh window when needed.
+
+## Client timeouts
+
+Generated Codex configuration uses an absolute Node executable and entry path, `startup_timeout_sec = 30` and `tool_timeout_sec = 2100`. The latter allows the maximum 30-minute interactive login plus five minutes for queue waiting, browser startup, verification and cleanup; ordinary discovery still has a two-minute server budget. CLI login is the fallback for hosts with shorter timeouts. Do not add undocumented timeout fields to other client configurations. See [the compatibility matrix](client-compatibility.md).
 
 ## Live ADAM
 
@@ -51,7 +67,7 @@ These hosts attach a local stdio server today: **Cursor**, **Claude Desktop**, *
 
 Paste the JSON object printed by `npm run setup` (`mcpServers.adam`).
 
-Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this).
+Generated configuration starts the absolute Node executable directly, so spaces in paths are separate arguments and GUI PATH differences do not affect it.
 
 Fully quit and reopen the host. Enable the **adam** server.
 
@@ -75,7 +91,7 @@ command = "node"
 args = ["<absolute path to packages/mcp/dist/adam-mcp.mjs from npm run setup>"]
 ```
 
-Paste that table into `~/.codex/config.toml`. Windows hosts that do not pass `node` through need `cmd /c` (the printed Windows snippet already does this). ADAM login stays `npm run login`.
+Use the generated table or `setup --client codex --write` so paths and timeout settings match this machine. ADAM login is available through `npm run login` or setup's `--login` option.
 
 ## First checks
 

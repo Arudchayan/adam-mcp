@@ -173,6 +173,8 @@ export type CalendarEvent = {
 
 export type Paginated<T> = {
   items: T[];
+  /** Immutable result snapshot creation time; per-item provenance has fetch times. */
+  snapshotAt?: string;
   nextCursor?: string;
   totalHint?: number;
   /** Honesty of the source listing (ADR 0005). Walks may omit; page-backed lists must set. */
@@ -211,6 +213,10 @@ export type ObjectOpenOptions = {
 export type ListOptions = {
   cursor?: string;
   limit?: number;
+  /** Optional enrolled-course scope for search/calendar/news only. */
+  courseRefId?: RefId;
+  /** Start a fresh discovery snapshot; never combine with cursor. */
+  refresh?: boolean;
   /** Optional long-walk progress (search / calendar / extract / news). */
   onProgress?: ProgressReporter;
 } & ObjectOpenOptions;

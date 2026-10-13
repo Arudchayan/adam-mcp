@@ -48,7 +48,8 @@ describe("elicitation spike: write-once shape", () => {
     const entry = result.inputRequests?.confirm;
     assert.equal(entry?.method, "elicitation/create");
     const params = entry?.params as { message?: string; requestedSchema?: unknown } | undefined;
-    assert.match(String(params?.message ?? ""), /adam_read_page/);
+    assert.match(String(params?.message ?? ""), /Read this course page/);
+    assert.match(String(params?.message ?? ""), /shared with your connected AI model/);
     assert.ok(params?.requestedSchema, "requestedSchema must be present");
   });
 

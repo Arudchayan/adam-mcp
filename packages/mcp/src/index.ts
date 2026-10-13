@@ -1,4 +1,5 @@
 import { isMainModule } from "./main-entry.ts";
+import { fileURLToPath } from "node:url";
 import { AdamError, isAdamError, redactText } from "adam-core";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
@@ -12,12 +13,13 @@ export async function createServer() {
   return createAdamMcpServer(await createConfiguredProvider());
 }
 
-function commandFromArgv(argv: string[]): "login" | "status" | "logout" | "session-holder" | "help" | "mcp" {
+function commandFromArgv(argv: string[]): "setup" | "doctor" | "login" | "status" | "logout" | "session-holder" | "help" | "mcp" {
   if (argv.includes("--help") || argv.includes("-h")) {
     return "help";
   }
   const positional = argv.filter((arg) => !arg.startsWith("-"));
   const command = positional[0];
+  if (command === "setup" || command === "doctor") return command;
   if (command === "help") {
     return "help";
   }
@@ -43,6 +45,9 @@ function printHelp(): void {
 Usage:
   adam-mcp              Live ADAM via a headless session (run login first)
   adam-mcp --browser    Same as adam-mcp (kept for existing host JSON)
+  adam-mcp setup --client codex  Preview client configuration
+  adam-mcp setup --client codex --write --login  Install with backup and verify sign-in
+  adam-mcp doctor --client codex  Check installation and passive session status
   adam-mcp login        Sign in to ADAM in Chrome, then close it
   adam-mcp login --force  Open a fresh sign-in window instead of reusing a session
   adam-mcp login --timeout-ms 120000  Limit the sign-in wait (close window or Ctrl+C to cancel)
@@ -73,6 +78,12 @@ async function runStdio(): Promise<void> {
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
   const command = commandFromArgv(argv);
   switch (command) {
+    case "setup":
+    case "doctor": {
+      const { runSetupCli } = await import("./setup-cli.ts");
+      await runSetupCli(argv.slice(argv.indexOf(command) + 1), fileURLToPath(import.meta.url), command === "doctor");
+      return;
+    }
     case "help":
       printHelp();
       return;

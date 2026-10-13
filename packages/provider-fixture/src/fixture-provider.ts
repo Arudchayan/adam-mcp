@@ -244,6 +244,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>> {
+    const scope = discoveryScope(options);
     throwIfCancelled(options?.signal);
     await LongWalkStub.emit("search", options?.onProgress);
     const needle = query.trim().toLowerCase();
@@ -251,18 +252,20 @@ export class FixtureAdamProvider implements AdamProvider {
       return paginate([], options);
     }
     // AT3: enrolled-tree only (not Magazin / whole-catalog). Title hits before page body.
-    return paginate(rankEnrolledSearch(needle), options);
+    return paginate(rankEnrolledSearch(needle).filter((item) => !scope || scope.has(item.refId)), options);
   }
 
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<Paginated<CalendarEvent>> {
+    const scope = discoveryScope(options);
     throwIfCancelled(options?.signal);
     await LongWalkStub.emit("calendar", options?.onProgress);
     const events = aggregateFixtureDeadlines();
     const from = options?.from ? Date.parse(options.from) : Number.NEGATIVE_INFINITY;
     const to = options?.to ? Date.parse(options.to) : Number.POSITIVE_INFINITY;
     const items = events.filter((event) => {
+      if (scope && (!event.objectRefId || !scope.has(event.objectRefId))) return false;
       // Honest omit: undated items (no startsAt) always pass range filters.
       if (!event.startsAt) {
         return true;
@@ -274,6 +277,7 @@ export class FixtureAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>> {
+    discoveryScope(options);
     throwIfCancelled(options?.signal);
     await LongWalkStub.emit("news", options?.onProgress);
     // AT4: enrolled + News-enabled courses only. Never invent activity for news-off / Magazin.
@@ -281,6 +285,7 @@ export class FixtureAdamProvider implements AdamProvider {
     const newsOn = new Set(newsEnabledCourseIds);
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     const items = fixtureNews.filter((item) => {
+      if (options?.courseRefId && item.courseRefId !== options.courseRefId) return false;
       if (!item.courseRefId || !enrolled.has(item.courseRefId) || !newsOn.has(item.courseRefId)) {
         return false;
       }
@@ -289,6 +294,23 @@ export class FixtureAdamProvider implements AdamProvider {
     });
     return paginate(items, options);
   }
+}
+
+function discoveryScope(options?: ListOptions): Set<string> | undefined {
+  if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+  const id = options?.courseRefId;
+  if (id === undefined) return undefined;
+  if (!enrolledCourseIds.includes(id)) throw new AdamError("forbidden", "Choose a course from adam_list_courses.", false);
+  const ids = new Set<string>();
+  const visit = (refId: string) => {
+    if (ids.has(refId)) return;
+    const record = fixtureCatalog[refId];
+    if (!record || isDeniedObjectType(record.object.type)) return;
+    ids.add(refId);
+    for (const child of record.children) visit(child);
+  };
+  visit(id);
+  return ids;
 }
 
 

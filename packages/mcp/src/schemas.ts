@@ -1,5 +1,31 @@
-import { ADAM_OBJECT_TYPES, parseAdamRef, type AdamObjectType } from "adam-core";
+import { ADAM_OBJECT_TYPES, ADAM_ERROR_CODES, parseAdamRef, type AdamObjectType } from "adam-core";
 import * as z from "zod/v4";
+
+export const toolErrorOutputSchema = z.object({
+  error: z.object({
+    code: z.enum(ADAM_ERROR_CODES),
+    message: z.string(),
+    retryable: z.boolean(),
+    recoveryAction: z.enum(["login", "restart_listing", "confirm_selected_object", "check_access_in_adam", "check_object_or_format", "refresh_listing", "none", "retry_once", "check_installation"]),
+    runId: z.string().optional(),
+  }).strict(),
+}).strict();
+
+/** Advertise error envelopes as well as successes; keep strict success validation in ok(). */
+export function withToolErrors<T extends z.ZodType>(success: T) {
+  const union = z.union([success, toolErrorOutputSchema]);
+  const standard = union["~standard"];
+  return {
+    "~standard": {
+      ...standard,
+      jsonSchema: {
+        ...standard.jsonSchema,
+        // Both branches are objects; retain the legacy root object declaration.
+        output: (options: Parameters<typeof standard.jsonSchema.output>[0]) => ({ ...standard.jsonSchema.output(options), type: "object" }),
+      },
+    },
+  };
+}
 
 const REF_ID_HELP =
   "ILIAS ref_id: digits, adam://{type}/{id}, or https://adam.unibas.ch/go/{type}/{id}. Titles and non-ADAM URLs are rejected.";
@@ -179,6 +205,8 @@ const walkHonestyFields = {
     .optional()
     .describe("True when an enrolled-tree walk skipped pages or hit a page/time budget — results may be incomplete"),
   partialReason: z.literal("time_budget").optional(),
+  partialReasons: z.array(z.enum(["time_budget", "page_budget", "unreadable_page", "unknown_listing"])).optional(),
+  snapshotAt: z.iso.datetime().optional(),
   skipped: z.number().optional().describe("Count of pages skipped during a partial walk"),
   listingNotice: z
     .string()
@@ -394,6 +422,8 @@ export const paginatedCalendarOutputSchema = z
 export const sessionStatusOutputSchema = z
   .object({
     loggedIn: z.boolean(),
+    connectionState: z.enum(["connected", "disconnected", "signing-in", "signed-out", "unknown"]).optional(),
+    recoveryAction: z.enum(["none", "login", "finish_login", "check_status"]).optional(),
     origin: z.string().optional(),
     currentUrl: z.string().optional(),
     title: z.string().optional(),

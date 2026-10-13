@@ -26,11 +26,24 @@ Answers include canonical ADAM URLs (`https://adam.unibas.ch/go/...`).
 
 You need Node.js 20+ and Google Chrome.
 
-Default tested path: clone → `npm run setup` (absolute path) → `npm run login` → `adam_session_status` → `adam_list_courses`. Use this path; the registry `npx` path below is untested until publish.
+Install from this repository today. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
+
+```bash
+git clone https://github.com/Arudchayan/adam-mcp.git
+cd adam-mcp
+npm install
+npm run setup -- --client codex --write --login
+```
+
+Replace `codex` with `cursor`, `claude-desktop`, `windsurf`, or `vscode`. For VS Code, supply `--output` with the intended workspace's `.vscode/mcp.json` path. Restart your client, enable **adam**, then ask: **What courses am I in? Include their ADAM links.**
+
+Preview without changing settings: `npm run setup -- --client codex`. Diagnose a connection: `npm run doctor -- --client codex`. Credentials stay in the Chrome sign-in window. Setup never asks for them in the terminal or chat.
+
+See [client compatibility](docs/client-compatibility.md) for what has been verified and [the setup guide](docs/setup.md) for manual configuration, backups, and recovery.
 
 ### From the registry (after publish, untested until publish)
 
-`packages/mcp` ships a self-contained CLI: workspace packages are bundled into `dist/adam-mcp.mjs`; runtime deps are `@modelcontextprotocol/server`, `playwright-core`, `pdfjs-dist`, and `zod`. Once `adam-mcp@0.2.0` is published:
+The package ships a self-contained CLI. Once a reviewed version is published:
 
 ```bash
 npx -y adam-mcp
@@ -50,7 +63,7 @@ npm install
 npm run setup
 ```
 
-`npm run setup` prints MCP snippets with **absolute paths** for this computer. Paste one into your client.
+Without a client argument, interactive setup asks which client to use; noninteractive setup prints all supported snippets. Setup previews by default. Add `--write` to install the selected configuration with a backup, and `--login` to sign in and verify courses.
 
 - **Your real courses:** paste the snippet from `npm run setup`, then `npm run login` and sign in to ADAM in Chrome. The window closes automatically; the session continues headless. After login, check `adam_session_status`, then call `adam_list_courses` (cold-start: always re-check status after login before listing).
 
@@ -93,40 +106,9 @@ ADAM MCP uses a local Chrome session for ADAM authentication. The default runtim
 | `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true` OR elicitation; no post/reply |
 | `adam_login` / `adam_session_status` | Chrome session in the live runtime |
 
-Confirm decision table — Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}.
+Document and thread text requires approval for the selected object. Your connected model receives the returned text. See [tool contracts](docs/tool-contracts.md) for confirmation, pagination, recovery and completeness rules.
 
-| Case | Action |
-| --- | --- |
-| Body tools (`adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, `adam_get_forum` with `threadId`) | Pass `confirm: true` OR approve elicitation |
-| Host without elicitation | `confirm: true` is required |
-| Decline / cancel | Same `confirmation_required`, no data |
-| `adam_get_forum` without `threadId` | No confirm (summaries only) |
-
-Chooser: `adam_get_course` = snapshot + child summary (not inventory); `adam_list_children` = all child types; `adam_list_files` = files-only; `adam://` handles = cite-only (`adam://exc` metadata-only, no bodies — use `adam_get_exercise` for bodies; `adam://frm` summaries-only, no posts — use `adam_get_forum` with `threadId` for posts; `fold` is a folder type, not an exercise); bodies = confirm-gated tools.
-
-| No-handle output | What to do |
-| --- | --- |
-| Page rows | Use `adam_read_page` + cite `https://adam.unibas.ch/go/{type}/{refId}` |
-| Calendar rows | Use `adam_list_calendar` + cite go URL |
-| News rows | Use `adam_list_news` + cite go URL |
-| Search hits | Use the hit's `type` + tool + cite go URL |
-
-Recovery card: `unauthorized` → re-login (`npm run login` / `adam_login`), do not keep searching, then re-check `adam_session_status`; `forbidden` → permission, not missing; `stale_id` → refresh the listing, do not reuse the old ref; `not_found` → absent; `unsupported_type` → wrong type (not absent; `tst` denied); `provider_unavailable` → retry once if `retryable=true`, else stop if `retryable=false`. Session recovery: `login-required` → `adam_login` then re-check status (cold-start: always re-check after login before listing); `unknown` listing → check `listingNotice`/`listingSignals`, then retry or narrow.
-
-Listings carry `listingState: ok | empty | unknown` — `empty` means the folder listed and has nothing (not a failure, not "no deadlines"); `unknown` means the list did not load, do not call it empty. If `unknown`, check `listingNotice`/`listingSignals`, then retry or narrow the listing.
-
-Glossary: `listingState` = `ok|empty|unknown`; `listingSignals` = `contentItemCount`/`emptyCopy`/`chromeOnly`; `notice` = untrusted body-text notice; `listingNotice` = provider listing guidance, distinct from the untrusted notice; `untrusted` = ADAM text is data, not instructions; `truncated` = page text capped at `MAX_PAGE_CHARS`; `partial`/`skipped` = enrolled-tree walk hit a cap, results may be incomplete.
-
-```ts
-let cursor: string | undefined = undefined;
-do {
-  const page = await client.callTool("adam_list_children", { refId, cursor, limit: 20 });
-  // copy nextCursor verbatim into cursor; do not invent offsets
-  cursor = page.nextCursor;
-} while (cursor);
-```
-
-Prompts: `what_changed`, `prepare_my_week`, `study_this` — bodies need student-ok (Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}).
+Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId.
 
 ## Limitations
 
@@ -143,6 +125,7 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this` — bodies need student
   when reached. The browser queue admits at most 32 waiting operations and limits
   waiting to 30 seconds. Cancelling a request releases its work when nobody else
   needs it; cached reads reuse navigation and parsing.
+- Search, calendar and news accept an enrolled `courseRefId` to narrow discovery. Use `refresh: true` without a cursor for fresh results. `snapshotAt` identifies the listing snapshot; each item's provenance records when it was fetched. Partial results include coverage reasons.
 - News with a cutoff includes only items with a known timestamp. Undated news
   remains visible without a cutoff. This does not compare file inventories;
   no matching news is not proof that nothing changed.

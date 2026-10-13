@@ -1,7 +1,8 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { AdamError, redactUrl, throwIfCancelled } from "adam-core";
+import { AdamError, redactUrl, throwIfCancelled, type ProgressReporter } from "adam-core";
+import { inactiveSessionStatus } from "./session-state.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { boundedAuthorizedFetch } from "./bounded-fetch.ts";
 import { waitForAdamLogin } from "./login-wait.ts";
@@ -29,7 +30,7 @@ import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } f
 import { boundHolderPid, holderStatus, isCdpAlive, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
 import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
-import { throwIfAborted } from "./request-lifecycle.ts";
+import { throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
 import type {
   AdamBrowserSession,
   PageSnapshot,
@@ -204,6 +205,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return this.serialize(async () => {
       const holder = await holderStatus(this.profileDir);
       const holderPid = boundHolderPid(holder) ?? null;
+      const inactiveState = await inactiveSessionStatus(this.profileDir);
       const loginRequired = (): SessionStatus => ({
         loggedIn: false,
         origin: this.origin,
@@ -211,7 +213,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         message: "No ADAM session. Run `adam-mcp login` (or the adam_login tool) to sign in.",
         checkedAt: new Date().toISOString(),
         holderPid,
+        ...inactiveState,
       });
+      if (inactiveState.connectionState === "signed-out") return loginRequired();
       if (!holder.running && !this.page && !this.context) {
         const endpoint = await readLocalCdpEndpoint(this.profileDir);
         if (!endpoint) {
@@ -221,6 +225,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       if (!holder.running && !this.ownsChrome && await isCdpAlive(this.profileDir)) {
         return {
           ...loginRequired(), reason: "unknown",
+          connectionState: "signing-in", recoveryAction: "finish_login",
           message: "A sign-in window is already open without a verified background session. Finish or close it before running login again.",
         };
       }
@@ -337,7 +342,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     }, options?.signal);
   }
 
-  loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS, options: { signal?: AbortSignal; force?: boolean } = {}): Promise<SessionStatus> {
+  loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS, options: { signal?: AbortSignal; force?: boolean; onProgress?: ProgressReporter } = {}): Promise<SessionStatus> {
     if (this.loginInflight) return this.loginInflight;
     const operation = this.runInteractiveLogin(timeoutMs, options).finally(() => {
       if (this.loginInflight === operation) this.loginInflight = undefined;
@@ -346,12 +351,17 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return operation;
   }
 
-  private async runInteractiveLogin(timeoutMs: number, options: { signal?: AbortSignal; force?: boolean }): Promise<SessionStatus> {
+  private async runInteractiveLogin(timeoutMs: number, options: { signal?: AbortSignal; force?: boolean; onProgress?: ProgressReporter }): Promise<SessionStatus> {
+    const report = async (progress: number, message: string) => {
+      // Feedback failure must not change authentication or strand Chrome.
+      try { await waitForSignal(Promise.resolve(options.onProgress?.({ progress, total: 4, message })), options.signal); } catch { /* Host feedback is best effort. */ }
+      throwIfCancelled(options.signal);
+    };
     throwIfCancelled(options.signal);
     if (!options.force) {
       const current = await this.status();
       throwIfCancelled(options.signal);
-      if (current.loggedIn) return current;
+      if (current.loggedIn) { await report(4, "ADAM is already connected."); return current; }
     }
     return this.serialize(async () => {
       throwIfCancelled(options.signal);
@@ -362,6 +372,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       const abort = () => { void this.closeContext(); };
       options.signal?.addEventListener("abort", abort, { once: true });
       try {
+        await report(1, "Opening Chrome for ADAM sign-in.");
         const page = await this.ensurePage({ allowLaunch: true });
         throwIfCancelled(options.signal);
         await enableSession(this.profileDir);
@@ -369,6 +380,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         await this.rejectIfBlocked(page);
         let snapshot = await this.readSnapshot(page);
         if (!isLoggedInSnapshot(snapshot)) {
+          await report(2, "Complete SWITCH sign-in in Chrome. Close the window to cancel.");
           await this.clickSwitchIfPresent(page);
           console.error("Complete SWITCH edu-ID in the Chrome window. Close the window to cancel. Do not paste credentials into chat.");
           snapshot = await waitForAdamLogin({
@@ -380,6 +392,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         }
         throwIfCancelled(options.signal);
         if (!headedByDefault()) {
+          await report(3, "Verifying ADAM and starting the background session.");
           const seed = await this.exportSessionState();
           await this.closeContext();
           if (!seed || seed.cookies.length === 0) throw new AdamError("unauthorized", "No session cookies were captured. Run adam-mcp login again.", false);
@@ -388,20 +401,24 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           if (!(await this.tryAttachCdp()) || !this.context) throw new AdamError("provider_unavailable", "The session started but could not be attached. Run adam-mcp status before retrying login.");
           this.page = this.context.pages()[0] ?? (await this.context.newPage());
           attachDownloadGuard(this.page);
-          return this.toStatus(await this.readSnapshot(this.page), holderRecord.pid);
+          const verified = this.toStatus(await this.readSnapshot(this.page), holderRecord.pid);
+          if (!verified.loggedIn) throw new AdamError("unauthorized", "The background ADAM session could not verify sign-in. Run login again.", false);
+          await report(4, "ADAM is connected. The sign-in window has closed.");
+          return verified;
         }
         await this.announceLogin(page, "success");
+        await report(4, "ADAM is connected.");
         if (this.hideWindowAfterFeedback) await minimizeChromeWindow(page);
         return this.toStatus(snapshot, null);
       } catch (error) {
-        await disableSession(this.profileDir);
+        await disableSession(this.profileDir, "login-failed");
         await this.closeContext();
         throwIfCancelled(options.signal);
         throw error;
       } finally {
         options.signal?.removeEventListener("abort", abort);
       }
-    });
+    }, options.signal);
   }
 
   async fetchAuthorized(url: string, options?: { signal?: AbortSignal }) {
@@ -460,6 +477,8 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       currentUrl: redactUrl(snapshot.url),
       title: snapshot.title,
       reason: loggedIn ? "signed-in" : "login-required",
+      connectionState: loggedIn ? "connected" : "disconnected",
+      recoveryAction: loggedIn ? "none" : "login",
       checkedAt: new Date().toISOString(),
       holderPid,
     };

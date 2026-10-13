@@ -26,3 +26,4 @@
 | [0022](0022-bounded-page-aware-extraction.md) | Bounded transfer and page-aware PDF extraction |
 | [0023](0023-login-and-logout-lifecycle.md) | Predictable login windows and explicit logout |
 | [0024](0024-reliable-performant-read-lifecycle.md) | Shared cancellation, parsing reuse, bounded waiting and truthful read identity/news |
+| [0025](0025-production-onboarding-and-read-controls.md) | Local guided setup, diagnostics, session clarity and scoped read controls |

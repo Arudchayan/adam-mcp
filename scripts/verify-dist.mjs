@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,6 +15,21 @@ const help = spawnSync(process.execPath, [resolve(entry), "--help"], { cwd: tmpd
 assert.equal(help.status, 0);
 assert.equal(help.stdout, "");
 assert.match(help.stderr, /Usage:/);
+
+const diagnosticProfile = mkdtempSync(join(tmpdir(), "adam-dist-doctor-"));
+try {
+  const localEnv = { ...env, ADAM_BROWSER_PROFILE_DIR: diagnosticProfile };
+  const setup = spawnSync(process.execPath, [resolve(entry), "setup", "--client", "codex"], { cwd: tmpdir(), env: localEnv, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  assert.equal(setup.status, 0, setup.stderr);
+  assert.match(setup.stdout, /\[mcp_servers.adam\]/);
+  assert.match(setup.stdout, /tool_timeout_sec = 2100/);
+  assert.ok(setup.stdout.includes("adam-mcp.mjs"));
+  const doctor = spawnSync(process.execPath, [resolve(entry), "doctor", "--json"], { cwd: tmpdir(), env: localEnv, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  const diagnosed = JSON.parse(doctor.stdout);
+  assert.ok(diagnosed.checks.some((check) => check.name === "session" && check.state === "warning"));
+  assert.ok(diagnosed.checks.some((check) => check.name === "server" && check.state === "pass"));
+  assert.ok([0, 1].includes(doctor.status)); // Chrome need not be installed on CI.
+} finally { rmSync(diagnosticProfile, { recursive: true, force: true }); }
 
 async function verify(mode) {
 const child = spawn(process.execPath, [resolve(entry)], { cwd: tmpdir(), env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
@@ -77,6 +94,12 @@ try {
   assert.equal(extracted.result.structuredContent.pages[0].page, 1);
   assert.ok(extracted.result.structuredContent.pages[0].text.trim());
   assert.equal("bytes" in extracted.result.structuredContent, false);
+  const scoped = await request("tools/call", { name: "adam_search", arguments: { query: "Fourier", courseRefId: "100001", refresh: true } });
+  assert.equal(scoped.result.isError, undefined);
+  const outOfScope = await request("tools/call", { name: "adam_search", arguments: { query: "Fourier", courseRefId: "999999" } });
+  assert.equal(outOfScope.result.isError, true);
+  assert.equal(outOfScope.result.structuredContent.error.code, "forbidden");
+  assert.deepEqual(Object.keys(outOfScope.result.structuredContent), ["error"]);
   if (mode === "modern") {
     cancelledId = ++nextId;
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: cancelledId, method: "tools/call", params: withMeta({ name: "adam_extract_file_text", arguments: { refId: "100011", confirm: true } }) })}\n`);

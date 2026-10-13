@@ -338,7 +338,8 @@ describe("B4 confirm RPC", () => {
       assert.equal(pageOmit.error, undefined, "confirm rejects are tool results, not JSON-RPC -32602");
       assert.equal(pageOmit.result?.isError, true);
       assert.match(pageOmit.result?.content?.[0]?.text ?? "", /confirm/i);
-      assert.equal(pageOmit.result?.structuredContent, undefined);
+      assert.deepEqual(Object.keys(pageOmit.result?.structuredContent ?? {}), ["error"]);
+      assert.equal((pageOmit.result?.structuredContent?.error as Record<string, unknown>)?.code, "confirmation_required");
 
       const pageFalse = await rpc(child, {
         jsonrpc: "2.0",
@@ -370,7 +371,8 @@ describe("B4 confirm RPC", () => {
       });
       assert.equal(extractOmit.result?.isError, true);
       assert.match(extractOmit.result?.content?.[0]?.text ?? "", /confirm/i);
-      assert.equal(extractOmit.result?.structuredContent, undefined);
+      assert.deepEqual(Object.keys(extractOmit.result?.structuredContent ?? {}), ["error"]);
+      assert.equal((extractOmit.result?.structuredContent?.error as Record<string, unknown>)?.code, "confirmation_required");
 
       const extractFalse = await rpc(child, {
         jsonrpc: "2.0",
@@ -535,7 +537,8 @@ describe("B10 tst deny fail-closed", () => {
       assert.match(deniedText, /tst/i);
       assert.match(deniedText, /not sent to the model/i);
       assert.doesNotMatch(deniedText, /DFT|Answer key|BLOCKED EXAM/i);
-      assert.equal(denied.result?.structuredContent, undefined);
+      assert.equal((denied.result?.structuredContent?.error as Record<string, unknown> | undefined)?.code, "unsupported_type");
+      assert.deepEqual(Object.keys(denied.result?.structuredContent ?? {}), ["error"]);
 
       const courseDenied = await rpc(child, {
         jsonrpc: "2.0",

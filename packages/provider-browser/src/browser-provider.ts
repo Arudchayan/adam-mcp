@@ -83,6 +83,7 @@ export type WalkResult = {
   partial: boolean;
   skipped: number;
   partialReason?: "time_budget";
+  partialReasons?: Array<"time_budget" | "page_budget" | "unreadable_page" | "unknown_listing">;
 };
 
 export const WALK_PARTIAL_NOTICE =
@@ -95,7 +96,7 @@ function withWalkState<T>(page: Paginated<T>, walk: WalkResult): WalkPaginated<T
 }
 
 function walkMetadata(walk: WalkResult): object {
-  return walk.partial ? { partial: true, skipped: walk.skipped, notice: WALK_PARTIAL_NOTICE, ...(walk.partialReason ? { partialReason: walk.partialReason } : {}) } : {};
+  return walk.partial ? { partial: true, skipped: walk.skipped, notice: WALK_PARTIAL_NOTICE, ...(walk.partialReason ? { partialReason: walk.partialReason } : {}), ...(walk.partialReasons ? { partialReasons: walk.partialReasons } : {}) } : {};
 }
 
 /** Byte-ish proxy for retained walk pages (JSON length). */
@@ -156,10 +157,10 @@ export class BrowserAdamProvider implements AdamProvider {
     return status;
   }
 
-  async login(timeoutMs?: number, signal?: AbortSignal): Promise<SessionStatus> {
+  async login(timeoutMs?: number, signal?: AbortSignal, onProgress?: ProgressReporter): Promise<SessionStatus> {
     // ADR 0015: session change invalidates walk memo + identity-sensitive type/file maps.
     this.clearSessionCaches();
-    return this.session().loginInteractively(timeoutMs, { signal });
+    return this.session().loginInteractively(timeoutMs, { signal, onProgress });
   }
 
   async close(): Promise<void> {
@@ -211,6 +212,21 @@ export class BrowserAdamProvider implements AdamProvider {
       }
       if (this.clock() - this.livePagesFetchedAt >= 60_000) this.livePagesMemo = undefined;
     }
+  }
+
+  private prepareDiscovery(options?: ListOptions): void {
+    if (options?.courseRefId !== undefined && !/^\d+$/.test(options.courseRefId)) throw new AdamError("unsupported_type", "courseRefId must be an enrolled course ID from adam_list_courses.", false);
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    if (!options?.refresh) return;
+    // Detach old work without cancelling other callers or deleting their cursors.
+    this.walkGeneration += 1;
+    this.livePagesMemo = undefined;
+    this.livePagesInflight = undefined;
+    this.pageByUrl.clear();
+    this.pageInflight.clear();
+    this.typeByRefId.clear();
+    this.fileByRefId.clear();
+    this.metadataExpiresAt = this.clock() + 60_000;
   }
 
   private fetchedAt(snapshot: PageSnapshot): string {
@@ -578,14 +594,15 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async search(query: string, options?: ListOptions): Promise<WalkPaginated<AdamObject>> {
+    this.prepareDiscovery(options);
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     if (!query.trim()) return this.pagination.first(`search:`, [], options);
-    const key = `search:${query.trim().toLowerCase()}`;
+    const key = `search:${query.trim().toLowerCase()}:course=${options?.courseRefId ?? ""}`;
     const continuation = this.pagination.continue<AdamObject>(key, options);
     if (continuation) return continuation;
     const needle = query.trim().toLowerCase();
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
     const titleMatches: AdamObject[] = [];
     const bodyMatches: AdamObject[] = [];
     for (const { catalog } of walk.pages) {
@@ -601,6 +618,7 @@ export class BrowserAdamProvider implements AdamProvider {
         (titleHit ? titleMatches : bodyMatches).push(current);
       }
       for (const item of catalog.objects) {
+        if (options?.courseRefId && item.type === "crs" && item.refId !== options.courseRefId) continue;
         if (isDeniedObjectType(item.type)) {
           continue;
         }
@@ -617,12 +635,13 @@ export class BrowserAdamProvider implements AdamProvider {
   async listCalendar(
     options?: { from?: string; to?: string } & ListOptions,
   ): Promise<WalkPaginated<CalendarEvent>> {
+    this.prepareDiscovery(options);
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
-    const key = `calendar:${options?.from ?? ""}:${options?.to ?? ""}`;
+    const key = `calendar:${options?.from ?? ""}:${options?.to ?? ""}:course=${options?.courseRefId ?? ""}`;
     const continuation = this.pagination.continue<CalendarEvent>(key, options);
     if (continuation) return continuation;
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
     const events: CalendarEvent[] = [];
     for (const page of walk.pages) {
       const { catalog } = page;
@@ -669,15 +688,16 @@ export class BrowserAdamProvider implements AdamProvider {
   }
 
   async listNews(options?: { since?: string } & ListOptions): Promise<WalkPaginated<NewsItem>> {
+    this.prepareDiscovery(options);
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const since = options?.since ? Date.parse(options.since) : Number.NEGATIVE_INFINITY;
     if (Number.isNaN(since)) throw new AdamError("unsupported_type", "since must be an ISO timestamp.", false);
-    const key = `news:${options?.since ?? ""}`;
+    const key = `news:${options?.since ?? ""}:course=${options?.courseRefId ?? ""}`;
     const continuation = this.pagination.continue<NewsItem>(key, options);
     if (continuation) return continuation;
     // A2-news-browser: long enrolled walk reports progress when onProgress is set (fixture parity).
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal);
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
     const items = uniqueNews(walk.pages.flatMap((page) => page.catalog.news));
     const filtered = items.filter((item) => {
       const stamp = Date.parse(item.updatedAt ?? item.createdAt ?? "");
@@ -686,8 +706,10 @@ export class BrowserAdamProvider implements AdamProvider {
     return withWalkState(this.pagination.first(key, filtered, options, walkMetadata(walk)), walk);
   }
 
-  private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal): Promise<WalkResult> {
+  private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal, courseRefId?: RefId): Promise<WalkResult> {
     throwIfAborted(signal);
+    // Scoped reads reuse page caches but never borrow a global walk or its budget.
+    if (courseRefId) return this.walkLivePages(onProgress, signal, this.walkGeneration, courseRefId);
     // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
     // Invalidation: login() + close(). Memo hit emits no progress.
     // Cancelled / unauthorized / forbidden / stale_id walks are never memoized (ADR 0011 / 0015 / 0016).
@@ -720,6 +742,7 @@ export class BrowserAdamProvider implements AdamProvider {
     onProgress: ProgressReporter | undefined,
     signal: AbortSignal | undefined,
     generation: number,
+    courseRefId?: RefId,
   ): Promise<WalkResult> {
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason);
@@ -731,7 +754,7 @@ export class BrowserAdamProvider implements AdamProvider {
       controller.abort(new AdamError("provider_unavailable", "ADAM's two-minute read budget was reached before a usable listing. Retry or narrow the request.", true));
     }, this.walkTimeoutMs);
     try {
-      return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired);
+      return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired, courseRefId);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
@@ -743,6 +766,7 @@ export class BrowserAdamProvider implements AdamProvider {
     signal: AbortSignal,
     generation: number,
     expired: () => boolean,
+    courseRefId?: RefId,
   ): Promise<WalkResult> {
     const report = async (progress: number) => {
       if (!onProgress) {
@@ -758,12 +782,13 @@ export class BrowserAdamProvider implements AdamProvider {
     const home = await this.openAuthorized(this.origin, signal);
     const homeCatalog = this.catalog(home);
     this.rememberTypes(homeCatalog, generation);
-    const pages: LivePage[] = [retainWalkPage(home, homeCatalog)];
+    const pages: LivePage[] = courseRefId ? [] : [retainWalkPage(home, homeCatalog)];
     await report(pages.length);
     const seen = new Set<string>(homeCatalog.current?.refId ? [homeCatalog.current.refId] : []);
     const queue: Array<{ type: AdamObjectType; refId: RefId }> = [];
 
     const enqueue = (type: AdamObjectType, refId: RefId) => {
+      if (courseRefId && type === "crs" && refId !== courseRefId) return;
       if (isDeniedObjectType(type) || type === "file" || type === "impr" || type === "cat" || type === "root") {
         return;
       }
@@ -781,9 +806,14 @@ export class BrowserAdamProvider implements AdamProvider {
       (item) => item.refId !== homeCatalog.current?.refId && !isDeniedObjectType(item.type),
     );
     const homeListing = classifyListing(home, homeChildren.length);
+    if (courseRefId) {
+      if (homeListing.state === "unknown") throw new AdamError("provider_unavailable", "Enrolled course scope could not be verified. Retry adam_list_courses.", true);
+      const enrolled = listingItemsOrEmpty(homeCatalog.objects, homeListing);
+      if (!enrolled.some((item) => item.type === "crs" && item.refId === courseRefId)) throw new AdamError("forbidden", "Requested course is not in the verified enrolled course listing. Choose a course from adam_list_courses.", false);
+    }
     if (homeListing.state === "ok") {
       for (const item of homeCatalog.objects) {
-        if (item.type === "crs") {
+        if (item.type === "crs" && (!courseRefId || item.refId === courseRefId)) {
           enqueue(item.type, item.refId);
         }
       }
@@ -847,6 +877,12 @@ export class BrowserAdamProvider implements AdamProvider {
       partial: expired() || homeListing.state === "unknown" || skipped > 0 || queue.length > 0,
       skipped,
       ...(expired() ? { partialReason: "time_budget" as const } : {}),
+      partialReasons: [
+        ...(expired() ? ["time_budget" as const] : []),
+        ...(queue.length > 0 && pages.length >= MAX_LIVE_PAGES ? ["page_budget" as const] : []),
+        ...(skipped > 0 ? ["unreadable_page" as const] : []),
+        ...(homeListing.state === "unknown" ? ["unknown_listing" as const] : []),
+      ],
     };
   }
 
