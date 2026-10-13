@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Scoped discovery respects an honestly empty dashboard even if parsed course links leak; diagnostics reject a regular file used as the Chrome profile directory
+- Mocked holder-start races prime the real runner identity before short timers and settle all queued starts before cleanup, preventing Windows CI cleanup races without weakening runtime PID checks
 
 - CLI startup recognizes symlinked install paths (including macOS temporary directories); cancellation waits for tab cleanup and detaches cancelled progress delivery
 
