@@ -43,8 +43,9 @@ course listing.
 
 ## Release gates and limits
 
-1. Record the change's actual six-job CI matrix result; local Node 24 checks do
-   not prove Node 20/22 or other operating systems.
+1. Six-job CI passed for implementation commit `6142af6`: Windows/macOS/Linux,
+   each on Node 20/22, including clean package installation. Recheck CI on the
+   final release head; local Node 24 checks alone do not prove other environments.
 2. Record installed-client version/OS walkthroughs in `client-compatibility.md`,
    including progress, timeout and confirmation behavior. Generated config and
    protocol tests are not actual desktop-client walkthroughs.
@@ -61,4 +62,7 @@ news as a substitute for inventory-change tracking, unobserved object types,
 pattern-based redaction and the maintenance burden of live browser markup.
 They remain explicit limitations rather than hidden claims of full ADAM coverage.
 
-PR/CI evidence: pending creation and matrix verification at initial record.
+PR: [#71](https://github.com/Arudchayan/adam-mcp/pull/71).
+Implementation CI: [successful six-job run 38438372177](https://github.com/Arudchayan/adam-mcp/actions/runs/38438372177),
+head `6142af6e1605092a020c67e3dc573081456e7881`. Any later documentation commit
+has its own CI result on the PR; this link identifies the exact tested code head.

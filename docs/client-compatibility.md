@@ -26,5 +26,6 @@ explicit logout, slow-read timeout and progress. Test the `confirm:true` fallbac
 and elicitation only when the client advertises it. Record outcomes rather than
 private screenshots, cookies or course bodies.
 
-CI targets Windows/macOS/Linux with Node 20/22. Actual CI results for a proposed
-release, packaging results, and live client evidence belong in the release record.
+CI passed on Windows/macOS/Linux with Node 20/22 for implementation commit
+`6142af6`. Actual CI results for the final release head, packaging results, and
+live client evidence belong in the [readiness record](qa/production-readiness.md).
