@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Exercise the built package from outside the repository, including its PDF worker.
-const entry = fileURLToPath(new URL("../packages/mcp/dist/adam-mcp.mjs", import.meta.url));
+const entry = process.argv[2] ?? fileURLToPath(new URL("../packages/mcp/dist/adam-mcp.mjs", import.meta.url));
 const env = { ...process.env, ADAM_MCP_TEST_FIXTURE: "1" };
 delete env.ADAM_PROVIDER;
+delete env.NODE_PATH;
+const help = spawnSync(process.execPath, [resolve(entry), "--help"], { cwd: tmpdir(), env, encoding: "utf8", windowsHide: true });
+assert.equal(help.status, 0);
+assert.equal(help.stdout, "");
+assert.match(help.stderr, /Usage:/);
+
+async function verify(mode) {
 const child = spawn(process.execPath, [resolve(entry)], { cwd: tmpdir(), env, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
 const pending = new Map();
-let nextId = 0, buffered = "", failure;
+let nextId = 0, buffered = "", failure, cancelledId;
 child.stdout.setEncoding("utf8");
 child.stderr.resume();
 const fail = (error) => { failure = error; for (const item of pending.values()) item.reject(error); pending.clear(); };
@@ -24,6 +31,7 @@ child.stdout.on("data", (chunk) => {
     try {
       const message = JSON.parse(line);
       assert.equal(message.jsonrpc, "2.0", "stdout must contain only JSON-RPC");
+      if (cancelledId !== undefined) assert.notEqual(message.id, cancelledId, "cancelled modern requests must not receive a response");
       const item = pending.get(message.id);
       if (item) { pending.delete(message.id); item.resolve(message); }
     } catch (error) { fail(error); }
@@ -37,14 +45,31 @@ async function request(method, params) {
     return await new Promise((resolve, reject) => {
       timer = setTimeout(() => { pending.delete(id); reject(new Error(`Built server ${method} timed out.`)); }, 25_000);
       pending.set(id, { resolve, reject });
-      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
+      child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params: withMeta(params) })}\n`);
     });
   } finally { clearTimeout(timer); }
 }
+function withMeta(params) {
+  return mode === "modern" ? { ...params, _meta: {
+    "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+    "io.modelcontextprotocol/clientCapabilities": {},
+  } } : params;
+}
 try {
-  const initialized = await request("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "dist-check", version: "1" } });
-  assert.ok(initialized.result);
-  child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+  if (mode === "modern") {
+    const discovered = await request("server/discover", {});
+    assert.ok(discovered.result?.supportedVersions?.includes("2026-07-28"), JSON.stringify(discovered.error));
+  } else {
+    const initialized = await request("initialize", { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "dist-check", version: "1" } });
+    assert.ok(initialized.result);
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
+  }
+  const tools = await request("tools/list", {});
+  assert.ok(tools.result.tools.some((tool) => tool.name === "adam_extract_file_text"));
+  const invalid = await request("tools/call", { name: "adam_list_news", arguments: { since: "not-a-date" } });
+  assert.equal(invalid.result.isError, true);
+  const whitespace = await request("tools/call", { name: "adam_search", arguments: { query: "   " } });
+  assert.equal(whitespace.result.isError, true);
   const denied = await request("tools/call", { name: "adam_extract_file_text", arguments: { refId: "100011" } });
   assert.equal(denied.result.isError, true);
   const extracted = await request("tools/call", { name: "adam_extract_file_text", arguments: { refId: "100011", confirm: true } });
@@ -52,8 +77,17 @@ try {
   assert.equal(extracted.result.structuredContent.pages[0].page, 1);
   assert.ok(extracted.result.structuredContent.pages[0].text.trim());
   assert.equal("bytes" in extracted.result.structuredContent, false);
+  if (mode === "modern") {
+    cancelledId = ++nextId;
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: cancelledId, method: "tools/call", params: withMeta({ name: "adam_extract_file_text", arguments: { refId: "100011", confirm: true } }) })}\n`);
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/cancelled", params: withMeta({ requestId: cancelledId, reason: "distribution cancellation check" }) })}\n`);
+    const recovered = await request("tools/call", { name: "adam_extract_file_text", arguments: { refId: "100011", confirm: true } });
+    assert.ok(recovered.result.structuredContent.pages[0].text.trim());
+  }
   if (failure) throw failure;
-  console.error("Built stdio package and page-aware PDF worker verified outside the repository.");
+  console.error(`${mode} stdio and page-aware PDF worker verified outside the repository.`);
 } finally {
   child.kill();
 }
+}
+for (const mode of ["legacy", "modern"]) await verify(mode);

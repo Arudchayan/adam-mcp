@@ -31,7 +31,7 @@ Default provider is `browser` (`--browser` is a no-op alias). `ADAM_PROVIDER=fix
 
 - Do not put SWITCH passwords in tools, env, logs, issues, or git.
 - No write tools. Object type `tst` is denied.
-- `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true` (interim schema gate after the student asked to read — not OS permission, not elicitation, not equated to tool annotations alone). Return text, never file bytes. Real confirms / future writes → MCP elicitation when host supports MRTR; see docs/architecture.md.
+- `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require student approval: `confirm: true` (interim schema gate after the student asked to read — not OS permission, not elicitation, not equated to tool annotations alone), or accepted boolean confirmation through the capability-gated MCP elicitation when host supports MRTR (ADR 0019). Omission without elicitation support, decline, or cancel returns no bodies. Return text, never file bytes; see docs/architecture.md.
 - stdout is JSON-RPC only. Logs go to stderr.
 - Pin origin to `https://adam.unibas.ch`. No generic URL fetch.
 - Do not commit cookies, Chrome profiles, live course files, or private screenshots.

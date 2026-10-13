@@ -14,7 +14,7 @@ This is a community project, not a University of Basel service.
 
 ## What you can ask
 
-- What changed in my courses this week?
+- Show timestamped course news from this week.
 - What deadlines do I have?
 - Find the exercise sheet about Fourier transforms.
 - Summarize this course page and give me the ADAM link.
@@ -39,7 +39,7 @@ npm install -g adam-mcp
 adam-mcp
 ```
 
-Default is live ADAM. Run `npm run login` once, then start the server (see [docs/setup.md](docs/setup.md)). `--browser` is optional.
+Default is live ADAM. For a registry installation, run `adam-mcp login` once, then start the server (see [docs/setup.md](docs/setup.md)). `--browser` is optional.
 
 ### Clone (default tested path: setup helpers + host snippets)
 
@@ -91,7 +91,7 @@ ADAM MCP uses a local Chrome session for ADAM authentication. The default runtim
 | `adam_list_calendar` / `adam_list_news` | Dates and news from pages you can see |
 | `adam_get_exercise` | Exercise text and deadline (`confirm: true` OR elicitation); no submit |
 | `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true` OR elicitation; no post/reply |
-| `adam_login` / `adam_session_status` | Chrome session (`--browser` only; fixture hides them) |
+| `adam_login` / `adam_session_status` | Chrome session in the live runtime |
 
 Confirm decision table — Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}.
 
@@ -139,6 +139,13 @@ Prompts: `what_changed`, `prepare_my_week`, `study_this` — bodies need student
 - Course pages and complete cross-course walks refresh after one minute. Restart
   the MCP server for an immediate refresh. Existing pagination retains its
   original snapshot for ten minutes; expired cursors require restarting the list.
+- Cross-course reads have a two-minute elapsed budget and report partial results
+  when reached. The browser queue admits at most 32 waiting operations and limits
+  waiting to 30 seconds. Cancelling a request releases its work when nobody else
+  needs it; cached reads reuse navigation and parsing.
+- News with a cutoff includes only items with a known timestamp. Undated news
+  remains visible without a cutoff. This does not compare file inventories;
+  no matching news is not proof that nothing changed.
 - Deadline clock times without an offset use Europe/Zurich. Ambiguous or invalid
   dates/times are omitted. Date-only evidence uses UTC midnight as a representation,
   and does not establish a midnight deadline.
@@ -155,6 +162,8 @@ Tool results go to the model your client is already using. Course content is cop
 npm test
 npm run typecheck
 npm run check  # tests, typecheck, build, built-package verification, dependency audit
+npm run release:check  # also verifies a clean tarball installation
+npm run benchmark:reads  # synthetic cached-read timing; no live ADAM access
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md)

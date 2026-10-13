@@ -14,7 +14,7 @@ Live search/calendar/news walk enrolled objects. They are not ADAM’s global se
 
 ### Confirm vs elicitation
 
-`confirm: true` is an **interim schema gate** after the student asked to read: a required tool argument so the host can show it. It is **not** an OS permission dialog, **not** MCP elicitation, and **not** equated to tool annotations alone. Real confirms and future writes → MCP **elicitation** when the host supports MRTR. See [architecture.md](architecture.md#confirm-vs-elicitation-a3).
+`confirm: true` is an **interim schema gate** after the student asked to read: the explicit fallback for hosts without elicitation support. It is **not** an OS permission dialog, **not** MCP elicitation, and **not** equated to tool annotations alone. The existing runtime also accepts approved boolean confirmation through MCP **elicitation** when the host supports MRTR (ADR 0019). Omission without that capability, decline, and cancel return no bodies. Future writes need separate review. See [architecture.md](architecture.md#confirm-vs-elicitation-a3).
 
 Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [ADR 0019](adr/0019-elicitation-spike.md).
 

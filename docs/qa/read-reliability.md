@@ -21,6 +21,13 @@ and production dependency audit. CI runs the distribution check after build on
 Windows, macOS and Linux with Node 20 and 22. Compiler checks reject unused locals
 and parameters. PDF tests additionally support the declared Node 20 baseline.
 
+The [reliability/performance baseline](reliability-baseline.md) adds shared
+navigation/catalog reuse, independent cancellation, elapsed/queue budgets,
+forum thread identity and timestamped news checks. `npm run release:check`
+also installs the actual tarball outside the repository and verifies legacy and
+modern stdio with its production dependencies. Use `npm run benchmark:reads`
+for a synthetic hot-cache measurement, without touching an ADAM account.
+
 Pattern-based redaction is not a general personal-information detector. Ambiguous
 human titles and unlabeled prose secrets remain documented limits. PDF OCR,
 formula interpretation and visual layout reconstruction remain unsupported.
