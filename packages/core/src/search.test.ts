@@ -3,6 +3,11 @@ import { describe, it } from "node:test";
 import { normalizeSearchNeedle, searchTitleHit } from "./search.ts";
 
 describe("searchTitleHit pdf extension awareness", () => {
+  it("does not report files with contrary MIME or extension evidence as PDF matches", () => {
+    assert.equal(searchTitleHit("pdf", { type: "file", title: "notes.txt", mimeType: "text/plain" }), false);
+    assert.equal(searchTitleHit(".pdf", { type: "file", title: "slides.pptx" }), false);
+    assert.equal(searchTitleHit("pdf", { type: "file", title: "Skript", mimeType: "application/pdf" }), true);
+  });
   it("matches type=file for pdf / PDF / .pdf even when the title omits the extension", () => {
     const file = { type: "file", title: "Lecture notes" };
     for (const query of ["pdf", "PDF", ".pdf"]) {

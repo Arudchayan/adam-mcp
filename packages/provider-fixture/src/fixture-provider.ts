@@ -285,7 +285,7 @@ export class FixtureAdamProvider implements AdamProvider {
         return false;
       }
       const stamp = Date.parse(item.updatedAt ?? item.createdAt ?? "");
-      return Number.isFinite(stamp) ? stamp >= since : true;
+      return Number.isFinite(stamp) ? stamp >= since : options?.since === undefined;
     });
     return paginate(items, options);
   }

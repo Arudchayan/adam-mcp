@@ -80,7 +80,8 @@ export function isProcessAlive(pid: number): boolean {
   }
 }
 
-/** Linux /proc identity for a live PID; undefined if the PID is gone or unreadable. */
+let ownProcessIdentity: ProcessIdentity | undefined;
+
 /**
  * Cross-platform process identity for PID bind.
  * Prefer Linux /proc starttime+exe; on Unix use `ps`; on Windows skip `ps`
@@ -91,15 +92,13 @@ export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
   if (!isProcessAlive(pid)) {
     return undefined;
   }
-  const linux = readLinuxProcIdentity(pid);
-  if (linux) {
-    return linux;
-  }
-  // Windows runners often ship a non-BSD `ps` that errors on `-o` and burns time.
-  if (process.platform === "win32") {
-    return readWindowsIdentity(pid);
-  }
-  return readPsIdentity(pid) ?? readWindowsIdentity(pid);
+  // This running process cannot have its own PID reused. Foreign PIDs are never cached.
+  if (pid === process.pid && ownProcessIdentity) return { ...ownProcessIdentity };
+  const identity = readLinuxProcIdentity(pid) ?? (process.platform === "win32"
+    ? readWindowsIdentity(pid)
+    : readPsIdentity(pid) ?? readWindowsIdentity(pid));
+  if (pid === process.pid && identity) ownProcessIdentity = { ...identity };
+  return identity;
 }
 
 function readLinuxProcIdentity(pid: number): ProcessIdentity | undefined {

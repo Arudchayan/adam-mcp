@@ -1057,7 +1057,7 @@ describe("A2-news-browser listNews onProgress", () => {
     });
     assert.ok(seen.length >= 1, `expected progress during news walk; got ${seen.length}`);
     assert.ok(seen.every((step) => step.progress >= 1));
-    assert.ok(seen.every((step) => typeof step.message === "string" && /news:/i.test(step.message ?? "")));
+    assert.ok(seen.every((step) => typeof step.message === "string" && /ADAM:/i.test(step.message ?? "")));
     assert.equal(news.items.some((item) => item.url.includes("/go/file/100011")), true);
   });
 
@@ -1580,7 +1580,7 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
     );
   });
 
-  it("in-flight walk after login() does not repopulate type cache", async () => {
+  it("login cancels an in-flight walk without repopulating the type cache", async () => {
     let releaseHome!: () => void;
     const homeGate = new Promise<void>((resolve) => {
       releaseHome = resolve;
@@ -1621,10 +1621,11 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
     });
 
     const walkPromise = provider.search("exam");
+    const cancelledWalk = assert.rejects(walkPromise, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
     await homeBlocked;
     await provider.login();
     releaseHome();
-    await walkPromise;
+    await cancelledWalk;
 
     // Stale walk must not have re-seeded typeByRefId: untyped open starts at crs.
     opens.length = 0;

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Concurrent reads share navigation, catalog parsing and enrolled walks while retaining independent cancellation/progress; abandoned work is stopped and not cached (ADR 0024)
+- Cross-course reads have a two-minute elapsed budget; browser waiting is capped at 32 operations and 30 seconds, with cancelled entries removed immediately
+- News cutoff queries exclude undated items; the change-summary prompt no longer claims a file inventory diff
+- `npm run release:check` verifies a fresh tarball installation with both legacy and modern MCP stdio; `npm run benchmark:reads` measures synthetic cached reads
+
 - Repeated opens of the same typed page are reused until `login()` or `close()`. Unknown landings are not cached (ADR 0018)
 - Tool argument rejects (missing or false `confirm`, a bad cursor, a non-ADAM URL) are tool results with `isError: true`. This SDK does not emit JSON-RPC `-32602` for those rejects
 - The ChatGPT desktop app, Codex CLI, and the Codex IDE extension are documented as local stdio hosts (`~/.codex/config.toml`)
@@ -18,6 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-process fixture startup no longer loads Playwright; `adam-provider-browser` is dynamic-import only
 
 ### Fixed
+
+- CLI startup recognizes symlinked install paths (including macOS temporary directories); cancellation waits for tab cleanup and detaches cancelled progress delivery
+
+- Forum bodies must match both the requested forum and thread identity; wrong/unidentified thread landings fail closed
+- Empty News labels no longer turn existing file/blog rows into announcements; distinct headlines on one course URL remain distinct
+- Known non-PDF formats no longer match `pdf` / `.pdf`, and whitespace search/invalid ISO filter arguments are rejected at the tool boundary
+- Self-process identity is reused after a real OS lookup; foreign PID identities and liveness checks remain fresh, reducing mocked-holder test overhead without weakening PID-reuse protection
 
 - Absent course refs are `not_found`. A resolved object of another known type stays `unsupported_type`. A landing on a different typed ref stays `stale_id` (ADR 0018)
 - News items and `ilias.php` children cite `https://adam.unibas.ch/go/{type}/{id}` when the href or, for news, the open page parses to a known type. Untyped refs stay `unknown` (ADR 0018)

@@ -13,6 +13,7 @@ export const cursorSchema = z
   .optional()
   .describe("Opaque decimal token — copy nextCursor verbatim into cursor, do not invent offsets. Expired browser cursors require restarting the listing without cursor.");
 export const limitSchema = z.number().int().min(1).max(100).optional().describe("Page size, default 20, max 100");
+export const isoDateFilterSchema = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
 export const confirmReadSchema = z
   .literal(true)
   .describe(
@@ -176,7 +177,8 @@ const walkHonestyFields = {
   partial: z
     .boolean()
     .optional()
-    .describe("True when an enrolled-tree walk skipped pages or hit a page cap — results may be incomplete"),
+    .describe("True when an enrolled-tree walk skipped pages or hit a page/time budget — results may be incomplete"),
+  partialReason: z.literal("time_budget").optional(),
   skipped: z.number().optional().describe("Count of pages skipped during a partial walk"),
   listingNotice: z
     .string()

@@ -21,7 +21,7 @@ Do not tag GitHub/npm until all of these hold:
 5. Chrome CDP uses an ephemeral loopback port with a detached headless session holder (no password, no persistent seed); dashboard is verified on start/resume; `adam_session_status` never launches a browser.
 6. HTTPS + pinned `https://adam.unibas.ch`; allowlist on start and final URL.
 7. Concurrency 1 (SerialQueue), size caps — tested.
-8. `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require `confirm: true`. `confirm` is an interim schema gate after the student asked to read — not an OS permission, not elicitation, not equated to tool annotations alone. Real confirms / future writes → MCP elicitation when the host supports MRTR.
+8. `adam_read_page`, `adam_extract_file_text`, `adam_get_forum` (when `threadId` / post bodies), and `adam_get_exercise` require student approval: explicit `confirm: true` or accepted boolean confirmation through capability-gated elicitation ([ADR 0019](docs/adr/0019-elicitation-spike.md)). `confirm` is an interim schema gate after the student asked to read — not an OS permission, not elicitation, not equated to tool annotations alone. Omission without elicitation support, decline, and cancel return no bodies. Future writes require a separate ADR and elicitation review.
 9. Object type `tst` is denied. No write tools.
 10. No PDF bytes to the model. Download cancel is tested.
 11. Stdout is protocol-only. Redaction tests cover emails, cookies, and session query keys.

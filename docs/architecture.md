@@ -30,13 +30,13 @@ Bump the pin in this file when changing the server dependency major or the negot
 
 ## Confirm vs elicitation (A3)
 
-`confirm: true` on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and `adam_get_forum` (when `threadId` is set) is an **interim schema gate** used **after the student asked to read** that object: a required tool argument so hosts can surface the flag in the tool UI. It is **not**:
+`confirm: true` on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and `adam_get_forum` (when `threadId` is set) is an **interim schema gate** used **after the student asked to read** that object. It is the explicit fallback argument for hosts without elicitation support. The argument is optional in the schema so omission can enter the capability-gated elicitation handler. No body is returned before either explicit confirmation or accepted boolean elicitation. The flag is **not**:
 
 - an OS permission dialog,
 - MCP **elicitation**, or
 - equated to tool annotations alone (`readOnlyHint`, etc.).
 
-Real confirms and future writes → MCP **elicitation** when the host supports MRTR. Until then, keep the schema gate; do not document `confirm` or annotations as elicitation.
+The runtime supports MCP **elicitation** when the host supports MRTR (ADR 0019). Omission on other hosts, decline, or cancel returns `confirmation_required` and no bodies. Future writes need a separate review. Do not document `confirm` or annotations as elicitation.
 
 Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [ADR 0019](adr/0019-elicitation-spike.md).
 
