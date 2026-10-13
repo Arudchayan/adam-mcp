@@ -29,6 +29,7 @@ import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } f
 import { boundHolderPid, holderStatus, isCdpAlive, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
 import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
+import { throwIfAborted } from "./request-lifecycle.ts";
 import type {
   AdamBrowserSession,
   PageSnapshot,
@@ -37,7 +38,6 @@ import type {
   SnapshotLink,
 } from "./session-types.ts";
 import {
-  adamErrorFromAuthorizedHttpStatus,
   adamErrorFromNavigationFailure,
   rejectIfGotoHttpFailed,
 } from "./upstream-errors.ts";
@@ -277,45 +277,62 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return { cookies: state.cookies as SessionCookie[], userAgent };
   }
 
-  async open(url: string): Promise<PageSnapshot> {
-    return this.serialize(async () => {
+  async open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot> {
+    return this.serialize(async (signal) => {
+      throwIfAborted(signal);
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
       const page = await this.ensurePage({ allowResume: true });
-      // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
-      // content wait with a real function predicate (arg undefined, options 3rd).
+      throwIfAborted(signal);
+      // Stop only this navigation tab; retain the authenticated context/holder.
+      const abort = () => {
+        if (this.page === page) this.page = undefined;
+        void page.close({ runBeforeUnload: false }).catch(() => undefined);
+      };
+      signal.addEventListener("abort", abort, { once: true });
       try {
-        // Capture main response so 403/429/5xx documents use ADR 0016 taxonomy.
-        // Null response (download abort / ERR_ABORTED — ADR 0013) is not forbidden.
-        const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
-        rejectIfGotoHttpFailed(response);
-      } catch (error) {
-        if (error instanceof AdamError) {
+        // ADR 0005: DCL only — no load/networkidle/fixed-delay tax. One bounded
+        // content wait with a real function predicate (arg undefined, options 3rd).
+        try {
+          // Capture main response so 403/429/5xx documents use ADR 0016 taxonomy.
+          // Null response (download abort / ERR_ABORTED — ADR 0013) is not forbidden.
+          const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+          rejectIfGotoHttpFailed(response);
+        } catch (error) {
+          if (error instanceof AdamError) {
+            throw error;
+          }
+          const mapped = adamErrorFromNavigationFailure(error);
+          if (mapped) {
+            throw mapped;
+          }
           throw error;
         }
-        const mapped = adamErrorFromNavigationFailure(error);
-        if (mapped) {
-          throw mapped;
+        if (/\/go\/crs\//i.test(target)) {
+          await page
+            .locator("[role='tab'], a, button")
+            .filter({ hasText: /^(Content|Inhalt)$/i })
+            .first()
+            .click({ timeout: 3_000 })
+            .catch(() => undefined);
         }
+        await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 12_000 }).catch(() => undefined);
+        await this.rejectIfBlocked(page);
+        const dom = await this.probeListing(page);
+        const snapshot = await this.readSnapshot(page, dom);
+        throwIfAborted(signal);
+        if (debugCaptureEnabled()) {
+          await this.captureDebug(page, snapshot);
+        }
+        throwIfAborted(signal);
+        return snapshot;
+      } catch (error) {
+        throwIfAborted(signal);
         throw error;
+      } finally {
+        signal.removeEventListener("abort", abort);
       }
-      if (/\/go\/crs\//i.test(target)) {
-        await page
-          .locator("[role='tab'], a, button")
-          .filter({ hasText: /^(Content|Inhalt)$/i })
-          .first()
-          .click({ timeout: 3_000 })
-          .catch(() => undefined);
-      }
-      await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 12_000 }).catch(() => undefined);
-      await this.rejectIfBlocked(page);
-      const dom = await this.probeListing(page);
-      const snapshot = await this.readSnapshot(page, dom);
-      if (debugCaptureEnabled()) {
-        await this.captureDebug(page, snapshot);
-      }
-      return snapshot;
-    });
+    }, options?.signal);
   }
 
   loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS, options: { signal?: AbortSignal; force?: boolean } = {}): Promise<SessionStatus> {
@@ -386,47 +403,43 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   }
 
   async fetchAuthorized(url: string, options?: { signal?: AbortSignal }) {
-    return this.serialize(async () => {
+    return this.serialize(async (signal) => {
+      throwIfAborted(signal);
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
       const page = await this.ensurePage({ allowResume: true });
+      throwIfAborted(signal);
       return boundedAuthorizedFetch(target, {
         origin: this.origin,
         headers: async (requestUrl) => {
           const cookies = await page.context().cookies(requestUrl);
           return { Cookie: cookies.map((cookie) => cookie.name + "=" + cookie.value).join("; ") };
         },
-      }, options?.signal);
-    });
+      }, signal);
+    }, options?.signal);
   }
 
-  async probeAuthorized(url: string): Promise<{
+  async probeAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<{
     contentType?: string;
     contentDisposition?: string;
     contentLength?: number;
   }> {
-    return this.serialize(async () => {
+    return this.serialize(async (signal) => {
+      throwIfAborted(signal);
       const target = this.resolveUrl(url);
       assertUrlAllowed(target);
       const page = await this.ensurePage({ allowResume: true });
-      const response = await page.context().request.fetch(target, {
+      throwIfAborted(signal);
+      const result = await boundedAuthorizedFetch(target, {
+        origin: this.origin,
         method: "HEAD",
-        timeout: 45_000,
-        maxRedirects: 5,
-      });
-      try {
-        assertUrlAllowed(response.url());
-        if (!response.ok()) throw adamErrorFromAuthorizedHttpStatus(response.status(), "probe");
-        const headers = response.headers();
-        return {
-          contentType: headers["content-type"],
-          contentDisposition: headers["content-disposition"],
-          contentLength: parseContentLength(headers["content-length"]),
-        };
-      } finally {
-        await response.dispose();
-      }
-    });
+        headers: async (requestUrl) => {
+          const cookies = await page.context().cookies(requestUrl);
+          return { Cookie: cookies.map((cookie) => cookie.name + "=" + cookie.value).join("; ") };
+        },
+      }, signal);
+      return { contentType: result.contentType, contentDisposition: result.contentDisposition, contentLength: result.contentLength };
+    }, options?.signal);
   }
 
   async close(): Promise<void> {
@@ -450,8 +463,8 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     };
   }
 
-  private serialize<T>(work: () => Promise<T>): Promise<T> {
-    return this.queue.enqueue(work);
+  private serialize<T>(work: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return this.queue.enqueue(work, signal);
   }
 
   private async announceLogin(page: Page, kind: "success" | "error"): Promise<void> {
@@ -787,14 +800,6 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
 export function createPlaywrightSession(options?: PlaywrightSessionOptions): PlaywrightAdamSession {
   return new PlaywrightAdamSession(options);
-}
-
-function parseContentLength(raw: string | undefined): number | undefined {
-  if (!raw) {
-    return undefined;
-  }
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 async function readLocalCdpEndpoint(profileDir: string): Promise<string | undefined> {

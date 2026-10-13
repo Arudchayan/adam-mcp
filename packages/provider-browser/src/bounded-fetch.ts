@@ -6,6 +6,7 @@ type FetchHost = {
   origin: string;
   headers: (url: string) => Promise<Record<string, string>>;
   fetch?: typeof fetch;
+  method?: "HEAD";
 };
 
 /** Read only pinned-origin responses and cancel the stream at the byte boundary. */
@@ -23,7 +24,7 @@ export async function boundedAuthorizedFetch(url: string, host: FetchHost, signa
       if (target.origin !== host.origin || target.protocol !== "https:") {
         throw new AdamError("unauthorized", "File retrieval left ADAM. Re-login before retrying.", false);
       }
-      response = await request(target, { headers: await host.headers(target.href), redirect: "manual", signal: controller.signal });
+      response = await request(target, { method: host.method, headers: await host.headers(target.href), redirect: "manual", signal: controller.signal });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get("location");
         await response.body?.cancel();
@@ -35,6 +36,14 @@ export async function boundedAuthorizedFetch(url: string, host: FetchHost, signa
       if (!response.ok) throw adamErrorFromAuthorizedHttpStatus(response.status, "fetch");
       const rawLength = response.headers.get("content-length");
       const contentLength = rawLength !== null && /^\d+$/.test(rawLength) ? Number(rawLength) : undefined;
+      if (host.method === "HEAD") {
+        return {
+          bytes: new Uint8Array(),
+          contentType: response.headers.get("content-type") ?? undefined,
+          contentDisposition: response.headers.get("content-disposition") ?? undefined,
+          contentLength,
+        };
+      }
       const tooLarge = () => new AdamError("provider_unavailable", `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`, false);
       if (contentLength !== undefined && contentLength > MAX_EXTRACT_BYTES) throw tooLarge();
       const reader = response.body?.getReader();

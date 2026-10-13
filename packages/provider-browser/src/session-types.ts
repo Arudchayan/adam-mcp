@@ -65,11 +65,11 @@ export type AdamBrowserSession = {
   /** Cheap local logout check, without launching or probing Chrome. */
   explicitlyLoggedOut?(): Promise<boolean>;
   status(): Promise<SessionStatus>;
-  open(url: string): Promise<PageSnapshot>;
+  open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot>;
   loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean }): Promise<SessionStatus>;
   fetchAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedFetchResult>;
   /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
-  probeAuthorized?(url: string): Promise<AuthorizedProbeResult>;
+  probeAuthorized?(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedProbeResult>;
   close(): Promise<void>;
   /** Export the authenticated cookie jar for the headless session holder (ADR 0009). */
   exportSessionState?(): Promise<{ cookies: SessionCookie[]; userAgent?: string } | undefined>;

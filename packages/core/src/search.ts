@@ -24,6 +24,12 @@ export function searchTitleHit(needle: string, object: SearchableObject): boolea
   if (!needle) {
     return false;
   }
+  if (object.type === "file" && isPdfSearchQuery(needle)) {
+    const mime = object.mimeType?.toLowerCase().split(";")[0]?.trim();
+    if (mime && mime !== "application/octet-stream" && !mime.includes("pdf")) return false;
+    const extension = object.title.match(/\.([a-z0-9]{1,8})$/i)?.[1]?.toLowerCase();
+    if (extension && extension !== "pdf") return false;
+  }
   if (object.title.toLowerCase().includes(needle)) {
     return true;
   }

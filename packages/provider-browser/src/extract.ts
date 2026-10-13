@@ -137,7 +137,7 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     breadcrumbs,
     objects,
     files,
-    news: extractNews(snapshot, objects, provenanceBase(snapshot.url), breadcrumbs),
+    news: extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs),
     inferredDates: inferDates(text),
     iliasVersion: readIliasVersion(snapshot.text),
     text,
@@ -203,33 +203,6 @@ export function mergeFrameLinks(mainLinks: SnapshotLink[], frameLinks: SnapshotL
     merged.push(link);
   }
   return merged;
-}
-
-function extractNews(
-  snapshot: PageSnapshot,
-  objects: AdamObject[],
-  provenance: Provenance,
-  breadcrumbs: Breadcrumb[] = [],
-): NewsItem[] {
-  const articles = extractNewsArticles(snapshot, provenance, breadcrumbs);
-  if (articles.length > 0) {
-    return articles;
-  }
-  if (!/news|nachrichten|aktuelles|new file|neue datei/i.test(snapshot.text)) {
-    return [];
-  }
-  return objects
-    .filter((item) => item.type === "blog" || item.type === "file")
-    .slice(0, 10)
-    .map((item) => ({
-      title: item.title,
-      summary: item.title,
-      url: item.url,
-      courseRefId: item.breadcrumb.find((crumb) => crumb.type === "crs")?.refId,
-      folderRefId: item.breadcrumb.find((crumb) => crumb.type === "fold")?.refId,
-      accessClass: item.accessClass,
-      provenance,
-    }));
 }
 
 /**

@@ -43,6 +43,7 @@ import {
   getForumInputSchema,
   fileObjectOutputSchema,
   limitSchema,
+  isoDateFilterSchema,
   listChildrenInputSchema,
   listFilesInputSchema,
   objectRefFieldsSchema,
@@ -400,7 +401,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       description:
         "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Ranks title matches before page-body matches; each hit includes match=title|body (body means text exists — opening the body still uses confirm-gated adam_read_page / adam_extract_file_text). Pass type from hits into later tools. Follow nextCursor. Honor partial/skipped when present. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links. Tests (tst) are omitted.",
       inputSchema: z.object({
-        query: z.string().min(1).describe("Search string"),
+        query: z.string().trim().min(1).describe("Search string"),
         cursor,
         limit,
       }),
@@ -439,8 +440,8 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       description:
         "Cross-course deadlines/dates aggregated from enrolled exercises (exc), page-inferred dates, and calendar SoT — not the lecture timetable and not the ILIAS calendar GUI (robots.txt). source:exc|calendar = explicit SoT; source:page = page-inferred only (never promote unlabeled page dates to exc/calendar). Dedup same object+day: exc > calendar > page. startsAt only when ISO-parseable. Provenance + confidence. Follow nextCursor. Honor partial/skipped when present. Do not invent dates. Empty folders are not 'no deadlines'.",
       inputSchema: z.object({
-        from: z.string().optional().describe("Inclusive ISO start"),
-        to: z.string().optional().describe("Inclusive ISO end"),
+        from: isoDateFilterSchema.optional().describe("Inclusive ISO start"),
+        to: isoDateFilterSchema.optional().describe("Inclusive ISO end"),
         cursor,
         limit,
       }),
@@ -467,7 +468,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       description:
         "News/announcements from enrolled courses where News is enabled. Honest empty when News is off — does not invent activity. Not Magazin/global scope. Includes provenance, timestamps, access class, and author when present. Follow nextCursor. Honor partial/skipped when present. Not a guaranteed ILIAS news API.",
       inputSchema: z.object({
-        since: z.string().optional().describe("Only items updated at or after this ISO timestamp"),
+        since: isoDateFilterSchema.optional().describe("Only news with a known timestamp at or after this ISO cutoff; undated items are excluded"),
         cursor,
         limit,
       }),
@@ -744,9 +745,9 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "What changed in my courses",
       description:
-        "Summarize ADAM news and newly visible files since a timestamp, with links. Bodies need student-ok (Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId).",
+        "Summarize timestamped ADAM news since a cutoff, with links. This does not compare file inventories or prove which files are newly added. Bodies need student-ok (Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId).",
       argsSchema: z.object({
-        since: z.string().describe("ISO timestamp"),
+        since: isoDateFilterSchema.describe("ISO cutoff"),
       }),
     },
     ({ since }) => ({
@@ -758,6 +759,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
             text: [
               `What changed in my ADAM courses since ${since}?`,
               "Call adam_list_news with since, and adam_list_courses.",
+              "Report timestamped news only; do not claim an inventory diff or that an undated file is new. No matching news is not proof that nothing changed.",
               "Link every item to its canonical ADAM URL. Do not fetch PDFs. Do not open tests.",
               'Bodies need student-ok (Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}).',
             ].join("\n"),
