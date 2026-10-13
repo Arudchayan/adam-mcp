@@ -31,6 +31,19 @@ it("course-scoped discovery checks enrollment and never navigates the other cour
   assert.ok(!opened.some((url) => url.includes("999999")));
 });
 
+it("an honest empty dashboard cannot authorize leaked course links for scoped discovery", async () => {
+  const { provider, pages, opened } = environment();
+  pages[origin] = {
+    ...pages[origin]!,
+    text: "Dashboard Abmelden No objects available",
+    dom: { itemRows: 0, emptyCopy: true },
+  };
+  assert.deepEqual((await provider.listCourses()).items, []);
+  await assert.rejects(() => provider.search("Sheet", { courseRefId: "100001" }),
+    (error: unknown) => error instanceof AdamError && error.code === "forbidden");
+  assert.ok(!opened.includes(`${origin}/go/crs/100001`));
+});
+
 it("refresh sees new material while old cursors retain their timestamp and bind to scope", async () => {
   const { provider, pages, course, advance } = environment();
   const first = await provider.search("Sheet", { courseRefId: "100001", limit: 1 });

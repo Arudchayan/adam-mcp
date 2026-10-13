@@ -22,8 +22,9 @@ writes, new object types, registry publication or tags are part of this change.
 
 ## Observed checks
 
-- Full suite: **444 passed**, zero failures, skips or TODOs. The last additional
-  regression covers all JSON client formats; the complete suite was rerun.
+- Initial full suite: **444 passed**, zero failures, skips or TODOs. Merge review
+  added two regressions for empty-dashboard scope authorization and a file used
+  as a profile directory; final validation is recorded on the PR review.
 - Strict workspace type checking passed.
 - Build and distribution smoke checks passed for legacy and modern modes.
 - Production dependency audit reported zero vulnerabilities at check time.

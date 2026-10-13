@@ -87,6 +87,17 @@ it("diagnoses prerequisites and configuration without invoking login, navigation
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+it("doctor rejects a regular file used as the Chrome profile directory", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "adam-profile-check-"));
+  try {
+    const file = join(dir, "profile-file");
+    await writeFile(file, "synthetic file");
+    const report = await diagnose(file, { profileDir: file, chrome: async () => true, session: async () => ({ loggedIn: false }) });
+    assert.equal(report.ready, false);
+    assert.equal(report.checks.find((check) => check.name === "profile")?.state, "error");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 it("setup previews by default and rejects ambiguous options", () => {
   assert.deepEqual(parseSetupArgs(["--client", "codex"]), { client: "codex", write: false, login: false, json: false });
   assert.throws(() => parseSetupArgs(["--client", "--write"]));

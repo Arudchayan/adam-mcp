@@ -25,7 +25,11 @@ export async function chromeAvailable(): Promise<boolean> {
 async function writableAncestor(path: string): Promise<boolean> {
   let current = resolve(path);
   while (true) {
-    try { await stat(current); await access(current, constants.W_OK); return true; }
+    try {
+      if (!(await stat(current)).isDirectory()) return false;
+      await access(current, constants.W_OK);
+      return true;
+    }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") return false;
       const parent = dirname(current);

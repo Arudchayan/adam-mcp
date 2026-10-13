@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Scoped discovery respects an honestly empty dashboard even if parsed course links leak; diagnostics reject a regular file used as the Chrome profile directory
+
 - CLI startup recognizes symlinked install paths (including macOS temporary directories); cancellation waits for tab cleanup and detaches cancelled progress delivery
 
 - Forum bodies must match both the requested forum and thread identity; wrong/unidentified thread landings fail closed

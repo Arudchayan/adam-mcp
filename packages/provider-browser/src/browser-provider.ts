@@ -808,7 +808,8 @@ export class BrowserAdamProvider implements AdamProvider {
     const homeListing = classifyListing(home, homeChildren.length);
     if (courseRefId) {
       if (homeListing.state === "unknown") throw new AdamError("provider_unavailable", "Enrolled course scope could not be verified. Retry adam_list_courses.", true);
-      if (!homeCatalog.objects.some((item) => item.type === "crs" && item.refId === courseRefId)) throw new AdamError("forbidden", "Requested course is not in the verified enrolled course listing. Choose a course from adam_list_courses.", false);
+      const enrolled = listingItemsOrEmpty(homeCatalog.objects, homeListing);
+      if (!enrolled.some((item) => item.type === "crs" && item.refId === courseRefId)) throw new AdamError("forbidden", "Requested course is not in the verified enrolled course listing. Choose a course from adam_list_courses.", false);
     }
     if (homeListing.state === "ok") {
       for (const item of homeCatalog.objects) {
