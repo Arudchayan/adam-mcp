@@ -31,7 +31,7 @@ export async function runLoginCli(
     }
     console.error("Opening a sign-in window. Close it or press Ctrl+C to cancel.");
     console.error("After sign-in it closes automatically; your session continues in the background.");
-    const status = await session.loginInteractively(timeoutMs, { signal: controller.signal, force: true });
+    const status = await session.loginInteractively(timeoutMs, { signal: controller.signal, force: true, onProgress: (update) => { if (update.message) console.error(update.message); } });
     if (!status.loggedIn) {
       console.error("Sign-in did not complete. Run adam-mcp login to try again.");
       process.exitCode = 1;

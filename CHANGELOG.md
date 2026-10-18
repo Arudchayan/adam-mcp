@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Guided packaged setup previews or installs one client configuration with a backup and explicit sign-in/course verification; passive `doctor` checks installation and connection prerequisites (ADR 0025)
+- Generated client entries use absolute Node paths; Codex timeout covers the maximum interactive login budget
+- Session status explains disconnected/unverified profiles, explicit logout and sign-in windows; login emits safe progress stages
+- Search/calendar/news support enrolled-course scope and explicit refresh; browser listings carry immutable snapshot timestamps and partial coverage reasons
+- Tool errors include structured, redacted recovery actions alongside existing error text; confirmation prompts explain sharing the selected object's text with the connected model
+
 - Concurrent reads share navigation, catalog parsing and enrolled walks while retaining independent cancellation/progress; abandoned work is stopped and not cached (ADR 0024)
 - Cross-course reads have a two-minute elapsed budget; browser waiting is capped at 32 operations and 30 seconds, with cancelled entries removed immediately
 - News cutoff queries exclude undated items; the change-summary prompt no longer claims a file inventory diff
@@ -23,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In-process fixture startup no longer loads Playwright; `adam-provider-browser` is dynamic-import only
 
 ### Fixed
+
+- Scoped discovery respects an honestly empty dashboard even if parsed course links leak; diagnostics reject a regular file used as the Chrome profile directory
+- Mocked holder-start races prime the real runner identity before short timers and settle all queued starts before cleanup, preventing Windows CI cleanup races without weakening runtime PID checks
 
 - CLI startup recognizes symlinked install paths (including macOS temporary directories); cancellation waits for tab cleanup and detaches cancelled progress delivery
 

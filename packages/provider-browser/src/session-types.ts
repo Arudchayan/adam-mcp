@@ -22,6 +22,8 @@ export type PageSnapshot = {
 
 export type SessionStatus = {
   loggedIn: boolean;
+  connectionState?: "connected" | "disconnected" | "signing-in" | "signed-out" | "unknown";
+  recoveryAction?: "none" | "login" | "finish_login" | "check_status";
   origin?: string;
   currentUrl?: string;
   title?: string;
@@ -66,7 +68,7 @@ export type AdamBrowserSession = {
   explicitlyLoggedOut?(): Promise<boolean>;
   status(): Promise<SessionStatus>;
   open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot>;
-  loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean }): Promise<SessionStatus>;
+  loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean; onProgress?: import("adam-core").ProgressReporter }): Promise<SessionStatus>;
   fetchAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedFetchResult>;
   /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
   probeAuthorized?(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedProbeResult>;

@@ -79,6 +79,17 @@ it("concurrent login requests reuse the same operation and a valid session", asy
   assert.equal(checks, 1);
 });
 
+it("verified login reuse reports safe progress and tolerates a failed host notification", async () => {
+  const session = createPlaywrightSession();
+  session.status = async () => ({ loggedIn: true, reason: "signed-in" });
+  const messages: string[] = [];
+  assert.equal((await session.loginInteractively(undefined, { onProgress: (update) => { messages.push(update.message!); throw new Error("Host disconnected"); } })).loggedIn, true);
+  assert.deepEqual(messages, ["ADAM is already connected."]);
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(() => session.loginInteractively(undefined, { signal: controller.signal }), /cancelled/i);
+});
+
 it("purge refuses the current workspace before touching files", async () => {
   const previous = process.env.ADAM_BROWSER_PROFILE_DIR;
   process.env.ADAM_BROWSER_PROFILE_DIR = process.cwd();

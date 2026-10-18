@@ -19,6 +19,8 @@ export async function runStatusCli(
     const report: Record<string, unknown> = {
       loggedIn: status.loggedIn,
       reason: status.reason ?? (status.loggedIn ? "signed-in" : "login-required"),
+      connectionState: status.connectionState ?? (status.loggedIn ? "connected" : "unknown"),
+      recoveryAction: status.recoveryAction ?? (status.loggedIn ? "none" : "check_status"),
       ...(status.message ? { message: status.message } : {}),
       origin: defaultOrigin(),
       currentUrl: status.currentUrl,

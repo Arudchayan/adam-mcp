@@ -132,6 +132,9 @@ function stubFetch(ok: boolean | "throw"): { restore: () => void } {
 
 describe("session holder races R1-R10 (mocked-process only)", () => {
   it("R1 concurrent starts serialize via queue to one live PID", async () => {
+    // Bind the runner before mocking liveness and starting short holder timers.
+    // OS identity startup belongs to the integration suites, not this queue race.
+    const identity = await runnerIdentity();
     const profileDir = await tempProfile();
     const kill = stubKillRecordOnly({ dieAfterTerm: true });
     const cdp = stubFetch(false);
@@ -146,17 +149,6 @@ describe("session holder races R1-R10 (mocked-process only)", () => {
       const now = new Date().toISOString();
       // Synchronous write so the poll loop sees this generation quickly.
       // Uses runner PID identity; stubbed kill never really signals.
-      // Windows WMIC/PowerShell can lag after spawn: spin synchronously.
-      let identity = readProcessIdentity(process.pid);
-      const deadline = Date.now() + 2_000;
-      while (!identity && Date.now() < deadline) {
-        const start = Date.now();
-        while (Date.now() - start < 50) {
-          // spin — spawnHolder is synchronous
-        }
-        identity = readProcessIdentity(process.pid);
-      }
-      assert.ok(identity);
       writeFileSync(
         holderRecordPath(profileDir),
         JSON.stringify({
@@ -185,7 +177,12 @@ describe("session holder races R1-R10 (mocked-process only)", () => {
       const second = queue.enqueue(() =>
         startSessionHolder({ profileDir, seed: { cookies: [] }, spawnHolder, timeoutMs: 5_000 }),
       );
-      const [rec1, rec2] = await Promise.all([first, second]);
+      // Always settle both queued operations before restoring mocks/removing
+      // their profile, even when the first startup fails under runner load.
+      const [firstResult, secondResult] = await Promise.allSettled([first, second]);
+      if (firstResult.status === "rejected") throw firstResult.reason;
+      if (secondResult.status === "rejected") throw secondResult.reason;
+      const rec1 = firstResult.value, rec2 = secondResult.value;
       assert.notEqual(rec1.generation, rec2.generation);
       assert.equal(rec1.pid, process.pid);
       assert.equal(rec2.pid, process.pid);

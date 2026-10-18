@@ -57,7 +57,10 @@ inflight walk are dropped, the per-URL page map is cleared, the
 bumped so a racing in-flight walk cannot re-seed the memo. Ordinary reads never
 clear. A logged-out status also clears caches. Page and complete-walk caches expire
 after one minute; partial walks and unknown container pages are not memoized.
-Restart the MCP server for an immediate refresh without disconnecting the holder.
+Search/calendar/news support `refresh:true` without a cursor for an immediate
+refresh without disconnecting the holder. Existing cursor snapshots remain valid;
+`snapshotAt` records snapshot creation, while per-item provenance retains actual
+fetch times. Other tools refresh after one minute or a server restart.
 Pagination uses immutable snapshots for ten minutes, then returns `stale_id`:
 restart that listing without cursor. Cancelled / `unauthorized` / `forbidden` /
 `stale_id` walks are never memoized. See [ADR 0021](adr/0021-read-freshness-and-completeness.md).

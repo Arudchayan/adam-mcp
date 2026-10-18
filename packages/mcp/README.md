@@ -12,6 +12,12 @@ adam-mcp status  # Verify the local session
 adam-mcp        # Start the stdio server through your MCP client
 ```
 
+For guided setup: `adam-mcp setup --client codex --write --login`. Choose `codex`,
+`cursor`, `claude-desktop`, `windsurf`, or `vscode`. Setup previews by default;
+`--write` backs up and merges existing configuration, and `--login` verifies the
+course listing. `adam-mcp doctor --client codex` checks prerequisites and passive
+session state without launching Chrome. Restart your client and enable **adam**.
+
 Run `adam-mcp logout` to stop the local session. `--browser` is optional.
 
 For client configuration and the currently verified clone/setup path, see the

@@ -46,11 +46,15 @@ export { acceptedContent, inputResponse };
  * Write-once elicitation request: check `acceptedContent` first; if missing,
  * return this. The shim covers 2025 hosts.
  */
-export function requestConfirmElicitation(toolName: string) {
+export function requestConfirmElicitation(toolName: string, refId?: string) {
+  const action = toolName === "adam_extract_file_text" ? "Extract text from this file"
+    : toolName === "adam_get_forum" ? "Read the selected forum thread"
+    : toolName === "adam_get_exercise" ? "Read these exercise instructions"
+    : "Read this course page";
   return inputRequired({
     inputRequests: {
       confirm: inputRequired.elicit({
-        message: `${toolName} requires confirm:true after the student asked to read. Confirm to proceed.`,
+        message: `${action}${refId ? ` (ADAM object ${refId})` : ""}? Its text will be shared with your connected AI model. Approve only the object you asked to read.`,
         requestedSchema: CONFIRM_ELICITATION_REQUESTED_SCHEMA as unknown as {
           type: "object";
           properties: { confirm: { type: "boolean" } };
