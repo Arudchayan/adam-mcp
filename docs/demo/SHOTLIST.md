@@ -1,8 +1,8 @@
 # Demo shot list
 
-Duration: **about 57s**. 1920×1080. Silent. Bottom caption bar, Segoe UI. Fixture catalog through the real `adam-mcp` stdio server, shown in MCP Inspector.
+Duration: **about 57s**. 1920×1080. Silent. Bottom caption bar, Segoe UI. Fixture catalog through the `adam-mcp` stdio test harness, shown in MCP Inspector.
 
-No title card, no serif headlines, no fake Cursor chrome.
+Use the Inspector interface with visible synthetic-data labels.
 
 ## Prompts / actions
 
@@ -28,7 +28,7 @@ No title card, no serif headlines, no fake Cursor chrome.
 
 ## Visual rules
 
-- Real Inspector, real Chrome, real GitHub.
+- Record the Inspector, Chrome, and project repository interfaces.
 - One caption: white on `#111`, Segoe UI, ~28px, bottom bar.
 - No progress lines, page numbers, or mock tool cards.
 

@@ -32,3 +32,4 @@ docs/demo/**/raw.mp4
 docs/demo/**/probe-*.png
 docs/demo/chat-demo/out/
 .slim/deepwork/
+.release/

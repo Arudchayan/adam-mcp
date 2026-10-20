@@ -1,6 +1,6 @@
 # Setup
 
-Need Node.js 20+ and Google Chrome. From the repo:
+Need Node.js 22+ and Google Chrome. From the repo:
 
 ```bash
 npm install

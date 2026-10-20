@@ -7,9 +7,8 @@ Thanks for helping improve ADAM MCP. Please follow the [Code of Conduct](CODE_OF
 Before you open a PR:
 
 ```bash
-npm install
-npm test
-npm run typecheck
+npm ci
+npm run release:check
 ```
 
 **Fixture-first CI:** PRs must pass on the in-process fixture catalog. Do not require production ADAM (or a live Chrome session) in CI. The running server is live ADAM only (ADR 0017).
@@ -17,7 +16,7 @@ npm run typecheck
 ## Setup
 
 1. Fork the repo, then clone your fork.
-2. `npm install`
+2. `npm ci`
 3. `npm run setup` — paste the MCP snippet, then `npm run login` for live ADAM.
 4. Check with `npm run status` (`holderPid`); stop with `npm run logout`. See [AGENTS.md](AGENTS.md), [docs/setup.md](docs/setup.md), and [ADR 0009](docs/adr/0009-headless-session-holder.md) / [ADR 0017](docs/adr/0017-live-runtime-only.md).
 

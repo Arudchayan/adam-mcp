@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +8,16 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 const root = fileURLToPath(new URL("../", import.meta.url));
+const sourcePackage = JSON.parse(await readFile(join(root, "packages/mcp/package.json"), "utf8"));
+const registry = JSON.parse(await readFile(join(root, "server.json"), "utf8"));
+assert.equal(registry.name, sourcePackage.mcpName, "MCP Registry ownership must match the npm package.");
+assert.equal(registry.version, sourcePackage.version, "MCP Registry version must match the npm package.");
+assert.equal(registry.packages.length, 1);
+assert.equal(registry.packages[0].identifier, sourcePackage.name);
+assert.equal(registry.packages[0].version, sourcePackage.version);
+assert.equal(registry.packages[0].registryType, "npm");
+assert.equal(registry.packages[0].transport.type, "stdio");
+assert.equal(sourcePackage.private, undefined, "The CLI workspace must be publishable.");
 const npmCli = process.env.npm_execpath;
 assert.ok(npmCli, "Run this check through npm run test:package.");
 const temporary = await mkdtemp(join(tmpdir(), "adam-package-"));
@@ -20,11 +30,22 @@ async function npm(args, cwd) {
 try {
   const packed = await npm(["pack", "-w", "adam-mcp", "--pack-destination", temporary, "--json"], root);
   const [manifest] = JSON.parse(packed.stdout);
+  for (const required of ["dist/adam-mcp.mjs", "README.md", "LICENSE", "NOTICE", "package.json"]) {
+    assert.ok(manifest.files.some((file) => file.path === required), `Package is missing ${required}.`);
+  }
   assert.ok(manifest.files.some((file) => file.path === "dist/pdf-extract-worker.mjs"));
   assert.ok(manifest.files.every((file) => /^(?:dist\/[^/]+\.mjs|README\.md|LICENSE|NOTICE|package\.json)$/.test(file.path)), "Package contains unexpected files.");
   await mkdir(consumer);
   await writeFile(join(consumer, "package.json"), JSON.stringify({ name: "adam-clean-consumer", private: true, type: "module" }));
-  await npm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", join(temporary, manifest.filename)], consumer);
+  await npm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", join(temporary, manifest.filename)], consumer);
+  const installed = JSON.parse(await readFile(join(consumer, "node_modules/adam-mcp/package.json"), "utf8"));
+  assert.equal(installed.mcpName, registry.name);
+  assert.equal(installed.version, sourcePackage.version);
+  assert.match(installed.bin["adam-mcp"], /^(?:\.\/)?dist\/adam-mcp\.mjs$/);
+  // The consumer resolves published dependency ranges without the repository lockfile.
+  // Audit that dependency tree as well as the locked development workspace.
+  const audited = await npm(["audit", "--omit=dev", "--audit-level=high"], consumer);
+  process.stderr.write(audited.stdout);
   const entry = join(consumer, "node_modules", "adam-mcp", "dist", "adam-mcp.mjs");
   const checked = await exec(process.execPath, [join(root, "scripts", "verify-dist.mjs"), entry], { cwd: consumer, env, windowsHide: true, timeout: 90_000 });
   process.stderr.write(checked.stderr);

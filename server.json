@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Arudchayan/adam-mcp",
+  "title": "ADAM MCP",
+  "description": "Read-only access to University of Basel ADAM courses through a local Chrome session.",
+  "repository": {
+    "url": "https://github.com/Arudchayan/adam-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "adam-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

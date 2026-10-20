@@ -1,6 +1,6 @@
 # Client compatibility
 
-Updated 13 October 2026. Repository fixture/wire checks establish server behavior;
+Updated 20 October 2026. Repository fixture/wire checks establish server behavior;
 they do not establish a successful walkthrough in each real client.
 
 | Client | Local configuration | Evidence | Login and timeouts |
@@ -26,6 +26,8 @@ explicit logout, slow-read timeout and progress. Test the `confirm:true` fallbac
 and elicitation only when the client advertises it. Record outcomes rather than
 private screenshots, cookies or course bodies.
 
-CI passed on Windows/macOS/Linux with Node 20/22 for implementation commit
-`6142af6`. Actual CI results for the final release head, packaging results, and
-live client evidence belong in the [readiness record](qa/production-readiness.md).
+Upstream CI passed on Windows/macOS/Linux with Node 20/22 for `99148fc`.
+The release candidate targets Node 22/24; its final committed changes still need
+the full CI matrix. Current package checks and remaining release gates are in the
+[release readiness review](audit/2026-10-20-release-readiness.md). Installed-client
+walkthroughs remain pending.

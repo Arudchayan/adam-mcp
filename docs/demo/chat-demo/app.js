@@ -204,8 +204,8 @@ async function runDemo() {
   const end = document.createElement("div");
   end.className = "endcard";
   end.innerHTML = `
-    <h3>Local-first. Your session stays yours.</h3>
-    <p>Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.</p>
+    <h3>Local access. Approved reads.</h3>
+    <p>Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.</p>
     <p>Open source · not a University product · community Uni Basel student tool</p>
     <a class="gh" href="https://github.com/Arudchayan/adam-mcp">github.com/Arudchayan/adam-mcp →</a>
   `;

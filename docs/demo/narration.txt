@@ -1,9 +1,9 @@
-So I built adam-mcp — ADAM, for the AI tools you already use.
+Connect your ADAM courses to an MCP-compatible assistant.
 
-Ask what changed. Pull every deadline. Search the reading. Open the page.
+Read course news. Find available deadlines. Search course materials. Read an approved page.
 
-Same ADAM — seconds, not a scavenger hunt.
+Results include ADAM links and report when coverage is incomplete.
 
-Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.
+Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.
 
 Open source. github.com/Arudchayan/adam-mcp.

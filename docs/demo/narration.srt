@@ -1,6 +1,6 @@
 1
 00:00:00,000 --> 00:00:05,000
-So I built adam-mcp — ADAM, for the AI tools you already use.
+Connect your ADAM courses to an MCP-compatible assistant.
 
 2
 00:00:05,000 --> 00:00:14,000
@@ -8,7 +8,7 @@ Ask what changed.
 
 3
 00:00:14,000 --> 00:00:24,000
-Pull every deadline. Courses and calendar, with ADAM URLs.
+Find available deadlines with ADAM links.
 
 4
 00:00:24,000 --> 00:00:34,000
@@ -16,11 +16,11 @@ Search the reading. Open the page.
 
 5
 00:00:34,000 --> 00:00:41,000
-Same ADAM — seconds, not a scavenger hunt.
+Results include ADAM links and report when coverage is incomplete.
 
 6
 00:00:41,000 --> 00:00:49,000
-Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.
+Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.
 
 7
 00:00:49,000 --> 00:00:55,000

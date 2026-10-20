@@ -11,7 +11,7 @@ const bin = join(root, "packages/mcp/dist/adam-mcp.mjs");
 const CLIENT_PORT = String(6400 + Math.floor(Math.random() * 200));
 const SERVER_PORT = String(Number(CLIENT_PORT) + 3);
 const SKIP_TTS = process.env.SKIP_TTS === "1";
-const EDGE_TTS = process.env.EDGE_TTS_BIN || "/workspace/yc-demo/venv/bin/edge-tts";
+const EDGE_TTS = process.env.EDGE_TTS_BIN;
 
 const CAPTION_CSS = `
 #adam-demo-caption-wrap {
@@ -196,7 +196,7 @@ try {
       "<div style=\"margin-top:18px;font-size:28px;color:#94a3b8\">ADAM, for the AI tools you already use</div>" +
       "<div style=\"margin-top:28px;font-size:16px;color:#64748b\">Uni Basel · community · local-first · fixture demo</div></div></body></html>";
     await page.goto("data:text/html," + encodeURIComponent(html), { waitUntil: "domcontentloaded" });
-    await caption(page, "So I built adam-mcp — ADAM, for the AI tools you already use.", { lower: "adam-mcp" });
+    await caption(page, "Connect your ADAM courses to an MCP-compatible assistant.", { lower: "adam-mcp" });
     await page.waitForTimeout(5500);
   });
 
@@ -204,7 +204,7 @@ try {
     await connectInspector(page, inspectorUrl);
     await caption(page, "Ask what changed in ADAM this week.", {
       lower: "adam-mcp",
-      badge: "fixture catalog · real MCP Inspector",
+      badge: "synthetic course data · MCP Inspector",
     });
     await executeTool(page, "adam_list_news");
     await page.getByText("https://adam.unibas.ch/go/file/100011").first().waitFor();
@@ -213,7 +213,7 @@ try {
 
   await recordClip(browser, "02-courses", async (page) => {
     await connectInspector(page, inspectorUrl);
-    await caption(page, "Pull every deadline — courses and calendar, with ADAM URLs.", { lower: "adam-mcp" });
+    await caption(page, "Find available deadlines with ADAM links.", { lower: "adam-mcp" });
     await executeTool(page, "adam_list_courses");
     await page.getByText("https://adam.unibas.ch/go/crs/100001").first().waitFor();
     await page.waitForTimeout(3500);
@@ -237,7 +237,7 @@ try {
 
   await recordClip(browser, "04-exercise", async (page) => {
     await connectInspector(page, inspectorUrl);
-    await caption(page, "Same ADAM — seconds, not a scavenger hunt.", {
+    await caption(page, "Results include ADAM links and report when coverage is incomplete.", {
       lower: "adam-mcp",
       badge: "labeled synthetic · refId 100021 · no submit",
     });
@@ -250,7 +250,7 @@ try {
     await page.goto("https://adam.unibas.ch/login.php", { waitUntil: "domcontentloaded" });
     await caption(
       page,
-      "Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.",
+      "Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.",
       { lower: "local-first" },
     );
     await page.waitForTimeout(8500);
@@ -293,25 +293,25 @@ await writeFile(listFile, mp4s.map((file) => `file '${file.replace(/\\/g, "/")}'
 const concat = join(outDir, "concat.mp4");
 await run("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile, "-c", "copy", concat]);
 
-const silentMaster = join(outDir, "adam-mcp-demo-yc-actb-silent.mp4");
+const silentMaster = join(outDir, "adam-mcp-inspector-silent.mp4");
 await run("ffmpeg", [
   "-y", "-i", concat, "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p",
   "-movflags", "+faststart", silentMaster,
 ]);
 
-const finalMp4 = join(demoDir, "adam-mcp-demo-yc-actb.mp4");
+const finalMp4 = join(demoDir, "adam-mcp-inspector.mp4");
 const narrationMp3 = join(outDir, "narration.mp3");
 const narrationTxt = join(demoDir, "narration.txt");
 const narrationSrt = join(demoDir, "narration.srt");
 
 const NARRATION = [
-  "So I built adam-mcp — ADAM, for the AI tools you already use.",
+  "Connect your ADAM courses to an MCP-compatible assistant.",
   "",
-  "Ask what changed. Pull every deadline. Search the reading. Open the page.",
+  "Read course news. Find available deadlines. Search course materials. Read an approved page.",
   "",
-  "Same ADAM — seconds, not a scavenger hunt.",
+  "Results include ADAM links and report when coverage is incomplete.",
   "",
-  "Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.",
+  "Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.",
   "",
   "Open source. github.com/Arudchayan/adam-mcp.",
 ].join("\n");
@@ -321,7 +321,7 @@ await writeFile(narrationTxt, NARRATION + "\n");
 const srt = [
   "1",
   "00:00:00,000 --> 00:00:05,000",
-  "So I built adam-mcp — ADAM, for the AI tools you already use.",
+  "Connect your ADAM courses to an MCP-compatible assistant.",
   "",
   "2",
   "00:00:05,000 --> 00:00:16,000",
@@ -329,7 +329,7 @@ const srt = [
   "",
   "3",
   "00:00:16,000 --> 00:00:32,000",
-  "Pull every deadline. Courses and calendar, with ADAM URLs.",
+  "Find available deadlines with ADAM links.",
   "",
   "4",
   "00:00:32,000 --> 00:00:50,000",
@@ -337,11 +337,11 @@ const srt = [
   "",
   "5",
   "00:00:50,000 --> 00:00:59,000",
-  "Same ADAM — seconds, not a scavenger hunt.",
+  "Results include ADAM links and report when coverage is incomplete.",
   "",
   "6",
   "00:00:59,000 --> 00:01:07,000",
-  "Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.",
+  "Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.",
   "",
   "7",
   "00:01:07,000 --> 00:01:12,000",
@@ -351,14 +351,14 @@ const srt = [
 await writeFile(narrationSrt, srt);
 
 let usedAudio = false;
-if (!SKIP_TTS && (await pathExists(EDGE_TTS))) {
+if (!SKIP_TTS && EDGE_TTS && (await pathExists(EDGE_TTS))) {
   try {
     await run(
       EDGE_TTS,
       ["--voice", "en-US-BrianNeural", "--rate", "+5%", "--write-media", narrationMp3, "-f", narrationTxt],
       { cwd: outDir },
     );
-    const mixed = join(outDir, "adam-mcp-demo-yc-actb-vo.mp4");
+    const mixed = join(outDir, "adam-mcp-inspector-vo.mp4");
     await run("ffmpeg", [
       "-y", "-i", silentMaster, "-i", narrationMp3,
       "-filter_complex", "[1:a]apad[a]",
@@ -378,15 +378,10 @@ if (!SKIP_TTS && (await pathExists(EDGE_TTS))) {
   await copyFile(silentMaster, finalMp4);
 }
 
-const ycCopy = "/workspace/yc-demo/adam-mcp-demo-yc-actb.mp4";
-await mkdir("/workspace/yc-demo", { recursive: true });
-await copyFile(finalMp4, ycCopy);
-
 const probe = await runCapture("ffprobe", [
   "-v", "error", "-show_entries", "format=duration,size",
   "-of", "default=noprint_wrappers=1", finalMp4,
 ]);
 console.error("wrote", finalMp4);
-console.error("copied", ycCopy);
 console.error("probe", probe.trim());
 console.error("audio", usedAudio ? "edge-tts BrianNeural" : "silent+srt");

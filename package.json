@@ -28,6 +28,7 @@
     "test:dist": "node scripts/verify-dist.mjs",
     "test:package": "npm run build && node scripts/verify-package.mjs",
     "release:check": "npm run check && npm run test:package",
+    "release:prepare": "npm run release:check && node scripts/prepare-release.mjs",
     "benchmark:reads": "node --import tsx scripts/benchmark-reads.mjs",
     "check": "npm test && npm run typecheck && npm run build && npm run test:dist && npm run audit",
     "setup": "npm run build && node packages/mcp/dist/adam-mcp.mjs setup",
@@ -35,11 +36,11 @@
     "capture:fixtures": "node scripts/capture-fixtures.mjs",
     "demo": "node docs/demo/serve.mjs",
     "demo:record": "node docs/demo/record.mjs",
-    "demo:record:yc": "node docs/demo/record-yc.mjs",
+    "demo:record:inspector": "node docs/demo/record-inspector.mjs",
     "audit": "npm audit --omit=dev --audit-level=high"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

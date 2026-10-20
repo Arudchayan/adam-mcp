@@ -1,5 +1,7 @@
 # Tool contracts for agents and integrators
 
+## Confirmation
+
 Confirm decision table — Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}.
 
 | Case | Action |
