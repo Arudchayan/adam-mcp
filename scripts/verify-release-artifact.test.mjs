@@ -15,21 +15,29 @@ test("publication accepts the approved artifact and refuses altered bytes, versi
     await mkdir(join(temporary, "packages", "mcp"), { recursive: true });
     const source = { name: "adam-mcp", version: "0.2.0", mcpName: "io.github.Arudchayan/adam-mcp" };
     await writeFile(join(temporary, "packages", "mcp", "package.json"), JSON.stringify(source));
+    // Exercise the OIDC CLI-version boundary independently of the Node 22/24
+    // test runner's bundled npm. Publication itself always uses the real CLI.
+    const npmFixture = join(temporary, "npm-version.mjs");
+    await writeFile(npmFixture, 'process.stdout.write("11.5.1\\n");');
     const bytes = Buffer.from("synthetic archive bytes; no registry or account access");
     const filename = "adam-mcp-0.2.0.tgz";
     await writeFile(join(temporary, ".release", filename), bytes);
     const original = { dirty: false, commit: "approved-source", package: { name: source.name, version: source.version, filename, sha256: createHash("sha256").update(bytes).digest("hex") }, registry: { name: source.mcpName, version: source.version, packages: [{ version: source.version }] } };
-    const env = { ...process.env, GITHUB_SHA: "approved-source", GITHUB_REF: "refs/heads/main", RELEASE_VERSION: source.version };
+    const env = { ...process.env, npm_execpath: npmFixture, GITHUB_SHA: "approved-source", GITHUB_REF: "refs/heads/main", RELEASE_VERSION: source.version };
     const check = async (evidence, overrides = {}) => {
       await writeFile(join(temporary, ".release", "release-evidence.json"), JSON.stringify(evidence));
       return spawnSync(process.execPath, [fileURLToPath(script)], { cwd: temporary, env: { ...env, ...overrides }, encoding: "utf8", windowsHide: true });
     };
-    assert.equal((await check(original)).status, 0);
+    const approved = await check(original);
+    assert.equal(approved.status, 0, approved.stderr);
     for (const evidence of [{ ...original, dirty: true }, { ...original, commit: "another-source" }, { ...original, package: { ...original.package, sha256: "altered" } }]) {
       assert.notEqual((await check(evidence)).status, 0);
     }
     assert.notEqual((await check(original, { RELEASE_VERSION: "9.9.9" })).status, 0);
     assert.notEqual((await check(original, { GITHUB_REF: "refs/heads/unreviewed" })).status, 0);
+    await writeFile(npmFixture, 'process.stdout.write("11.5.0\\n");');
+    assert.notEqual((await check(original)).status, 0, "An npm version below the OIDC minimum must fail.");
+    await writeFile(npmFixture, 'process.stdout.write("11.5.1\\n");');
     await writeFile(join(temporary, ".release", filename), "tampered archive");
     assert.notEqual((await check(original)).status, 0);
   } finally {
