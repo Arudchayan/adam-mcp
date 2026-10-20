@@ -36,11 +36,11 @@
     "education"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "build": "node ../../scripts/build-cli.mjs",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run release:check --prefix ../.. --workspaces=false",
     "start": "tsx src/index.ts",
     "test": "node ../../scripts/run-tests.mjs",
     "typecheck": "tsc -p tsconfig.json"
@@ -58,5 +58,6 @@
     "adam-provider-fixture": "*",
     "adam-provider-html": "*",
     "adam-provider-soap": "*"
-  }
+  },
+  "mcpName": "io.github.Arudchayan/adam-mcp"
 }

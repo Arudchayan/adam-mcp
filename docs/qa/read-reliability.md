@@ -18,8 +18,8 @@ ADAM credentials, course files or private screenshots are needed.
 
 Run `npm run check` for tests, strict typechecking, build, distribution verification
 and production dependency audit. CI runs the distribution check after build on
-Windows, macOS and Linux with Node 20 and 22. Compiler checks reject unused locals
-and parameters. PDF tests additionally support the declared Node 20 baseline.
+Windows, macOS and Linux with Node 22 and 24. Compiler checks reject unused locals
+and parameters. The release baseline is Node.js 22 or later on a supported LTS release.
 
 The [reliability/performance baseline](reliability-baseline.md) adds shared
 navigation/catalog reuse, independent cancellation, elapsed/queue budgets,

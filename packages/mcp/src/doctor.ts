@@ -47,8 +47,8 @@ export async function diagnose(entryPath: string, options: {
   profileDir?: string;
 } = {}): Promise<{ ready: boolean; checks: DiagnosticCheck[] }> {
   const checks: DiagnosticCheck[] = [];
-  const nodeOk = Number(process.versions.node.split(".")[0]) >= 20;
-  checks.push({ name: "node", state: nodeOk ? "pass" : "error", message: nodeOk ? "Node.js is supported." : "Install Node.js 20 or later." });
+  const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
+  checks.push({ name: "node", state: nodeOk ? "pass" : "error", message: nodeOk ? "Node.js meets the minimum version requirement." : "Install Node.js 22 or later; use a supported LTS release." });
   const entryOk = await exists(entryPath);
   checks.push({ name: "server", state: entryOk ? "pass" : "error", message: entryOk ? "Server entry is available." : "Build or reinstall ADAM MCP." });
   const chromeOk = await (options.chrome ?? chromeAvailable)();

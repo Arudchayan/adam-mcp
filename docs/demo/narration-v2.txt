@@ -1,11 +1,15 @@
-Every Uni Basel student lives in ADAM. Finding what changed shouldn't take twenty clicks.
+ADAM MCP connects your University of Basel courses to an MCP-compatible assistant. Here is one study workflow, illustrated with synthetic course data.
 
-Today: dig through courses, folders, and pages. Deadlines hide. News is easy to miss.
+Sign in through a dedicated Chrome session. Ask for your courses, then choose the one you want to explore. Course links take you back to ADAM.
 
-So I built adam-mcp — ADAM, for the AI tools you already use.
+Ask for available deadlines in that course. Results cite their source. If a listing is incomplete, the assistant should say so. An empty folder does not mean there are no deadlines.
 
-Ask what changed. Pull every deadline. Search the reading. Open the page. Same ADAM — seconds, not a scavenger hunt.
+Search your enrolled course tree for a topic, such as Fourier transforms. Search covers titles and available page text. It is not ADAM's global search.
 
-Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.
+Select a page and approve the read. Page text, file extracts, exercise instructions, and forum posts require approval for the selected object. Declining returns no body text.
 
-Open source. github.com/Arudchayan/adam-mcp.
+The assistant can work with the approved text and cite its ADAM link. Extracts are bounded. Scanned PDFs have no OCR, and mathematical notation may need checking in the original.
+
+The server runs on your machine. Sign-in stays in Chrome. Returned text goes to the model provider chosen in your client. Exams, grades, submissions, and other writes are unsupported.
+
+Explore the setup guide and client compatibility notes in the repository. ADAM MCP is an unofficial, open-source community project. This illustration does not certify a client integration.

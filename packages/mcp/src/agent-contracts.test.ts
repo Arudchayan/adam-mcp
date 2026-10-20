@@ -210,8 +210,9 @@ describe("agent contracts: confirm contract copy (fix-13/14)", () => {
     }
     // README alignment: same contract line survives in docs.
     const readme = readFileSync(resolve(here, "../../../README.md"), "utf8");
-    assert.match(readme, /Confirm contract: pass confirm:true OR approve elicitation/);
-    assert.match(readme, /forum needs gate only with threadId/);
+    assert.match(readme, /other clients pass `confirm: true`/);
+    assert.match(readme, /Declining or cancelling returns no body text/);
+    assert.match(readme, /Forum summaries do not require body-read approval/);
   });
 
   it("4 confirm schema describes are optional gates carrying the contract", () => {

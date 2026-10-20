@@ -1,9 +1,13 @@
-So I built adam-mcp — ADAM, for the AI tools you already use.
+ADAM MCP in the MCP Inspector. This walkthrough uses synthetic course data.
 
-Ask what changed. Pull every deadline. Search the reading. Open the page.
+List course news, with source links. This is a fixture demonstration, not a live course inventory.
 
-Same ADAM — seconds, not a scavenger hunt.
+List courses and available deadlines. Results should retain their source and report incomplete coverage.
 
-Runs on your machine. Uses your Chrome session. No cloud tunnel of your SWITCH login.
+Search the enrolled course tree. Approve a selected page read before its text is returned.
 
-Open source. github.com/Arudchayan/adam-mcp.
+Read selected exercise instructions after approval. The server cannot submit work.
+
+Sign-in stays in Chrome. Returned text goes to the model provider chosen in your client.
+
+An unofficial community project. Find setup and limitations in the repository.

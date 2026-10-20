@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Rebuilt the narrated overview with an eight-scene study workflow, realistic synthetic examples, a new visual design and synchronized captions; replaced legacy Inspector narration and captions
+- Added a manually triggered npm OIDC publication workflow, gated by six-platform verification, an explicit enable switch, approved version, main branch and release environment; artifact checks reject changed bytes and source mismatches
+- Release preparation produces a review tarball, SHA-256 checksum and source/package evidence; the manual release-candidate workflow requires six-platform verification before artifact upload
+- Demo narration sources describe available results and disclose sharing returned text with the chosen model provider; existing video exports still require rebuilding and review
+- Public documentation uses neutral demo names, explains synthetic demo content, and distinguishes generated client configuration from verified client walkthroughs
+- Minimum Node.js version is 22; CI targets Node 22 and 24 on Windows, macOS, and Linux
+- npm publication runs the complete release checks; packed-package verification requires license/readme/CLI files and matching MCP Registry ownership and versions
+- Added MCP Registry metadata and a release guide covering npm ownership, provenance, package review, client verification, and post-publication checks
+
 - Guided packaged setup previews or installs one client configuration with a backup and explicit sign-in/course verification; passive `doctor` checks installation and connection prerequisites (ADR 0025)
 - Generated client entries use absolute Node paths; Codex timeout covers the maximum interactive login budget
 - Session status explains disconnected/unverified profiles, explicit logout and sign-in windows; login emits safe progress stages
