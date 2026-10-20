@@ -1,27 +1,27 @@
 1
 00:00:00,000 --> 00:00:05,000
-Connect your ADAM courses to an MCP-compatible assistant.
+ADAM MCP in the MCP Inspector. This walkthrough uses synthetic course data.
 
 2
-00:00:05,000 --> 00:00:14,000
-Ask what changed.
+00:00:05,000 --> 00:00:13,000
+List course news, with source links. This is a fixture demonstration, not a live course inventory.
 
 3
-00:00:14,000 --> 00:00:24,000
-Find available deadlines with ADAM links.
+00:00:13,000 --> 00:00:23,000
+List courses and available deadlines. Results should retain their source and report incomplete coverage.
 
 4
-00:00:24,000 --> 00:00:34,000
-Search the reading. Open the page.
+00:00:23,000 --> 00:00:33,000
+Search the enrolled course tree. Approve a selected page read before its text is returned.
 
 5
-00:00:34,000 --> 00:00:41,000
-Results include ADAM links and report when coverage is incomplete.
+00:00:33,000 --> 00:00:40,500
+Read selected exercise instructions after approval. The server cannot submit work.
 
 6
-00:00:41,000 --> 00:00:49,000
-Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.
+00:00:40,500 --> 00:00:49,000
+Sign-in stays in Chrome. Returned text goes to the model provider chosen in your client.
 
 7
-00:00:49,000 --> 00:00:55,000
-Open source. github.com/Arudchayan/adam-mcp.
+00:00:49,000 --> 00:00:54,600
+An unofficial community project. Find setup and limitations in the repository.

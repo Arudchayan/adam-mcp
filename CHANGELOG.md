@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Rebuilt the narrated overview with an eight-scene study workflow, realistic synthetic examples, a new visual design and synchronized captions; replaced legacy Inspector narration and captions
+- Added a manually triggered npm OIDC publication workflow, gated by six-platform verification, an explicit enable switch, approved version, main branch and release environment; artifact checks reject changed bytes and source mismatches
 - Release preparation produces a review tarball, SHA-256 checksum and source/package evidence; the manual release-candidate workflow requires six-platform verification before artifact upload
 - Demo narration sources describe available results and disclose sharing returned text with the chosen model provider; existing video exports still require rebuilding and review
 - Public documentation uses neutral demo names, explains synthetic demo content, and distinguishes generated client configuration from verified client walkthroughs

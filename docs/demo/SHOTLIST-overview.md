@@ -1,16 +1,18 @@
 # Overview shot list
 
-The existing overview is approximately 93 seconds at 1920×1080. Its source combines recorded ADAM navigation and a scripted assistant conversation using synthetic data.
+The current overview is approximately 108 seconds at 1920×1080. All scenes are code-rendered illustrations with realistic synthetic course data and scripted responses. No live browser capture is used.
 
-| Segment | Picture | Purpose |
+| Chapter | Story beat | Visual |
 | --- | --- | --- |
-| Introduction | Title card | Introduce ADAM MCP |
-| ADAM navigation | Dashboard, course folders, and calendar | Show the course navigation workflow |
-| Assistant conversation | Demo interface with synthetic replies | Show news, deadlines, search, and an approved read |
-| Closing | Project link and privacy disclosure | Explain local access and model-provider sharing |
+| 01 | Introduce the workflow | Course context, approval and coverage |
+| 02 | Choose a course | Sample enrolled-course list with ADAM links |
+| 03 | Check available deadlines | Exercises with source labels and a coverage reminder |
+| 04 | Find material | Fourier reading result and canonical ADAM link |
+| 05 | Approve a selected read | Illustrated approval decision and model-sharing notice |
+| 06 | Read with context | Synthetic summary, source and extraction limits |
+| 07 | Explain privacy | Client, local server and ADAM boundaries |
+| 08 | Close | Repository, setup guide and compatibility notes |
 
-The navigation recording shows Multimedia Retrieval and Analysis I with the inventory available at capture time. It does not establish the current state of those courses. The scripted conversation uses fixture IDs, including exercise `100021`; it does not demonstrate a supported client connected to live ADAM.
+The approval interface is illustrative; installed-client behavior may differ. Course IDs are synthetic. The current export does not establish live-client compatibility or current course inventory.
 
-Source files: [chat interface](chat-demo/), [narration](narration-v2.txt), and [production notes](STITCH-overview.md). The [Inspector recorder](record-inspector.mjs) produces the separate Inspector walkthrough.
-
-Review recorded frames and audio for personal information, redistribution rights, and current product claims before sharing. Updated scripts do not update existing video exports. Keep intermediate captures, working directories, and raw recordings untracked.
+Source: [renderer](render-overview.py), [narration](narration-v2.txt), [captions](overview.srt). Keep audio, frames and intermediate encodes under ignored `work-rebuild/`. See [production notes](STITCH-overview.md).

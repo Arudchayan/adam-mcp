@@ -1,0 +1,43 @@
+1
+00:00:00,000 --> 00:00:12,170
+ADAM MCP connects your University of Basel courses to an MCP-compatible assistant. Here
+is one study workflow, illustrated with synthetic course data.
+
+2
+00:00:12,170 --> 00:00:22,900
+Sign in through a dedicated Chrome session. Ask for your courses, then choose the one
+you want to explore. Course links take you back to ADAM.
+
+3
+00:00:22,900 --> 00:00:36,750
+Ask for available deadlines in that course. Results cite their source. If a listing is
+incomplete, the assistant should say so. An empty folder does not mean there are no
+deadlines.
+
+4
+00:00:36,750 --> 00:00:48,560
+Search your enrolled course tree for a topic, such as Fourier transforms. Search covers
+titles and available page text. It is not ADAM's global search.
+
+5
+00:00:48,560 --> 00:01:03,538
+Select a page and approve the read. Page text, file extracts, exercise instructions, and
+forum posts require approval for the selected object. Declining returns no body text.
+
+6
+00:01:03,538 --> 00:01:16,956
+The assistant can work with the approved text and cite its ADAM link. Extracts are
+bounded. Scanned PDFs have no OCR, and mathematical notation may need checking in the
+original.
+
+7
+00:01:16,956 --> 00:01:32,606
+The server runs on your machine. Sign-in stays in Chrome. Returned text goes to the
+model provider chosen in your client. Exams, grades, submissions, and other writes are
+unsupported.
+
+8
+00:01:32,606 --> 00:01:47,272
+Explore the setup guide and client compatibility notes in the repository. ADAM MCP is an
+unofficial, open-source community project. This illustration does not certify a client
+integration.

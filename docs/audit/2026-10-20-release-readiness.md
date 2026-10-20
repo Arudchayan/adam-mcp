@@ -2,6 +2,14 @@
 
 Reviewed 20 October 2026. **Hold publication until the remaining release gates are closed.** No npm package, Git tag, or MCP Registry entry was published.
 
+## Media and publication follow-up
+
+The overview has now been completely rebuilt as an approximately 107.5-second narrated illustration with eight designed scenes, realistic synthetic course examples, scripted replies, visible captions and explicit model-sharing/coverage limits. It contains no live browser capture or student information. The 54.6-second Inspector export retains synthetic footage with a new title, replacement narration and captions. The README preview GIF was regenerated. Rendering sources and both caption files are committed; audio/frames stay ignored. Both exports decoded successfully with H.264/AAC streams; sampled frames passed text-fit/disclosure checks, and the overview speech peak measured -3.4 dBFS without clipping. The earlier media rows below describe the initial review and are superseded by this follow-up.
+
+The npm CLI is authenticated as `arudchayan`; no authentication material was copied into source or evidence. The account currently has no packages, so package-level trusted publishing cannot be configured until the first approved package exists. A manual `publish-npm.yml` workflow now reuses the six-platform candidate checks, verifies source/version/artifact hashes, and checks published integrity. It runs only on `main`, requires checklist attestation, the repository enable switch, and `npm-release` environment review. A local adversarial guard test passes for the approved artifact and rejects changed bytes, wrong versions/commits/branches and dirty trees.
+
+The GitHub `npm-release` environment was created with required review by `Arudchayan` and deployment restricted to `main`. The npm trusted publisher and `NPM_PUBLISH_ENABLED` variable remain unconfigured. CI must verify the final committed workflow before it can be used. The user selected realistic samples for the demo; this does not provide the required real-client body-read walkthrough or independent review. Those release gates remain open.
+
 ## Source and scope
 
 `git fetch --prune origin` and `git pull --ff-only` succeeded. The current branch, `feature/production-onboarding`, is up to date with its remote at `59cbe8b0a491eebc62e04866e74482cd9e790dbb`. The default branch is `99148fcda1f4cfcea085dadf4973db83378637e3`. Both have the identical source tree `3e2f0995ba041c1e6ffa6ad7aabf839c2cc4a892`. Existing local changes were preserved. This review includes uncommitted release-preparation changes and cannot certify an exact release commit.

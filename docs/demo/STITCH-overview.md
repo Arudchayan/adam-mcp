@@ -1,15 +1,13 @@
 # Overview production notes
 
-The existing [overview](adam-mcp-overview.mp4) is a 92.5-second H.264 video with AAC stereo audio at 1920×1080. These notes describe its production sources; they do not certify the recording for release.
+Rebuilt 20 October 2026. The [overview](adam-mcp-overview.mp4) uses H.264 video, AAC narration, 1920×1080 resolution and 24 frames per second. Duration is approximately 107.5 seconds. [Captions](overview.srt) and [narration](narration-v2.txt) are generated alongside it.
 
-| Segment | Source | Duration |
-| --- | --- | --- |
-| Title | Generated title card | 3.0 seconds |
-| ADAM navigation | Recorded signed-in dashboard and course views | 39.5 seconds |
-| Assistant conversation | Browser recording of `chat-demo/` with scripted fixture replies | 50.0 seconds |
+The source is [render-overview.py](render-overview.py): eight designed scenes rendered with Pillow, then encoded with ffmpeg. Each segment starts with a short fade and an illustrated response reveal. Speech uses `en-US-BrianNeural` at -3%; segment timing follows the generated audio, with a short reading pause. No stock music, external imagery, live student data or browser profile is used.
 
-The ADAM segment visits Multimedia Retrieval, its notes and exercises folders, Analysis I, and the dashboard calendar. The conversation segment illustrates `adam_list_news`, `adam_list_calendar`, `adam_search`, `adam_read_page`, and `adam_get_exercise` using synthetic course data. Links use the canonical ADAM URL format; fixture IDs are not evidence of accessible live objects.
+The paper/green visual system uses Georgia display text and Calibri body text, available from the rendering machine's licensed Windows installation. The video contains rendered text; font files are not distributed. Synthetic-data and unofficial-project disclosures remain visible. The final workflow and UI are illustrations, not an installed-client certification.
 
-The chat source is in [chat-demo/](chat-demo/); narration is in [narration-v2.txt](narration-v2.txt). The original export used synthesized narration and a generated music bed with volume reduced under speech. Intermediate audio and captures are intentionally untracked.
+Intermediates live under ignored `work-rebuild/`, including per-scene PNGs, public narration scripts, synthesized audio, encodes and render evidence. `EDGE_TTS_BIN` selects the speech generator. Narration caches are keyed by text, voice and rate so revised scripts automatically generate fresh audio. Review the rendered output after every script or visual change.
 
-Before exporting a new overview, use the current narration and privacy copy, retain visible synthetic-data labels, and review the result for personal information and rights to redistribute course content. Existing video exports retain their original narration until rebuilt and reviewed. No installed-client compatibility claim follows from this recording.
+The [Inspector revoice helper](revoice-inspector.py) separately replaces legacy audio and captions over existing synthetic Inspector footage. It preserves its original input in the ignored working directory for reproducible edits. That export is 54.6 seconds; it is independent of the overview timeline.
+
+Verification: both exports were decoded, checked for video/audio streams and duration, and visually sampled for framing, text fit and synthetic-data disclosures. The overview speech peak measured below clipping. This review does not certify all future renders, real-client behavior or any earlier live footage.

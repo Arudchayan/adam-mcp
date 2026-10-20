@@ -1,9 +1,13 @@
-Connect your ADAM courses to an MCP-compatible assistant.
+ADAM MCP in the MCP Inspector. This walkthrough uses synthetic course data.
 
-Read course news. Find available deadlines. Search course materials. Read an approved page.
+List course news, with source links. This is a fixture demonstration, not a live course inventory.
 
-Results include ADAM links and report when coverage is incomplete.
+List courses and available deadlines. Results should retain their source and report incomplete coverage.
 
-Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.
+Search the enrolled course tree. Approve a selected page read before its text is returned.
 
-Open source. github.com/Arudchayan/adam-mcp.
+Read selected exercise instructions after approval. The server cannot submit work.
+
+Sign-in stays in Chrome. Returned text goes to the model provider chosen in your client.
+
+An unofficial community project. Find setup and limitations in the repository.

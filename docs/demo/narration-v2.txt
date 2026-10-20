@@ -1,11 +1,15 @@
-ADAM MCP helps University of Basel students find and read their course materials.
+ADAM MCP connects your University of Basel courses to an MCP-compatible assistant. Here is one study workflow, illustrated with synthetic course data.
 
-Course news, folders, pages, and deadlines are available through your MCP client.
+Sign in through a dedicated Chrome session. Ask for your courses, then choose the one you want to explore. Course links take you back to ADAM.
 
-Connect your ADAM courses to an MCP-compatible assistant.
+Ask for available deadlines in that course. Results cite their source. If a listing is incomplete, the assistant should say so. An empty folder does not mean there are no deadlines.
 
-Read course news. Find available deadlines. Search course materials. Read an approved page. Results include ADAM links and report when coverage is incomplete.
+Search your enrolled course tree for a topic, such as Fourier transforms. Search covers titles and available page text. It is not ADAM's global search.
 
-Runs locally with a dedicated Chrome session. Returned text goes to your chosen model provider.
+Select a page and approve the read. Page text, file extracts, exercise instructions, and forum posts require approval for the selected object. Declining returns no body text.
 
-Open source. github.com/Arudchayan/adam-mcp.
+The assistant can work with the approved text and cite its ADAM link. Extracts are bounded. Scanned PDFs have no OCR, and mathematical notation may need checking in the original.
+
+The server runs on your machine. Sign-in stays in Chrome. Returned text goes to the model provider chosen in your client. Exams, grades, submissions, and other writes are unsupported.
+
+Explore the setup guide and client compatibility notes in the repository. ADAM MCP is an unofficial, open-source community project. This illustration does not certify a client integration.

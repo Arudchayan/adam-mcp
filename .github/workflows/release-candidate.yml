@@ -2,6 +2,7 @@ name: Release candidate
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

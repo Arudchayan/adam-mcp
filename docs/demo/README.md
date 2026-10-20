@@ -1,36 +1,32 @@
 # Demo
 
-[Watch the overview](adam-mcp-overview.mp4) (approximately 93 seconds).
+[Watch the overview](adam-mcp-overview.mp4) (approximately 108 seconds).
 
-The video introduces the ADAM MCP workflow with an ADAM session recording followed by a simulated assistant conversation. The chat uses synthetic course data and scripted replies; it is not a recording of a supported client running the server.
+The overview illustrates a study workflow: choose a course, check available deadlines, find material, approve a selected read, and keep sources and limitations visible. Its course names, dates, responses and approval interface are synthetic illustrations. It is not a recording of an installed client connected to live ADAM.
 
-| Segment | Source | Purpose |
-| --- | --- | --- |
-| ADAM navigation | Recorded signed-in course view | Show the navigation involved in finding course materials |
-| Assistant conversation | Demo interface with synthetic fixture replies | Illustrate course news, deadlines, search, and an approved text read |
-
-ADAM MCP is an unofficial community project. Sign-in takes place in a dedicated local Chrome profile. Returned text is shared with the model provider selected in the student's client.
-
-## Recordings
+The visual design uses a warm paper background, green accents, large text, a chapter rail and persistent synthetic-data disclosure. Narration uses synthesized speech; full captions remain visible. No live account, course document, student name, password or browser profile is used in the new overview.
 
 | File | Contents |
 | --- | --- |
-| [adam-mcp-overview.mp4](adam-mcp-overview.mp4) | Overview with narration |
-| [adam-mcp-inspector.mp4](adam-mcp-inspector.mp4) | Inspector walkthrough using synthetic course data |
+| [adam-mcp-overview.mp4](adam-mcp-overview.mp4) | New narrated eight-scene illustration, 1920×1080, approximately 108 seconds |
+| [overview.srt](overview.srt) | Overview narration captions |
+| [adam-mcp-inspector.mp4](adam-mcp-inspector.mp4) | Retained synthetic Inspector footage with replacement narration, title and visible captions; 54.6 seconds |
+| [narration.srt](narration.srt) | Inspector narration captions |
 | [adam-mcp-demo.mp4](adam-mcp-demo.mp4) | Earlier silent Inspector walkthrough |
-| [demo.gif](demo.gif) | Short preview used in the project README |
+| [demo.gif](demo.gif) | Preview from the new overview |
 
-## Production sources
+## Rebuild the current exports
 
-- [Overview shot list](SHOTLIST-overview.md)
-- [Overview production notes](STITCH-overview.md)
-- [Chat interface and recording script](chat-demo/)
-- [Narration](narration-v2.txt)
+Requires Python with Pillow, ffmpeg/ffprobe, and an `edge-tts` installation. Set `EDGE_TTS_BIN` to that executable. Rendering does not require ADAM access. The default fonts are Georgia and Calibri from Windows; set `DEMO_FONT_DIR` to a directory containing those licensed fonts when reproducing elsewhere. Font files are not redistributed.
 
-`npm run demo` serves the Inspector demo. `npm run demo:record` records that interface; `npm run demo:record:inspector` records the narrated Inspector walkthrough. These production helpers require their own browser, video, and optional speech tooling; they are not part of the npm package or installation checks.
+```powershell
+$env:EDGE_TTS_BIN = 'C:/path/to/edge-tts.exe'
+python docs/demo/render-overview.py
+python docs/demo/revoice-inspector.py
+```
 
-For narration in the Inspector recording, set `EDGE_TTS_BIN` to the installed `edge-tts` executable. Without it, the script produces a silent recording with subtitles.
+The overview renderer creates its scenes from source. The Inspector helper preserves its input in ignored `work-rebuild/inspector/source.mp4` on first run, then replaces audio, title and bottom captions. Preserve that intermediate source when iterating. Speech synthesis sends only the public synthetic narration to Microsoft's speech service. The current export uses `en-US-BrianNeural`; intermediate audio is untracked. A missing voice generator fails the render instead of silently producing an unnarrated export.
 
-Review every recording for personal information and third-party course content before sharing a release. Rebuilding the npm CLI does not validate the video frames or audio. Intermediate captures and generated working files must remain untracked.
+The earlier browser/chat recording helpers remain available for reference. They are not the production path for the current overview. See [shot list](SHOTLIST-overview.md) and [production notes](STITCH-overview.md).
 
-Narration scripts and interface copy were revised on 20 October 2026. Existing video exports retain their original audio and captions until rebuilt and reviewed; the source edits do not certify those exports for publication.
+ADAM MCP is unofficial. Authentication stays in a dedicated Chrome session; returned tool text goes to the model provider selected in the student's client. Synthetic demonstrations do not establish real-client compatibility. Review any future captures for personal information and redistribution rights before sharing. Media and production helpers are excluded from the npm tarball.

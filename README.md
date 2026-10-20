@@ -12,7 +12,7 @@ This is a community project, not a University of Basel service.
 
 [Watch the demo](docs/demo/adam-mcp-overview.mp4) · [Demo details](docs/demo/README.md)
 
-The demo combines an ADAM session recording with a simulated chat using synthetic course data. It illustrates the workflow; it does not establish client compatibility.
+The narrated overview illustrates a study workflow with realistic synthetic course data and scripted responses. It does not record a supported client connected to live ADAM or establish client compatibility.
 
 ## What you can ask
 

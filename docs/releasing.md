@@ -38,7 +38,15 @@ In the configured trusted publishing job, publish the reviewed artifact:
 npm publish ./adam-mcp-0.2.0.tgz --access public --registry=https://registry.npmjs.org
 ```
 
-Trusted publishing from a public GitHub repository generates provenance automatically. Verify it on the published version. This repository does not yet ship a configured publication workflow; a CI test workflow is not a trusted publisher. If initial package creation requires an interactive npm publish, use the maintainer's normal authenticated, 2FA-protected session after approval and record that provenance was not established by that path. Never put account credentials in shell arguments, source files, issues, or chat.
+Trusted publishing from a public GitHub repository generates provenance automatically. Verify it on the published version. The repository ships a manual `publish-npm.yml` workflow; npm account trust and the repository enable switch must be configured separately. If initial package creation requires an interactive npm publish, use the maintainer's normal authenticated, 2FA-protected session after approval and record that provenance was not established by that path. Never put account credentials in shell arguments, source files, issues, or chat.
+
+### Configure GitHub Actions publication
+
+1. Create the `npm-release` GitHub environment with required maintainer review and deployment restricted to `main`. Do this before enabling the workflow. Environment naming alone does not enforce review.
+2. After the first reviewed npm package exists, configure its trusted publisher: GitHub owner `Arudchayan`, repository `adam-mcp`, workflow filename `publish-npm.yml`, environment `npm-release`. Allow direct publication for this workflow. Newly created trust configurations must complete their first successful publish within the period specified by npm (currently two days); configure trust when the next release is ready.
+3. Set repository variable `NPM_PUBLISH_ENABLED=true` only after trust, environment protection and all release gates are ready. Leave it unset while preparing. No npm token secret is needed.
+4. Run **Publish npm** manually on `main`, enter the exact approved version and attest that the `SECURITY.md` checklist is complete. The workflow runs the six-platform release candidate checks, archives the tarball and evidence, waits for `npm-release` environment review, verifies source/version/checksum, publishes that tarball, and checks the published integrity and `mcpName`. A feature-branch run cannot publish.
+5. Archive the run URL and provenance, then carry out the Registry and installed-version checks below. The workflow does not assert that manual gates are complete; the maintainer and environment reviewer must confirm the recorded evidence.
 
 ## Publish MCP Registry metadata
 
