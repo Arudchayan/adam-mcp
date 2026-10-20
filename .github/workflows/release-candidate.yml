@@ -36,7 +36,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Pack the verified source and record artifact evidence
-        run: npm exec -- node scripts/prepare-release.mjs
+        run: npm run release:pack
       - uses: actions/upload-artifact@v4
         with:
           name: adam-mcp-release-candidate
