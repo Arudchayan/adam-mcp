@@ -63,6 +63,15 @@ export type AuthorizedProbeResult = {
   contentLength?: number;
 };
 
+/** CLI-only transfer sink; never part of the MCP provider/result contract. */
+export type AuthorizedStreamOptions = {
+  signal?: AbortSignal;
+  maxBytes: number;
+  timeoutMs: number;
+  onHeaders: (headers: AuthorizedProbeResult) => Promise<void>;
+  onChunk: (chunk: Uint8Array) => Promise<void>;
+};
+
 export type AdamBrowserSession = {
   /** Cheap local logout check, without launching or probing Chrome. */
   explicitlyLoggedOut?(): Promise<boolean>;
@@ -70,6 +79,7 @@ export type AdamBrowserSession = {
   open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot>;
   loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean; onProgress?: import("adam-core").ProgressReporter }): Promise<SessionStatus>;
   fetchAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedFetchResult>;
+  streamAuthorized?(url: string, options: AuthorizedStreamOptions): Promise<AuthorizedProbeResult>;
   /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
   probeAuthorized?(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedProbeResult>;
   close(): Promise<void>;

@@ -1,5 +1,6 @@
 import { Worker } from "node:worker_threads";
 import { AdamError, throwIfCancelled } from "./errors.ts";
+import { WeightedQueue } from "./weighted-queue.ts";
 
 export type PdfText = {
   pages: Array<{ page: number; text: string }>;
@@ -7,32 +8,12 @@ export type PdfText = {
   truncated: boolean;
 };
 
-let busy = false;
-const waiting: Array<() => void> = [];
+const queue = new WeightedQueue({ maxPending: 8, maxBytes: 32 * 1024 * 1024, waitMs: 30_000 });
 
 /** Isolate parser memory, elapsed time and diagnostics from the stdio server. */
 export function extractPdfText(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal?: AbortSignal): Promise<PdfText> {
   throwIfCancelled(signal);
-  return new Promise((resolve, reject) => {
-    const cancelWaiting = () => {
-      const index = waiting.indexOf(start);
-      if (index >= 0) {
-        waiting.splice(index, 1);
-        reject(new AdamError("cancelled", "Queued PDF extraction cancelled.", false));
-      }
-    };
-    const start = () => {
-      signal?.removeEventListener("abort", cancelWaiting);
-      busy = true;
-      Promise.resolve().then(() => runPdfWorker(bytes, pagesLimit, charsLimit, signal))
-        .then(resolve, reject)
-        .finally(() => { busy = false; waiting.shift()?.(); });
-    };
-    if (busy) {
-      waiting.push(start);
-      signal?.addEventListener("abort", cancelWaiting, { once: true });
-    } else start();
-  });
+  return queue.enqueue(bytes.byteLength, () => runPdfWorker(bytes, pagesLimit, charsLimit, signal), signal);
 }
 
 function runPdfWorker(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal?: AbortSignal): Promise<PdfText> {

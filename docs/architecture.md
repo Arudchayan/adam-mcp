@@ -1,5 +1,9 @@
 # Architecture
 
+The 0.3.0 source candidate adds a CLI-only local download sink (ADR 0027),
+scope-keyed discovery sharing and bounded PDF waiting demand (ADR 0028).
+No MCP tool or resource gains local filesystem write access.
+
 ```
 AI client (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code)
         │  stdio, JSON-RPC
@@ -72,6 +76,18 @@ capped at 128. Search/calendar/news accept `refresh:true` without a cursor to
 start fresh discovery while preserving existing cursors. Other reads refresh
 after a minute or server restart. Login, close and a
 logged-out status clear cached identity and pagination state.
+
+Complete walk caches and shared operations are keyed by enrolled course scope
+or the global scope, with at most 32 cached and 32 in-flight scopes. Scoped
+search/calendar/news share traversal; each new walk verifies enrollment. PDF
+parsing retains one worker, with up to eight waiting jobs, at most 32 MiB of
+waiting input and a 30-second queue deadline. Overload is a retryable error.
+
+CLI downloads stream directly to a private temporary file in an explicit existing
+directory outside Git. They have separate 256 MiB/120-second transfer limits,
+safe filenames, a digest and exclusive final-name creation via hard link. Ordinary
+failure/cancellation cleans the temporary name. They never send file bytes through
+MCP, write to ADAM or relax selected-object text approval. See [downloads](downloads.md).
 
 Discovery accepts an enrolled `courseRefId`, checked against dashboard evidence
 before scoped navigation. Snapshot results carry `snapshotAt`; item provenance

@@ -27,6 +27,9 @@ import {
   type ProgressReporter,
   type RefId,
 } from "adam-core";
+import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
+import { filenameFromContentDisposition } from "./download-metadata.ts";
+export { filenameFromContentDisposition } from "./download-metadata.ts";
 import { defaultOrigin } from "./config.ts";
 import {
   extractCatalog,
@@ -117,7 +120,6 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly clock: () => number;
   private readonly pagination: SnapshotPagination;
   private readonly walkTimeoutMs: number;
-  private livePagesFetchedAt = 0;
   private metadataExpiresAt = 0;
   /** Identity-sensitive; cleared on login() / close() (ADR 0015). */
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
@@ -127,8 +129,11 @@ export class BrowserAdamProvider implements AdamProvider {
    * PERF-1 / ADR 0015: enrolled walk memo owned by this provider instance.
    * Invalidated on login() and close() with type/file maps; cancelled/unauthorized/forbidden/stale_id walks never memoize.
    */
-  private livePagesMemo: WalkResult | undefined;
-  private livePagesInflight: SharedOperation<WalkResult> | undefined;
+  private readonly walks = new Map<string, { result: WalkResult; fetchedAt: number }>();
+  private readonly walkInflight = new Map<string, SharedOperation<WalkResult>>();
+  /** Refresh detaches reuse keys, but session invalidation must still cancel their work. */
+  private readonly ownedWalks = new Set<SharedOperation<WalkResult>>();
+  private readonly ownedPages = new Set<SharedOperation<PageSnapshot>>();
   /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
   private walkGeneration = 0;
   /**
@@ -177,11 +182,11 @@ export class BrowserAdamProvider implements AdamProvider {
    */
   private clearSessionCaches(): void {
     this.walkGeneration += 1;
-    this.livePagesMemo = undefined;
-    this.livePagesInflight?.cancel();
-    this.livePagesInflight = undefined;
+    this.walks.clear();
+    for (const operation of this.ownedWalks) operation.cancel();
+    this.walkInflight.clear();
     this.pageByUrl.clear();
-    for (const operation of this.pageInflight.values()) operation.cancel();
+    for (const operation of this.ownedPages) operation.cancel();
     this.pageInflight.clear();
     this.snapshotFetchedAt = new WeakMap();
     this.catalogBySnapshot = new WeakMap();
@@ -210,7 +215,9 @@ export class BrowserAdamProvider implements AdamProvider {
       for (const [url, page] of this.pageByUrl) {
         if (this.clock() - page.fetchedAt >= 60_000) this.pageByUrl.delete(url);
       }
-      if (this.clock() - this.livePagesFetchedAt >= 60_000) this.livePagesMemo = undefined;
+      for (const [scope, walk] of this.walks) {
+        if (this.clock() - walk.fetchedAt >= 60_000) this.walks.delete(scope);
+      }
     }
   }
 
@@ -220,8 +227,8 @@ export class BrowserAdamProvider implements AdamProvider {
     if (!options?.refresh) return;
     // Detach old work without cancelling other callers or deleting their cursors.
     this.walkGeneration += 1;
-    this.livePagesMemo = undefined;
-    this.livePagesInflight = undefined;
+    this.walks.clear();
+    this.walkInflight.clear();
     this.pageByUrl.clear();
     this.pageInflight.clear();
     this.typeByRefId.clear();
@@ -480,6 +487,16 @@ export class BrowserAdamProvider implements AdamProvider {
     throw new AdamError("not_found", `Could not fetch extractable bytes for file ${refId}.`);
   }
 
+  /** CLI only: no download method is advertised through AdamProvider or MCP. */
+  async downloadFile(refId: RefId, directory: string, options?: { signal?: AbortSignal }): Promise<LocalDownload> {
+    // Reject invalid destinations before navigating an authenticated session.
+    const destination = await downloadDirectory(directory);
+    throwIfCancelled(options?.signal);
+    await this.assertSessionEnabled(options?.signal);
+    const file = await this.getFile(refId, { type: "file", signal: options?.signal });
+    return saveLocalDownload(this.session(), file, destination, options?.signal);
+  }
+
   async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
@@ -706,33 +723,38 @@ export class BrowserAdamProvider implements AdamProvider {
 
   private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal, courseRefId?: RefId): Promise<WalkResult> {
     throwIfAborted(signal);
-    // Scoped reads reuse page caches but never borrow a global walk or its budget.
-    if (courseRefId) return this.walkLivePages(onProgress, signal, this.walkGeneration, courseRefId);
+    const scope = courseRefId ?? "all";
     // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
     // Invalidation: login() + close(). Memo hit emits no progress.
     // Cancelled / unauthorized / forbidden / stale_id walks are never memoized (ADR 0011 / 0015 / 0016).
-    if (this.livePagesMemo && this.clock() - this.livePagesFetchedAt < 60_000) {
+    const cached = this.walks.get(scope);
+    if (cached && this.clock() - cached.fetchedAt < 60_000) {
       throwIfCancelled(signal);
-      return this.livePagesMemo;
+      return cached.result;
     }
-    if (this.livePagesInflight && !this.livePagesInflight.aborted) {
-      return this.livePagesInflight.join(signal, onProgress);
+    this.walks.delete(scope);
+    const existing = this.walkInflight.get(scope);
+    if (existing && !existing.aborted) {
+      return existing.join(signal, onProgress);
     }
+    if (this.ownedWalks.size >= 32) throw new AdamError("provider_unavailable", "ADAM discovery queue is full. Retry after current discovery finishes.", true);
     const generation = this.walkGeneration;
-    const inflight = new SharedOperation((workSignal, report) => this.walkLivePages(report, workSignal, generation)
+    const inflight = new SharedOperation((workSignal, report) => this.walkLivePages(report, workSignal, generation, courseRefId)
       .then((pages) => {
         if (generation === this.walkGeneration && !workSignal.aborted && !pages.partial) {
-          this.livePagesMemo = pages;
-          this.livePagesFetchedAt = this.clock();
+          this.walks.set(scope, { result: pages, fetchedAt: this.clock() });
+          while (this.walks.size > 32) this.walks.delete(this.walks.keys().next().value!);
         }
         return pages;
       }));
     void inflight.promise.finally(() => {
-        if (this.livePagesInflight === inflight) {
-          this.livePagesInflight = undefined;
+        this.ownedWalks.delete(inflight);
+        if (this.walkInflight.get(scope) === inflight) {
+          this.walkInflight.delete(scope);
         }
       }).catch(() => undefined);
-    this.livePagesInflight = inflight;
+    this.walkInflight.set(scope, inflight);
+    this.ownedWalks.add(inflight);
     return inflight.join(signal, onProgress);
   }
 
@@ -1002,7 +1024,9 @@ export class BrowserAdamProvider implements AdamProvider {
     }
     const pending = new SharedOperation((workSignal) => this.openAuthorizedOnce(url, generation, workSignal));
     this.pageInflight.set(url, pending);
+    this.ownedPages.add(pending);
     void pending.promise.finally(() => {
+      this.ownedPages.delete(pending);
       if (this.pageInflight.get(url) === pending) {
         this.pageInflight.delete(url);
       }
@@ -1153,25 +1177,6 @@ function preferCachedFileTitle(file: FileObject, cached: FileObject | undefined)
   };
 }
 
-export function filenameFromContentDisposition(header: string | undefined): string | undefined {
-  if (!header) {
-    return undefined;
-  }
-  const star = /filename\*=(?:UTF-8''|utf-8'')([^;]+)/i.exec(header);
-  if (star?.[1]) {
-    try {
-      return decodeURIComponent(star[1].trim().replace(/^"|"$/g, "")).replace(/^.*[/\\]/, "") || undefined;
-    } catch {
-      // fall through
-    }
-  }
-  const plain = /filename="([^"]+)"|filename=([^;]+)/i.exec(header);
-  const raw = (plain?.[1] ?? plain?.[2])?.trim().replace(/^"|"$/g, "");
-  if (!raw) {
-    return undefined;
-  }
-  return raw.replace(/^.*[/\\]/, "") || undefined;
-}
 
 function filterRange(events: CalendarEvent[], from?: string, to?: string): CalendarEvent[] {
   const start = from ? Date.parse(from) : Number.NEGATIVE_INFINITY;

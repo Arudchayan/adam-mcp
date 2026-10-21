@@ -19,6 +19,14 @@ describes local desktop/CLI/IDE configuration, timeout options and the distincti
 from hosted web usage. Configuration format compatibility is not proof that a
 particular installed client supports progress, elicitation or cancellation.
 
+The 0.3.0 candidate was also checked in actual installed Codex CLI
+`0.163.0-alpha.11` on Windows using an isolated package installation and ephemeral
+configuration: session/listing, selected metadata, false-confirm refusal and the
+approved selected extraction passed. CLI downloads independently passed local
+size/digest and duplicate-preservation checks. See the
+[0.3.0 readiness record](audit/2026-10-21-v0.3.0-release-readiness.md) for scope and
+limits. This does not establish graphical approval/progress or other-client parity.
+
 ## Walkthrough to record before claiming a verified client
 
 Record client version, OS and date; validate clean configuration, sign-in/MFA,

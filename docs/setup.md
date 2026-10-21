@@ -1,5 +1,9 @@
 # Setup
 
+Source targets **0.3.0 (unreleased)**; the installation below is published 0.2.0.
+Build source for [selected local downloads](downloads.md) and the candidate read
+efficiency improvements. No 0.3.0 tag or publication is implied by source versioning.
+
 You need Node.js 22+ and Google Chrome. For the published package:
 
 ```bash

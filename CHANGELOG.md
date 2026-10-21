@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- 0.3.0 candidate: selected-file CLI download with explicit confirmation, an
+  existing destination outside Git, streaming 256 MiB/120-second limits, SHA-256,
+  safe filenames, collision preservation and temporary-file cleanup (ADR 0027).
+- Synthetic discovery benchmark for cold/large trees, scoped concurrent reads,
+  partial coverage and extraction queue pressure: `npm run benchmark:discovery`.
+
+### Changed
+
+- Course-scoped search/news/calendar share complete walks and in-flight work,
+  preserving scope/session isolation, refresh and independent cancellation (ADR 0028).
+- PDF parsing admits at most eight waiting tasks and 32 MiB of waiting input,
+  with a 30-second queue deadline and retryable overload errors.
+- Extraction and CLI saving share the credential-pinned streaming transfer loop;
+  extraction retains its 8 MiB limit. MCP adds no tools and still returns no bytes.
+
+This candidate is not published or tagged. See the [release checklist](docs/qa/v0.3.0-release-candidate.md).
+
 ## [0.2.0 npm publication] - 2026-10-21
 
 First npm publication, built from `09ebda4896ba612afc1e9a7f1a65e55871dff0d4`.

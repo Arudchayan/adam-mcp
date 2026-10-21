@@ -29,3 +29,7 @@ Do not tag GitHub/npm until all of these hold:
 13. Browser-session architecture has a review recorded in `docs/adr/`.
 14. No real student data, cookies, or private screenshots in the repo.
 15. Review the packed file list, license notices, exact version, npm ownership, and matching `mcpName` / `server.json`. Complete the [release guide](docs/releasing.md), including a packed-consumer dependency audit and an installed-client walkthrough. Archive release evidence before publishing.
+16. For 0.3.0 local CLI downloads, review ADR 0027, selected-file confirmation,
+    destination/filename confinement, exclusive final creation, temporary cleanup,
+    bounded streaming and redirect credential pinning. Record one student-selected
+    live download. This filesystem action is CLI-only; no MCP write tool is added.

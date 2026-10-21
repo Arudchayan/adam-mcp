@@ -35,7 +35,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
 | A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
-| Release tag / npm | Known | Git tag **v0.2.0** exists; **npm publish not done** (`npx` / registry install do not work yet). Path today: clone + `npm run setup`. Publish waits on [SECURITY.md](../SECURITY.md) |
+| Release tag / npm | Known | **0.2.0 published** 21 October 2026; see [publication evidence](audit/2026-10-21-npm-publication.md). Source now targets **0.3.0 (unreleased)**; [candidate checklist](qa/v0.3.0-release-candidate.md) tracks remaining gates. |
 
 ## Phase A-thin — must-ship reads still incomplete
 
@@ -96,6 +96,15 @@ Only after ToS / academic-integrity review, ADR, and host elicitation. Prefer de
 SOAP/REST on public ADAM remain unavailable per historical notes — browser session stays the live path unless Uni Basel documents otherwise.
 
 ## How to pick up work
+
+### Next release: 0.3.0 — downloads and dependable discovery
+
+- Implemented candidate: selected single-file CLI downloads (ADR 0027), bounded
+  PDF waiting demand and scope-keyed shared discovery (ADR 0028), synthetic benchmarks.
+- Pending release gates: exact-commit cross-platform CI, independent review,
+  selected-file live verification and installed-client walkthrough. No tag or publication yet.
+- Deferred: batches, metadata inventory diffs, resumable traversal, OCR and new
+  object types. Existing Phase B inventory gates remain in force.
 
 Local onboarding and read controls (ADR 0025) now include guided setup, passive
 diagnostics, portable client configuration/timeouts, clear session states,
