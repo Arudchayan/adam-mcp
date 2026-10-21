@@ -22,9 +22,19 @@ Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [A
 
 Writes (submit, forum, mail, enroll). Exam taking (`tst` denied). File bytes/base64 to the model. Generic URL fetch. Hosted HTTP MCP. Gradebook. Member gallery. OCR for scanned PDFs.
 
+### Local CLI download (0.3.0 candidate)
+
+`adam-mcp download FILE_ID --output-dir DIRECTORY --confirm` saves one selected
+file into an existing directory outside Git. This is a local filesystem action,
+not an ADAM write or MCP tool. It streams at most 256 MiB within 120 seconds;
+it returns a path and digest, never file bytes to the model. No batch or recursive
+downloads. See [ADR 0027](adr/0027-selected-local-downloads.md).
+
 ## Install
 
-After publish of `adam-mcp` 0.2.0: `npx -y adam-mcp` (or `npm install -g adam-mcp`). Clone this repo and `npm run setup` still prints host JSON and `npm run login` helpers. Do not claim the package is already on npm until published.
+Published version: `adam-mcp@0.2.0`; see the [publication record](audit/2026-10-21-npm-publication.md).
+Source targets `0.3.0`, currently unreleased. Build source to try candidate features;
+do not claim they are available in the published 0.2.0 package.
 
 ## Changes that need an ADR
 

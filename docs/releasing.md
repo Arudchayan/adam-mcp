@@ -28,14 +28,14 @@ For a local review bundle, run `npm run release:prepare`. It runs the release ch
 
 The manual **Release candidate** workflow (`.github/workflows/release-candidate.yml`) runs the complete checks on Node 22/24 across Windows, macOS, and Linux, then uploads a review bundle from the same source commit. It has read-only repository permissions and no publication credentials. Download the artifact and archive the run URL before the 30-day retention period expires. The workflow does not replace the installed-client, media, licensing, ownership, or independent-review gates.
 
-Retain the resulting tarball's filename, SHA-256, npm integrity value, exact source commit, and packed file list with the release evidence. Publish the reviewed tarball rather than rebuilding different bytes after review. For the current candidate the filename is `adam-mcp-0.2.0.tgz`; change it when the approved version changes.
+Retain the resulting tarball's filename, SHA-256, npm integrity value, exact source commit, and packed file list with the release evidence. Publish the reviewed tarball rather than rebuilding different bytes after review. For the current candidate the filename is `adam-mcp-0.3.0.tgz`; change it when the approved version changes.
 
 Prefer npm trusted publishing from a GitHub-hosted release workflow in this public repository. Configure the exact repository, workflow filename, and protected release environment in npm's trusted publisher settings. Use `contents: read` and grant `id-token: write` only to the publication job. Require environment approval, validate the approved commit, run release checks, and keep install/test jobs free of publish credentials. npm currently requires CLI 11.5.1+ and Node 22.14.0+ for trusted publishing; Node 24 LTS is suitable. Do not add a long-lived publish token to this repository.
 
 In the configured trusted publishing job, publish the reviewed artifact:
 
 ```bash
-npm publish ./adam-mcp-0.2.0.tgz --access public --registry=https://registry.npmjs.org
+npm publish ./adam-mcp-0.3.0.tgz --access public --registry=https://registry.npmjs.org
 ```
 
 Trusted publishing from a public GitHub repository generates provenance automatically. Verify it on the published version. The repository ships a manual `publish-npm.yml` workflow; npm account trust and the repository enable switch must be configured separately. If initial package creation requires an interactive npm publish, use the maintainer's normal authenticated, 2FA-protected session after approval and record that provenance was not established by that path. Never put account credentials in shell arguments, source files, issues, or chat.

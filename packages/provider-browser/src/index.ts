@@ -36,6 +36,7 @@ export { createPlaywrightSession };
 export { runLoginCli } from "./login-cli.ts";
 export { runLogoutCli } from "./logout-cli.ts";
 export { runStatusCli } from "./status-cli.ts";
+export { runDownloadCli } from "./download-cli.ts";
 export {
   clearHolderFiles,
   holderStatus,

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { AdamError, MAX_EXTRACT_BYTES } from "adam-core";
-import { boundedAuthorizedFetch } from "./bounded-fetch.ts";
+import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
 
 const origin = "https://adam.unibas.ch";
 it("HEAD probes preserve large-file metadata without reading response bytes", async () => {
@@ -77,4 +77,34 @@ it("cancels a transfer while waiting for its next streamed chunk", async () => {
   await new Promise<void>((resolve) => setImmediate(resolve));
   controller.abort();
   await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+});
+
+it("detects truncated unencoded downloads and preserves the sink's backpressure", async () => {
+  let chunks = 0;
+  await assert.rejects(boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => ({}), fetch: async () => new Response("abc", { headers: { "content-length": "4" } }),
+  }, { maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async () => { chunks++; } }), /unexpected byte count/);
+  assert.equal(chunks, 1);
+  let active = 0, completed = 0;
+  const body = new ReadableStream<Uint8Array>({ start(stream) { for (let i = 0; i < 4; i++) stream.enqueue(new Uint8Array(1)); stream.close(); } });
+  await boundedAuthorizedStream(`${origin}/file`, { origin, headers: async () => ({}), fetch: async () => new Response(body) }, {
+    maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async () => {
+      assert.equal(active++, 0);
+      await new Promise<void>((done) => setImmediate(done));
+      active--; completed++;
+    },
+  });
+  assert.equal(completed, 4);
+});
+
+it("times out a stalled download and never exposes credentials to redirect targets", async () => {
+  let headers = 0;
+  await assert.rejects(boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => { headers++; return {}; }, fetch: async (_url, options) => {
+      return new Response(new ReadableStream({ start(stream) {
+        options?.signal?.addEventListener("abort", () => stream.error(new DOMException("Aborted", "AbortError")), { once: true });
+      } }));
+    },
+  }, { maxBytes: 10, timeoutMs: 10, onHeaders: async () => {}, onChunk: async () => {} }), /timed out/);
+  assert.equal(headers, 1);
 });

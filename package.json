@@ -1,7 +1,7 @@
 {
   "name": "adam-mcp",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for University of Basel ADAM courses.",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -33,6 +33,7 @@
     "release:verify": "node scripts/verify-release-artifact.mjs",
     "test:release": "node --test scripts/verify-release-artifact.test.mjs",
     "benchmark:reads": "node --import tsx scripts/benchmark-reads.mjs",
+    "benchmark:discovery": "node --import tsx scripts/benchmark-discovery.mjs",
     "check": "npm test && npm run typecheck && npm run build && npm run test:dist && npm run audit",
     "setup": "npm run build && node packages/mcp/dist/adam-mcp.mjs setup",
     "doctor": "node packages/mcp/dist/adam-mcp.mjs doctor",

@@ -15,10 +15,17 @@ const help = spawnSync(process.execPath, [resolve(entry), "--help"], { cwd: tmpd
 assert.equal(help.status, 0);
 assert.equal(help.stdout, "");
 assert.match(help.stderr, /Usage:/);
+assert.match(help.stderr, /download FILE_ID/);
 
 const diagnosticProfile = mkdtempSync(join(tmpdir(), "adam-dist-doctor-"));
 try {
   const localEnv = { ...env, ADAM_BROWSER_PROFILE_DIR: diagnosticProfile };
+  const downloadEnv = { ...localEnv };
+  delete downloadEnv.ADAM_MCP_TEST_FIXTURE;
+  const refused = spawnSync(process.execPath, [resolve(entry), "download", "100011", "--output-dir", diagnosticProfile], { cwd: tmpdir(), env: downloadEnv, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  assert.equal(refused.status, 1);
+  assert.equal(refused.stdout, "");
+  assert.match(refused.stderr, /confirmation_required/);
   const setup = spawnSync(process.execPath, [resolve(entry), "setup", "--client", "codex"], { cwd: tmpdir(), env: localEnv, encoding: "utf8", windowsHide: true, timeout: 30_000 });
   assert.equal(setup.status, 0, setup.stderr);
   assert.match(setup.stdout, /\[mcp_servers.adam\]/);

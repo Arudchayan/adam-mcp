@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { AdamError, redactUrl, throwIfCancelled, type ProgressReporter } from "adam-core";
 import { inactiveSessionStatus } from "./session-state.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
-import { boundedAuthorizedFetch } from "./bounded-fetch.ts";
+import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
 import { waitForAdamLogin } from "./login-wait.ts";
 import { disableSession, enableSession, sessionDisabled } from "./session-disabled.ts";
 import { assertUrlAllowed, sameOrigin, urlAllowed } from "./allowlist.ts";
@@ -33,6 +33,7 @@ import { SerialQueue } from "./serial-queue.ts";
 import { throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
 import type {
   AdamBrowserSession,
+  AuthorizedStreamOptions,
   PageSnapshot,
   SessionCookie,
   SessionStatus,
@@ -436,6 +437,23 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         },
       }, signal);
     }, options?.signal);
+  }
+
+  async streamAuthorized(url: string, options: AuthorizedStreamOptions) {
+    return this.serialize(async (signal) => {
+      throwIfAborted(signal);
+      const target = this.resolveUrl(url);
+      assertUrlAllowed(target);
+      const page = await this.ensurePage({ allowResume: true });
+      throwIfAborted(signal);
+      return boundedAuthorizedStream(target, {
+        origin: this.origin,
+        headers: async (requestUrl) => {
+          const cookies = await page.context().cookies(requestUrl);
+          return { Cookie: cookies.map((cookie) => cookie.name + "=" + cookie.value).join("; ") };
+        },
+      }, { ...options, signal });
+    }, options.signal);
   }
 
   async probeAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<{

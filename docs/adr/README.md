@@ -28,3 +28,5 @@
 | [0024](0024-reliable-performant-read-lifecycle.md) | Shared cancellation, parsing reuse, bounded waiting and truthful read identity/news |
 | [0025](0025-production-onboarding-and-read-controls.md) | Local guided setup, diagnostics, session clarity and scoped read controls |
 | [0026](0026-forum-thread-navigation.md) | Construct forum thread navigation from requested IDs |
+| [0027](0027-selected-local-downloads.md) | Selected local file downloads through the CLI |
+| [0028](0028-scoped-walks-and-extraction-backpressure.md) | Scope-keyed discovery sharing and bounded PDF waiting demand |

@@ -2,7 +2,8 @@
 
 MCP server for University of Basel ADAM.
 
-Version `0.2.0`. The CLI bundles the project's workspace code; npm installs its declared runtime dependencies.
+Version `0.3.0` candidate (unreleased). The CLI bundles the project's workspace code;
+npm installs its declared runtime dependencies. Published 0.2.0 remains available:
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 
@@ -25,6 +26,14 @@ course listing. `adam-mcp doctor --client codex` checks prerequisites and passiv
 session state without launching Chrome. Restart your client and enable **adam**.
 
 Run `adam-mcp logout` to stop the local session. `--browser` is optional.
+
+The 0.3.0 candidate also supports `adam-mcp download FILE_ID --output-dir DIRECTORY
+--confirm` after building/installing the candidate. Choose one file from
+`adam_list_files` and an existing directory outside Git. This CLI-only command
+streams up to 256 MiB in 120 seconds, preserves existing files and returns a local
+path, source URL, size and digest. It adds no MCP tool and sends no file bytes to
+the model. Destination filesystems must support hard links; HTML-shaped and empty
+responses are refused. See [download details](https://github.com/Arudchayan/adam-mcp/blob/main/docs/downloads.md).
 
 Page text, file text, exercise instructions, and forum posts require approval for
 the selected object. Clients with elicitation support can request approval;

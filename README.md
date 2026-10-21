@@ -8,6 +8,10 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
+Source now targets **0.3.0 (unreleased)**. The published installation below remains
+0.2.0; candidate download and efficiency features require a source build. See the
+[candidate checklist](docs/qa/v0.3.0-release-candidate.md).
+
 ![Demo](docs/demo/demo.gif)
 
 [Watch the demo](docs/demo/adam-mcp-overview.mp4) · [Demo details](docs/demo/README.md)
@@ -82,6 +86,24 @@ other browsers.
 
 Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code, ChatGPT desktop, Codex): [docs/setup.md](docs/setup.md).
 
+### Save a selected file locally (0.3.0 source candidate)
+
+Find the file ID using `adam_list_files`, then run this command from the checkout.
+Use an existing directory outside any Git checkout:
+
+```bash
+npm run build
+node packages/mcp/dist/adam-mcp.mjs download 100011 --output-dir "D:/Study/ADAM" --confirm
+```
+
+`100011` is an example; replace it with your selected file ID. This explicitly
+saves that file to your computer without sharing its bytes with the model.
+The CLI returns its path, source URL, size and SHA-256. Duplicate names receive
+a suffix; existing files are preserved. Ctrl+C cancels the transfer. Downloads
+are limited to 256 MiB and 120 seconds; empty and HTML-shaped responses are refused.
+The destination filesystem must support hard links. This adds no MCP download
+tool and does not approve text extraction. [Details and cleanup](docs/downloads.md).
+
 ## How it works
 
 The client starts ADAM MCP as a local process and communicates over stdio. ADAM MCP reads through your dedicated Chrome session at `https://adam.unibas.ch`. Authentication stays in Chrome; no hosted MCP endpoint is provided.
@@ -122,6 +144,9 @@ For page, file-text, exercise, and forum-post reads, request the specific object
   when reached. The browser queue admits at most 32 waiting operations and limits
   waiting to 30 seconds. Cancelling a request releases its work when nobody else
   needs it; cached reads reuse navigation and parsing.
+- Candidate 0.3.0 also shares complete discovery walks within each enrolled course.
+  PDF parsing admits at most eight waiting requests and 32 MiB of waiting input;
+  queued requests expire after 30 seconds. Overload returns a retryable error.
 - Search, calendar and news accept an enrolled `courseRefId` to narrow discovery. Use `refresh: true` without a cursor for fresh results. `snapshotAt` identifies the listing snapshot; each item's provenance records when it was fetched. Partial results include coverage reasons.
 - News with a cutoff includes only items with a known timestamp. Undated news
   remains visible without a cutoff. This does not compare file inventories;
@@ -144,6 +169,7 @@ npm run typecheck
 npm run check  # tests, typecheck, build, built-package verification, dependency audit
 npm run release:check  # also verifies a clean tarball installation
 npm run benchmark:reads  # synthetic cached-read timing; no live ADAM access
+npm run benchmark:discovery  # cold/scoped/large trees and queue pressure; synthetic
 ```
 
 [CONTRIBUTING.md](CONTRIBUTING.md) · [Release guide](docs/releasing.md) · [AGENTS.md](AGENTS.md)

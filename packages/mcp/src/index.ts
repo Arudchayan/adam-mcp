@@ -13,13 +13,14 @@ export async function createServer() {
   return createAdamMcpServer(await createConfiguredProvider());
 }
 
-function commandFromArgv(argv: string[]): "setup" | "doctor" | "login" | "status" | "logout" | "session-holder" | "help" | "mcp" {
+function commandFromArgv(argv: string[]): "setup" | "doctor" | "login" | "status" | "logout" | "download" | "session-holder" | "help" | "mcp" {
   if (argv.includes("--help") || argv.includes("-h")) {
     return "help";
   }
   const positional = argv.filter((arg) => !arg.startsWith("-"));
   const command = positional[0];
   if (command === "setup" || command === "doctor") return command;
+  if (command === "download") return command;
   if (command === "help") {
     return "help";
   }
@@ -36,7 +37,7 @@ function commandFromArgv(argv: string[]): "setup" | "doctor" | "login" | "status
     return "session-holder";
   }
   if (command === undefined) return "mcp";
-  throw new AdamError("provider_unavailable", `Unknown command: ${redactText(command)}. Use login, status, logout, or --help.`, false);
+  throw new AdamError("provider_unavailable", `Unknown command: ${redactText(command)}. Use login, status, logout, download, or --help.`, false);
 }
 
 function printHelp(): void {
@@ -53,7 +54,9 @@ Usage:
   adam-mcp login --timeout-ms 120000  Limit the sign-in wait (close window or Ctrl+C to cancel)
   adam-mcp status       Check the headless ADAM session (default mirrors adam_session_status keys: loggedIn/reason/holderPid/checkedAt)
   adam-mcp status --verbose  Bug-report-only holder/profileDir detail (holder pid/generation/exe + profileDir)
-  adam-mcp logout       Stop the headless session (--purge removes the profile)`);
+  adam-mcp logout       Stop the headless session (--purge removes the profile)
+  adam-mcp download FILE_ID --output-dir DIRECTORY --confirm
+                       Save one selected file outside Git (256 MiB / 120 seconds)`);
 }
 
 async function runStdio(): Promise<void> {
@@ -87,6 +90,12 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<vo
     case "help":
       printHelp();
       return;
+    case "download": {
+      if (detectProviderName() !== "browser") throw new AdamError("provider_unavailable", "Local downloads require the browser provider.", false);
+      const { runDownloadCli } = await import("adam-provider-browser");
+      await runDownloadCli(argv.slice(argv.indexOf(command) + 1));
+      return;
+    }
     case "login": {
       const { runLoginCli } = await import("adam-provider-browser");
       await runLoginCli(undefined, argv);
