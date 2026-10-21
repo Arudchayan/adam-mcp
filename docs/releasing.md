@@ -76,6 +76,13 @@ The publisher validates the submitted metadata and npm ownership. Local identifi
 
 ## Verify the published result
 
+A successful npm publish can report that processing is still underway. The
+post-publication verifier allows up to five minutes for public metadata to appear,
+retrying temporary lookup failures while rejecting a visible integrity or MCP
+identity mismatch immediately. If that budget expires, retain the successful
+publish receipt and check public metadata again later. Never rerun publication
+of the same immutable version to recover a delayed verification step.
+
 1. Read npm metadata for the exact version and confirm ownership, repository, `mcpName`, integrity, and provenance. Match the downloaded artifact to the reviewed tarball.
 2. Install that version into a new directory outside this checkout using only production dependencies. Verify help, setup preview, passive diagnostics, and stdio initialization before trying a real client. Run the approved client walkthrough with the installed version.
 3. Look up the exact name/version in the official MCP Registry and verify its npm reference. Update pending-release wording only after these checks succeed. Publish a GitHub release/tag for the verified commit only after the security checklist is green.
