@@ -23,6 +23,7 @@ test("publication accepts the approved artifact and refuses altered bytes, versi
     const filename = "adam-mcp-0.2.0.tgz";
     await writeFile(join(temporary, ".release", filename), bytes);
     const original = { dirty: false, commit: "approved-source", package: { name: source.name, version: source.version, filename, sha256: createHash("sha256").update(bytes).digest("hex") }, registry: { name: source.mcpName, version: source.version, packages: [{ version: source.version }] } };
+    original.source = { commit: original.commit, archiveUrl: `https://github.com/Arudchayan/adam-mcp/archive/${original.commit}.tar.gz`, directions: "SOURCE.md" };
     const env = { ...process.env, npm_execpath: npmFixture, GITHUB_SHA: "approved-source", GITHUB_REF: "refs/heads/main", RELEASE_VERSION: source.version };
     const check = async (evidence, overrides = {}) => {
       await writeFile(join(temporary, ".release", "release-evidence.json"), JSON.stringify(evidence));
@@ -34,6 +35,8 @@ test("publication accepts the approved artifact and refuses altered bytes, versi
       assert.notEqual((await check(evidence)).status, 0);
     }
     assert.notEqual((await check(original, { RELEASE_VERSION: "9.9.9" })).status, 0);
+    assert.notEqual((await check({ ...original, source: { ...original.source, commit: "unrelated" } })).status, 0);
+    assert.notEqual((await check({ ...original, source: { ...original.source, archiveUrl: "https://example.com/source" } })).status, 0);
     assert.notEqual((await check(original, { GITHUB_REF: "refs/heads/unreviewed" })).status, 0);
     await writeFile(npmFixture, 'process.stdout.write("11.5.0\\n");');
     assert.notEqual((await check(original)).status, 0, "An npm version below the OIDC minimum must fail.");

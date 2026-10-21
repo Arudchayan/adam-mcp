@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { AdamError } from "adam-core";
 import { parseForumPage, resolveForumThreadUrl, threadIdFromHref } from "./forum-parse.ts";
 import { snapshotFromHtml } from "./memory-session.ts";
 
@@ -178,15 +179,29 @@ describe("parseForumPage", () => {
 });
 
 describe("resolveForumThreadUrl", () => {
-  it("never follows showUser leftover thr_pk links", () => {
+  it("constructs the fixed viewThread route from numeric identities", () => {
     const url = resolveForumThreadUrl(
       "https://adam.unibas.ch",
       "100040",
       "200001",
-      "/ilias.php?cmdClass=ilobjforumgui&cmd=showUser&ref_id=100040&thr_pk=200001&user=5",
     );
     assert.match(url, /cmd=viewThread/);
     assert.equal(/showUser/.test(url), false);
     assert.equal(threadIdFromHref(url), "200001");
+    assert.equal(url, "https://adam.unibas.ch/ilias.php?baseClass=ilrepositorygui&cmdClass=ilobjforumgui&cmd=viewThread&ref_id=100040&thr_pk=200001");
+  });
+
+  for (const id of ["", "200001x", "200001&cmd=logout", "200001#cmd=delete", "200001\n", " 200001", "2e5", "-1", "%32", "２００００１"]) {
+    it(`rejects malformed forum or thread identity ${JSON.stringify(id)}`, () => {
+      const invalid = (error: unknown) => error instanceof AdamError && error.code === "stale_id";
+      assert.throws(() => resolveForumThreadUrl("https://adam.unibas.ch", id, "200001"), invalid);
+      assert.throws(() => resolveForumThreadUrl("https://adam.unibas.ch", "100040", id), invalid);
+    });
+  }
+
+  it("rejects origins that could change the target host, path or query", () => {
+    for (const origin of ["https://example.org", "http://adam.unibas.ch", "https://adam.unibas.ch/logout.php", "https://adam.unibas.ch?cmd=logout", "https://adam.unibas.ch#marker"]) {
+      assert.throws(() => resolveForumThreadUrl(origin, "100040", "200001"), AdamError);
+    }
   });
 });

@@ -1,4 +1,4 @@
-import type { ForumPost, ForumThreadSummary } from "adam-core";
+import { AdamError, DEFAULT_ADAM_ORIGIN, type ForumPost, type ForumThreadSummary } from "adam-core";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
 export type ParsedForum = {
@@ -35,23 +35,17 @@ export function parseForumPage(snapshot: PageSnapshot): ParsedForum {
   };
 }
 
+/** Build the read-only route from requested identities, never from page-supplied hrefs. */
 export function resolveForumThreadUrl(
   origin: string,
   forumRefId: string,
   threadId: string,
-  href?: string,
 ): string {
-  const base = origin.replace(/\/$/, "");
-  if (href) {
-    const decoded = decodeHref(href);
-    try {
-      const url = new URL(decoded, `${base}/`);
-      if (url.protocol === "https:" && isThreadViewHref(url.toString()) && threadIdFromHref(url.toString()) === threadId) {
-        return url.toString();
-      }
-    } catch {
-      // Construct the viewThread URL instead of following a bad href.
-    }
+  if (!forumRefId || /[^0-9]/.test(forumRefId) || !threadId || /[^0-9]/.test(threadId)) {
+    throw new AdamError("stale_id", "Forum and thread IDs must contain only decimal digits.", false);
+  }
+  if (origin.replace(/\/$/, "") !== DEFAULT_ADAM_ORIGIN) {
+    throw new AdamError("forbidden", "Forum thread navigation requires the pinned ADAM origin.", false);
   }
   const params = new URLSearchParams({
     baseClass: "ilrepositorygui",
@@ -60,7 +54,7 @@ export function resolveForumThreadUrl(
     ref_id: forumRefId,
     thr_pk: threadId,
   });
-  return `${base}/ilias.php?${params.toString()}`;
+  return `${DEFAULT_ADAM_ORIGIN}/ilias.php?${params.toString()}`;
 }
 
 export function pageHeading(html: string): string | undefined {

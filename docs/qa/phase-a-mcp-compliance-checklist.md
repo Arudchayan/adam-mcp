@@ -12,7 +12,7 @@
 | B1 | Stdio only; no Streamable HTTP listener | `serveStdio` works; no hosted HTTP | HTTP MCP without ADR |
 | B2 | Tools + resources + prompts advertised | `tools/list`, resources (+ templates), `prompts/list` non-empty | Missing primitive class |
 | B3 | Tool I/O schemas + annotations | Zod in/out; `readOnlyHint` on reads | Missing schema / wrong hints |
-| B4 | Sensitive reads need `confirm: true` | `adam_read_page` / `adam_extract_file_text` reject without literal `true` | Succeeds without confirm |
+| B4 | Sensitive reads need student approval | `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and `adam_get_forum` with `threadId` require literal `confirm:true` or accepted boolean `confirm:true` through capability-gated elicitation (ADR 0019). Without elicitation capability, literal `true` is required. False, non-boolean, missing, declined, cancelled, or timed-out elicitation returns no bodies and makes no provider body call. Forum summaries without `threadId` need no approval. | Body read succeeds without either approval path, or a negative/unfulfilled elicitation accesses provider bodies |
 | B5 | No file bytes to model | Text + sha256 only | Bytes/base64 in result |
 | B6 | Untrusted notice on page/extract | `untrusted: true` + notice | Missing notice |
 | B7 | Stdout hygiene | stdout = JSON-RPC; logs on stderr | Log noise on stdout |

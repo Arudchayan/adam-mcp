@@ -19,6 +19,11 @@ const sha256 = createHash("sha256").update(await readFile(join(output, packed.fi
 const evidence = {
   createdAt: new Date().toISOString(),
   commit: git("rev-parse", "HEAD"),
+  source: {
+    commit: git("rev-parse", "HEAD"),
+    archiveUrl: `https://github.com/Arudchayan/adam-mcp/archive/${git("rev-parse", "HEAD")}.tar.gz`,
+    directions: "SOURCE.md",
+  },
   dirty: git("status", "--porcelain").length > 0,
   node: process.version,
   npm: execFileSync(process.execPath, [npmCli, "--version"], { encoding: "utf8", windowsHide: true }).trim(),

@@ -1,11 +1,12 @@
 # Client compatibility
 
-Updated 20 October 2026. Repository fixture/wire checks establish server behavior;
+Updated 21 October 2026. Repository fixture/wire checks establish server behavior;
 they do not establish a successful walkthrough in each real client.
 
 | Client | Local configuration | Evidence | Login and timeouts |
 | --- | --- | --- | --- |
-| Codex CLI / desktop / IDE, and compatible ChatGPT desktop surface | TOML `mcp_servers.adam` | Official local STDIO documentation; generated config and both wire modes tested. Actual version/OS walkthrough pending. | Generated 2,100-second tool timeout; CLI login fallback |
+| Codex CLI | TOML `mcp_servers.adam` | Windows, CLI 0.163.0-alpha.10.2: live metadata and selected approved read through built distribution verified; final installed-artifact and recovery checks pending. See dated review below. | Generated 2,100-second tool timeout; CLI login fallback |
+| Codex desktop / IDE and compatible ChatGPT desktop surface | TOML `mcp_servers.adam` | Generated configuration tested; separate UI walkthrough pending. | Verify host behavior; CLI login fallback |
 | Cursor | JSON `mcpServers.adam` | Configuration generation/merge tested; actual version/OS walkthrough pending | Verify client limits; prefer CLI login |
 | Claude Desktop | JSON `mcpServers.adam` | Configuration generation/merge tested; actual version/OS walkthrough pending | Verify client limits; prefer CLI login |
 | Windsurf | JSON `mcpServers.adam` | Configuration generation/merge tested; actual version/OS walkthrough pending | Verify client limits; prefer CLI login |
@@ -26,8 +27,7 @@ explicit logout, slow-read timeout and progress. Test the `confirm:true` fallbac
 and elicitation only when the client advertises it. Record outcomes rather than
 private screenshots, cookies or course bodies.
 
-Upstream CI passed on Windows/macOS/Linux with Node 20/22 for `99148fc`.
-The release candidate targets Node 22/24; its final committed changes still need
-the full CI matrix. Current package checks and remaining release gates are in the
-[release readiness review](audit/2026-10-20-release-readiness.md). Installed-client
-walkthroughs remain pending.
+The Node 22/24 Windows/macOS/Linux matrix passed for `43a4243`. Final review fixes
+and the refreshed dependency require a new exact-commit matrix. Detailed observed
+client outcomes and remaining gates are in the
+[21 October release review](audit/2026-10-21-release-review.md).
