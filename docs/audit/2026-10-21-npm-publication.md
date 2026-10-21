@@ -61,7 +61,15 @@ OIDC publication is not claimed; the first new-version publish must validate the
 connection within npm's two-day window or the trust must be recreated. Existing
 0.2.0 cannot be republished. Environment approval and release gates still apply.
 
-MCP Registry submission is pending GitHub device authorization at this point.
+The official MCP Registry publisher 1.8.1 accepted
+`io.github.Arudchayan/adam-mcp` version `0.2.0` after GitHub authentication.
+Its npm reference is `adam-mcp@0.2.0`, matching npm's published mcpName.
+The CLI reported successful publication for that exact name and version.
+Public Registry API verification remains incomplete: bounded curl and Node
+requests timed out, and the independent web fetch was unavailable. This record
+does not claim that a public API lookup or discovery client has verified the
+entry. npm publication, registry integrity and fresh npm installation were
+independently verified above. No hosted endpoint was added.
 
 Final protocol/QA follow-up reviewed this sanitized record and cleared the supported
 explicit-confirmation/CLI-login path with no remaining blocker in scope. The
