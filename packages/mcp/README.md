@@ -2,9 +2,9 @@
 
 MCP server for University of Basel ADAM.
 
-The release candidate is version `0.2.0`. npm installation is pending publication and verification. The CLI bundles the project's workspace code; npm installs its declared runtime dependencies.
+Version `0.2.0`. The CLI bundles the project's workspace code; npm installs its declared runtime dependencies.
 
-You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release. After publication:
+You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 
 ```bash
 npm install -g adam-mcp@0.2.0
@@ -44,3 +44,7 @@ Client configuration support and walkthrough evidence are recorded in the
 Maintainers: see the [release guide](https://github.com/Arudchayan/adam-mcp/blob/main/docs/releasing.md).
 
 License: GPL-3.0-or-later.
+
+Each distributed package includes `SOURCE.md` with its exact source commit,
+immutable source archive URL, and build directions. The source archive includes
+the project source, lockfile, build scripts, tests and license notices.

@@ -41,6 +41,43 @@ it("reuses initial posts only when the landed thread matches, without a second n
   assert.equal(opens, 1);
 });
 
+for (const href of [
+  "/logout.php?thr_pk=200002",
+  "/logout.php?cmd=viewThread&thr_pk=200002",
+  "/ilias.php?cmd=deleteThread&ref_id=100040&thr_pk=200002",
+  "https://example.org/ilias.php?cmd=viewThread&ref_id=100040&thr_pk=200002",
+  "/ilias.php?cmd=viewThread&ref_id=999999&thr_pk=200002",
+  "/ilias.php?%63md=logout&thr_pk=200002",
+  "/ilias.php?cmd=viewThread&%63md=deleteThread&ref_id=100040&thr_pk=200002",
+  "/ilias.php?cmd=viewThread&cmd=deleteThread&ref_id=100040&thr_pk=200002",
+  "/ilias.php?cmd=viewThread&ref_id=999999&ref_id=100040&thr_pk=200002&thr_pk=999999",
+  "/logout.php#thr_pk=200002",
+  "/ilias.php?cmd=viewThread&thr_pk=200002#cmd=logout",
+  "/goto.php?target=frm_999999_200002",
+  "./ilias.php?cmd=viewThread&ref_id=100040&thr_pk=200002&page=0",
+]) {
+  it(`never uses a source href as the authenticated thread target: ${href}`, async () => {
+    const opened: string[] = [];
+    const listing = `<main><h1>Forum</h1><h4 class="il-item-title"><a href="${href.replaceAll("&", "&amp;")}">Thread B</a></h4><a href="/logout.php">Abmelden</a></main>`;
+    const provider = createBrowserProvider({ session: createMemorySession({
+      [forumUrl]: snapshotFromHtml(forumUrl, "Forum", listing, "Forum Thread B Abmelden"),
+      [threadUrl("200002")]: snapshot(threadUrl("200002"), "Thread B"),
+    }, { onOpen: (url) => opened.push(url) }) });
+    const forum = await provider.getForum("100040", { threadId: "200002" });
+    assert.equal(forum.selectedThread?.posts[0]?.body, "Body of Thread B");
+    assert.deepEqual(opened, [forumUrl, threadUrl("200002")]);
+  });
+}
+
+for (const [refId, threadId] of [["100040", ""], ["100040", "200002&cmd=logout"], ["100040", "200002\n"], ["100040&cmd=logout", "200002"]]) {
+  it(`rejects malformed requested forum/thread IDs before opening: ${JSON.stringify([refId, threadId])}`, async () => {
+    const opened: string[] = [];
+    const provider = createBrowserProvider({ session: createMemorySession({ [forumUrl]: snapshot(forumUrl, "Forum") }, { onOpen: (url) => opened.push(url) }) });
+    await assert.rejects(() => provider.getForum(refId!, { threadId }), (error: unknown) => error instanceof AdamError && error.code === "stale_id");
+    assert.deepEqual(opened, []);
+  });
+}
+
 const courseUrl = `${origin}/go/crs/100001`;
 const home = snapshotFromHtml(`${origin}/ilias.php?baseClass=ilDashboardGUI`, "Dashboard", '<main><a href="/go/crs/100001">Course</a></main>', "Dashboard Course Abmelden");
 function newsProvider(html: string) {

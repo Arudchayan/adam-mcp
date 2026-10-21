@@ -11,8 +11,11 @@ Copyright Microsoft Corporation
 Licensed under the Apache License, Version 2.0
 https://github.com/microsoft/playwright
 
-@modelcontextprotocol/server and related MCP TypeScript packages
-Licensed under the MIT License
+@modelcontextprotocol/server and @modelcontextprotocol/core 2.3.1
+Package metadata: Apache-2.0. Upstream LICENSE retains MIT terms for
+contributions awaiting relicensing consent; documentation has separate
+CC-BY-4.0 terms. See the LICENSE included with each dependency.
+https://github.com/modelcontextprotocol/typescript-sdk
 
 Zod
 Licensed under the MIT License

@@ -20,7 +20,8 @@
     "dist",
     "README.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "SOURCE.md"
   ],
   "exports": {
     ".": "./dist/adam-mcp.mjs"
@@ -46,7 +47,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.3.1",
     "pdfjs-dist": "4.10.38",
     "playwright-core": "^1.55.0",
     "smol-toml": "1.9.1",

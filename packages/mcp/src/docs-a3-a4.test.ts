@@ -78,14 +78,14 @@ describe("A4 pin SDK/protocol", () => {
     DocsSnapshot.mustInclude("docs/architecture.md", [
       "@modelcontextprotocol/server",
       "2.x",
-      "^2.0.0",
+      "^2.3.1",
       "2025-03-26",
       "2026-07-28",
     ]);
     const pkg = JSON.parse(DocsSnapshot.read("packages/mcp/package.json")) as {
       dependencies?: Record<string, string>;
     };
-    assert.equal(pkg.dependencies?.["@modelcontextprotocol/server"], "^2.0.0");
+    assert.equal(pkg.dependencies?.["@modelcontextprotocol/server"], "^2.3.1");
     const installed = require(
       resolve(repoRoot, "node_modules/@modelcontextprotocol/server/package.json"),
     ) as { version: string };

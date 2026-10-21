@@ -30,11 +30,15 @@ async function npm(args, cwd) {
 try {
   const packed = await npm(["pack", "-w", "adam-mcp", "--pack-destination", temporary, "--json"], root);
   const [manifest] = JSON.parse(packed.stdout);
-  for (const required of ["dist/adam-mcp.mjs", "README.md", "LICENSE", "NOTICE", "package.json"]) {
+  for (const required of ["dist/adam-mcp.mjs", "README.md", "LICENSE", "NOTICE", "SOURCE.md", "package.json"]) {
     assert.ok(manifest.files.some((file) => file.path === required), `Package is missing ${required}.`);
   }
   assert.ok(manifest.files.some((file) => file.path === "dist/pdf-extract-worker.mjs"));
-  assert.ok(manifest.files.every((file) => /^(?:dist\/[^/]+\.mjs|README\.md|LICENSE|NOTICE|package\.json)$/.test(file.path)), "Package contains unexpected files.");
+  assert.ok(manifest.files.every((file) => /^(?:dist\/[^/]+\.mjs|README\.md|LICENSE|NOTICE|SOURCE\.md|package\.json)$/.test(file.path)), "Package contains unexpected files.");
+  const revision = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })).stdout.trim();
+  const sourceDirections = await readFile(join(root, "packages/mcp/SOURCE.md"), "utf8");
+  assert.ok(sourceDirections.includes(`Source commit: ${revision}`));
+  assert.ok(sourceDirections.includes(`https://github.com/Arudchayan/adam-mcp/archive/${revision}.tar.gz`));
   await mkdir(consumer);
   await writeFile(join(consumer, "package.json"), JSON.stringify({ name: "adam-clean-consumer", private: true, type: "module" }));
   await npm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", join(temporary, manifest.filename)], consumer);
@@ -42,6 +46,7 @@ try {
   assert.equal(installed.mcpName, registry.name);
   assert.equal(installed.version, sourcePackage.version);
   assert.match(installed.bin["adam-mcp"], /^(?:\.\/)?dist\/adam-mcp\.mjs$/);
+  assert.equal(await readFile(join(consumer, "node_modules/adam-mcp/SOURCE.md"), "utf8"), sourceDirections);
   // The consumer resolves published dependency ranges without the repository lockfile.
   // Audit that dependency tree as well as the locked development workspace.
   const audited = await npm(["audit", "--omit=dev", "--audit-level=high"], consumer);

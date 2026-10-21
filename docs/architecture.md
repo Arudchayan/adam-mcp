@@ -23,7 +23,7 @@ Stdout is MCP only. Logs go to stderr.
 
 ## SDK / protocol pin (A4)
 
-- **SDK:** `@modelcontextprotocol/server` **2.x** — `packages/mcp` depends on `^2.0.0` (resolved 2.0.0 in lockfile).
+- **SDK:** `@modelcontextprotocol/server` **2.x** — `packages/mcp` depends on `^2.3.1` (resolved 2.3.1 in lockfile).
 - **Protocol era:** MCP specification **2025-03-26** / **2026-07-28** family (stdio JSON-RPC; tools, resources, prompts). Do not adopt deprecated Sampling, Roots, or protocol Logging; do not put MCP OAuth on stdio.
 
 Bump the pin in this file when changing the server dependency major or the negotiated protocol era.

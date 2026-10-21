@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Packaged source directions identify the exact public source archive, commit and rebuild commands; release evidence verifies the same source identity
+- Updated the MCP SDK to 2.3.1 and its Apache-2.0 notice after newly published HTTP security advisories; this project ships local stdio only
 - Rebuilt the narrated overview with an eight-scene study workflow, realistic synthetic examples, a new visual design and synchronized captions; replaced legacy Inspector narration and captions
 - Added a manually triggered npm OIDC publication workflow, gated by six-platform verification, an explicit enable switch, approved version, main branch and release environment; artifact checks reject changed bytes and source mismatches
 - Release preparation produces a review tarball, SHA-256 checksum and source/package evidence; the manual release-candidate workflow requires six-platform verification before artifact upload
-- Demo narration sources describe available results and disclose sharing returned text with the chosen model provider; existing video exports still require rebuilding and review
+- Demo narration and rebuilt exports describe available results and disclose sharing returned text with the chosen model provider
 - Public documentation uses neutral demo names, explains synthetic demo content, and distinguishes generated client configuration from verified client walkthroughs
 - Minimum Node.js version is 22; CI targets Node 22 and 24 on Windows, macOS, and Linux
 - npm publication runs the complete release checks; packed-package verification requires license/readme/CLI files and matching MCP Registry ownership and versions
@@ -39,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Forum thread reads discard source navigation links and construct the pinned view route from validated IDs before opening a page
+- Approval integration checks exercise registered handlers across both protocol paths, including denied, cancelled and unanswered approval requests
 - Scoped discovery respects an honestly empty dashboard even if parsed course links leak; diagnostics reject a regular file used as the Chrome profile directory
 - Mocked holder-start races prime the real runner identity before short timers and settle all queued starts before cleanup, preventing Windows CI cleanup races without weakening runtime PID checks
 

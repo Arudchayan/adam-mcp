@@ -516,6 +516,10 @@ export class BrowserAdamProvider implements AdamProvider {
     options?: ObjectOpenOptions & { threadId?: string },
   ): Promise<ForumObject> {
     throwIfCancelled(options?.signal);
+    // Validate before any authenticated navigation, including opening the overview.
+    const threadUrl = options?.threadId !== undefined
+      ? resolveForumThreadUrl(this.origin, refId, options.threadId)
+      : undefined;
     await this.assertSessionEnabled(options?.signal);
     // Fail-closed on client type hint: wrong hint must not return forum posts/meta.
     if (options?.type !== undefined && options.type !== "frm") {
@@ -547,14 +551,8 @@ export class BrowserAdamProvider implements AdamProvider {
     let posts = threadIdFromHref(snapshot.url) === options.threadId ? parsed.posts : [];
     let threadTitle = threads.find((thread) => thread.threadId === options.threadId)?.title;
     if (posts.length === 0) {
-      const threadUrl = resolveForumThreadUrl(
-        this.origin,
-        refId,
-        options.threadId,
-        parsed.threadHrefs[options.threadId],
-      );
       try {
-        const threadSnapshot = await this.openAuthorized(threadUrl, options.signal);
+        const threadSnapshot = await this.openAuthorized(threadUrl!, options.signal);
         if (parseAdamRef(threadSnapshot.url)?.refId !== refId || threadIdFromHref(threadSnapshot.url) !== options.threadId) {
           throw new AdamError("stale_id", "ADAM opened a different or unidentified forum thread. Refresh the thread listing and retry.", false);
         }

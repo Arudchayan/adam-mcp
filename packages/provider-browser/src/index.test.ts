@@ -20,7 +20,7 @@ import {
   LISTING_EMPTY_NOTICE,
   LISTING_UNKNOWN_NOTICE,
 } from "./extract.ts";
-import { parseForumPage, resolveForumThreadUrl } from "./forum-parse.ts";
+import { resolveForumThreadUrl } from "./forum-parse.ts";
 import { shouldProbeOrigin, mergeListingProbes, classifyStatus } from "./playwright-session.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
@@ -2000,7 +2000,6 @@ describe("Phase B getForum browser fail-closed", () => {
       "https://adam.unibas.ch",
       "100040",
       "200001",
-      parseForumPage(listing).threadHrefs["200001"],
     );
     const provider = createBrowserProvider({
       origin: "https://adam.unibas.ch",

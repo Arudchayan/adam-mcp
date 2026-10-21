@@ -47,7 +47,7 @@
 | B1 | Stdio only; no Streamable HTTP listener | serveStdio works; no hosted HTTP | HTTP MCP without ADR | Covered in stdio/server suites | Assert no HTTP listener in spawn tests |
 | B2 | Tools + resources + prompts advertised | tools/list, resources (+ templates), prompts/list non-empty | Missing primitive class | Partial — extend list assertions | Add full three-primitive list smoke |
 | B3 | Tool I/O schemas + annotations | Zod in/out; readOnlyHint on reads | Missing schema / wrong hints | Partial | Assert annotations on read tools |
-| B4 | Sensitive reads need confirm: true | adam_read_page / adam_extract_file_text reject without literal true | Succeeds without confirm | Covered — stdio RPC reject omit/false + success with confirm:true; ConfirmGate in handlers | Keep RPC + schema regression |
+| B4 | Sensitive reads need student approval | adam_read_page, adam_extract_file_text, adam_get_exercise, and adam_get_forum with threadId require literal confirm:true or accepted boolean confirm:true via capability-gated elicitation (ADR 0019). Without capability, literal true is required. Negative/unfulfilled elicitation returns no bodies and makes no provider body call; forum summaries need no approval. | Body read succeeds without either approval path, or negative/unfulfilled elicitation accesses provider bodies | Covered — stdio fallback RPC; elicitation-integration.test.ts drives actual SDK handler re-entry over legacy 2025-11-25 in-memory transport and modern 2026-07-28 fetch-shaped HTTP dispatch, with provider spies and sentinel bodies for all four routes: boolean true/false, string true, missing boolean, decline/cancel, no-capability fallback, legacy timeout, modern empty retry, forum summaries | Keep RPC + schema + capable-host integration regression; these are offline SDK tests, not live-host certification |
 | B5 | No file bytes to model | Text + sha256 only | Bytes/base64 in result | Covered | Keep regression on extract result shape |
 | B6 | Untrusted notice on page/extract | untrusted: true + notice string | Missing notice | Covered — stdio + server fixture asserts | Assert untrusted + notice on page/extract tools |
 | B7 | Stdout hygiene | stdout = JSON-RPC only; logs on stderr | Log noise on stdout | Covered in stdio tests | Keep spawn hygiene asserts |
@@ -116,7 +116,7 @@ Track until green on main under fixture:
 
 - [x] **B6** — untrusted notice on page/extract
 - [x] **B10** — tst denied / fail-closed
-- [x] **B4** — sensitive reads RPC require confirm: true
+- [x] **B4** — sensitive reads require literal confirm:true or accepted boolean approval through capable-host elicitation; incapable-host fallback still requires literal true. Offline SDK integration covers all four body routes; legacy timeout uses a shortened test-instance SDK timeout, while modern fulfilment/timeouts belong to the host and empty retry grants no access.
 - [x] **B11** — no deprecated primitives (Sampling / Roots / MCP Logging client API)
 - [x] **B12** — no MCP OAuth on stdio
 - [x] **A1** — resource links in tool results (`adam://` + HTTPS)
