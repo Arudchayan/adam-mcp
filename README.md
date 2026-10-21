@@ -28,33 +28,39 @@ Answers include canonical ADAM URLs (`https://adam.unibas.ch/go/...`).
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 
-Install from this repository today. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
+Install the published package. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
 
 ```bash
-git clone https://github.com/Arudchayan/adam-mcp.git
-cd adam-mcp
-npm install
-npm run setup -- --client codex --write --login
+npm install -g adam-mcp@0.2.0
+adam-mcp setup --client codex --write --login
 ```
 
 Replace `codex` with `cursor`, `claude-desktop`, `windsurf`, or `vscode`. For VS Code, supply `--output` with the intended workspace's `.vscode/mcp.json` path. Restart your client, enable **adam**, then ask: **What courses am I in? Include their ADAM links.**
 
-Preview without changing settings: `npm run setup -- --client codex`. Diagnose a connection: `npm run doctor -- --client codex`. Credentials stay in the Chrome sign-in window. Setup never asks for them in the terminal or chat.
+Preview without changing settings: `adam-mcp setup --client codex`. Diagnose a connection: `adam-mcp doctor --client codex`. Credentials stay in the Chrome sign-in window. Setup never asks for them in the terminal or chat.
 
 See [client compatibility](docs/client-compatibility.md) for what has been verified and [the setup guide](docs/setup.md) for manual configuration, backups, and recovery.
 
-### npm installation (pending release)
+### Run without a global install
 
-The package ships a self-contained CLI. Once a reviewed version is published:
+The [published package](https://www.npmjs.com/package/adam-mcp) ships a self-contained CLI:
 
 ```bash
 npx -y adam-mcp@0.2.0
-# or
-npm install -g adam-mcp@0.2.0
-adam-mcp
 ```
 
-After publication, guided client configuration will be available with `adam-mcp setup --client codex --write --login`. This signs in through Chrome and checks the course listing. Registry installation has not yet been verified. See the [release guide](docs/releasing.md) for publication gates.
+The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-10-21-npm-publication.md) for source, integrity, client evidence and limits.
+
+### Build from source
+
+```bash
+git clone https://github.com/Arudchayan/adam-mcp.git
+cd adam-mcp
+npm ci
+npm run setup -- --client codex --write --login
+```
+
+The repository commands below also work from a source checkout. Installed users can use `adam-mcp login`, `adam-mcp status`, and `adam-mcp logout` directly.
 
 ### Session management
 
