@@ -8,7 +8,7 @@ Every item in [SECURITY.md](../SECURITY.md#publish-checklist) must be satisfied 
 
 1. Refresh a clean checkout using `git pull --ff-only`. Resolve local changes deliberately. Install the committed dependency tree with `npm ci` on a supported Node.js LTS release. This candidate requires Node.js 22 or later; CI covers Node 22 and 24 on Windows, macOS, and Linux.
 2. Check npm ownership and version availability with `npm view adam-mcp name version maintainers repository --json --registry=https://registry.npmjs.org` and authenticated account access. A missing package does not prove that its name can be registered. If the name is unavailable, choose a maintainer-owned scope and update both the package and Registry identifiers before publication.
-3. Select the version deliberately. Keep the root package, CLI package, lockfile, server-reported version, package README, changelog, and both version fields in `server.json` consistent. Do not overwrite an existing npm version. This candidate retains `0.2.0`; publication availability has not been established.
+3. Select the version deliberately. Keep the root package, CLI package, lockfile, server-reported version, package README, changelog, and both version fields in `server.json` consistent. Do not overwrite an existing npm version. Version `0.2.0` was published on 21 October 2026; future releases must select a new version.
 4. Require the full CI matrix on the release commit and run `npm run release:check`. This runs the synthetic/scrubbed test suite, strict typechecking, build, stdio smoke checks, locked production dependency audit, and a fresh tarball installation with a separate consumer dependency audit. Audits need registry access; a network failure is an incomplete check, not a clean result. Inspect development dependencies separately with `npm audit` and review any findings.
 5. Review package contents and licensing. Run `npm pack -w adam-mcp --dry-run --json` after building. Only distribution modules, the package manifest, README, LICENSE, NOTICE and generated SOURCE.md belong in the tarball. SOURCE.md identifies the exact source commit, immutable public archive and rebuild directions; verify the archive includes the source, lockfile and build scripts. Release evidence binds that archive to the release commit. Inspect bundled dependency notices and retain corresponding source for GPL distribution. No profiles, credentials, captures, fixtures, recordings, test files, or workspace-only dependency references may become production dependencies.
 6. Record a walkthrough in an installed MCP client: version/OS, setup, Chrome sign-in, course listing, one student-selected approved read, refusal/cancellation, restart, expired-session recovery, and logout. Use [the compatibility checklist](client-compatibility.md). Fixture and wire tests cannot establish real-client behavior. Live body reads still require approval for that selected object.
@@ -41,6 +41,19 @@ npm publish ./adam-mcp-0.2.0.tgz --access public --registry=https://registry.npm
 Trusted publishing from a public GitHub repository generates provenance automatically. Verify it on the published version. The repository ships a manual `publish-npm.yml` workflow; npm account trust and the repository enable switch must be configured separately. If initial package creation requires an interactive npm publish, use the maintainer's normal authenticated, 2FA-protected session after approval and record that provenance was not established by that path. Never put account credentials in shell arguments, source files, issues, or chat.
 
 ### Configure GitHub Actions publication
+
+The `npm-release` environment, matching npm trusted publisher and repository enable
+switch were configured after the first npm publication on 21 October 2026. The
+first release used interactive 2FA, so it has no GitHub OIDC provenance. A new
+trusted publisher must complete a successful new-version publication within two
+days or be recreated; configuring trust does not prove a successful OIDC run.
+Verify the connection is still valid before the next release. Existing version
+0.2.0 cannot be published again.
+
+The npm CLI also supports configuring trust with `npm trust github adam-mcp
+--file publish-npm.yml --repository Arudchayan/adam-mcp --environment npm-release
+--allow-publish --yes`. This requires the maintainer's interactive 2FA. Do not
+create a token to bypass it.
 
 1. Create the `npm-release` GitHub environment with required maintainer review and deployment restricted to `main`. Do this before enabling the workflow. Environment naming alone does not enforce review.
 2. After the first reviewed npm package exists, configure its trusted publisher: GitHub owner `Arudchayan`, repository `adam-mcp`, workflow filename `publish-npm.yml`, environment `npm-release`. Allow direct publication for this workflow. Newly created trust configurations must complete their first successful publish within the period specified by npm (currently two days); configure trust when the next release is ready.

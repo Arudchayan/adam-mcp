@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0 npm publication] - 2026-10-21
+
+First npm publication, built from `09ebda4896ba612afc1e9a7f1a65e55871dff0d4`.
+This follows the September repository release below. The published artifact has
+independent agent review, exact-commit CI, installed-client evidence and immutable
+source directions; see the [publication record](docs/audit/2026-10-21-npm-publication.md).
+
 ### Changed
 
 - Packaged source directions identify the exact public source archive, commit and rebuild commands; release evidence verifies the same source identity

@@ -5,7 +5,7 @@ they do not establish a successful walkthrough in each real client.
 
 | Client | Local configuration | Evidence | Login and timeouts |
 | --- | --- | --- | --- |
-| Codex CLI | TOML `mcp_servers.adam` | Windows, CLI 0.163.0-alpha.10.2: live metadata and selected approved read through built distribution verified; final installed-artifact and recovery checks pending. See dated review below. | Generated 2,100-second tool timeout; CLI login fallback |
+| Codex CLI | TOML `mcp_servers.adam` | Windows, CLI 0.163.0-alpha.11: exact installed release tarball verified for sign-in/recovery, listing, selected approved read, refusal, host timeout, restart and logout. Graphical approval/progress UI remains unverified. | Generated 2,100-second tool timeout; CLI login fallback; deliberately shortened host timeout observed |
 | Codex desktop / IDE and compatible ChatGPT desktop surface | TOML `mcp_servers.adam` | Generated configuration tested; separate UI walkthrough pending. | Verify host behavior; CLI login fallback |
 | Cursor | JSON `mcpServers.adam` | Configuration generation/merge tested; actual version/OS walkthrough pending | Verify client limits; prefer CLI login |
 | Claude Desktop | JSON `mcpServers.adam` | Configuration generation/merge tested; actual version/OS walkthrough pending | Verify client limits; prefer CLI login |
@@ -27,7 +27,8 @@ explicit logout, slow-read timeout and progress. Test the `confirm:true` fallbac
 and elicitation only when the client advertises it. Record outcomes rather than
 private screenshots, cookies or course bodies.
 
-The Node 22/24 Windows/macOS/Linux matrix passed for `43a4243`. Final review fixes
-and the refreshed dependency require a new exact-commit matrix. Detailed observed
-client outcomes and remaining gates are in the
-[21 October release review](audit/2026-10-21-release-review.md).
+The Node 22/24 Windows/macOS/Linux matrix and release-candidate workflow passed
+for npm source `09ebda4`. Detailed client outcomes, review scope, artifact identity
+and UI/expiry limits are retained in the
+[publication record](audit/2026-10-21-npm-publication.md). Earlier dated reviews
+record preparation states and are historical evidence.
