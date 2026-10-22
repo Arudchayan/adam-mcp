@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { verifyPublishedPackage } from "./published-package.mjs";
 
 const script = new URL("./verify-release-artifact.mjs", import.meta.url);
 test("publication accepts the approved artifact and refuses altered bytes, versions, source and dirty trees", async () => {
@@ -47,4 +48,49 @@ test("publication accepts the approved artifact and refuses altered bytes, versi
     assert.equal(resolve(dirname(temporary)), resolve(tmpdir()));
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+const expected = { integrity: "sha512-reviewed", mcpName: "io.github.test/server" };
+const visible = () => Response.json({ dist: { integrity: expected.integrity }, mcpName: expected.mcpName });
+test("published verification waits for registry propagation without republishing", async () => {
+  let requests = 0, waits = 0;
+  await verifyPublishedPackage("https://registry.npmjs.org/example/1.0.0", expected, {
+    request: async () => ++requests < 3 ? new Response(null, { status: 404 }) : visible(),
+    wait: async () => { waits++; }, maxAttempts: 3,
+  });
+  assert.equal(requests, 3); assert.equal(waits, 2);
+});
+
+test("published verification tolerates temporary server/network failures", async () => {
+  let requests = 0;
+  await verifyPublishedPackage("https://registry.npmjs.org/example/1.0.0", expected, {
+    request: async () => { if (++requests === 1) throw new TypeError("synthetic network failure"); return requests === 2 ? new Response(null, { status: 503 }) : visible(); },
+    wait: async () => {}, maxAttempts: 3,
+  });
+  assert.equal(requests, 3);
+});
+
+test("published integrity and authentication failures are never retried", async () => {
+  for (const response of [new Response(null, { status: 403 }), Response.json({ dist: { integrity: "sha512-changed" }, mcpName: expected.mcpName })]) {
+    let requests = 0;
+    await assert.rejects(verifyPublishedPackage("https://registry.npmjs.org/example/1.0.0", expected, {
+      request: async () => { requests++; return response; }, wait: async () => assert.fail("must not retry"),
+    }));
+    assert.equal(requests, 1);
+  }
+});
+
+test("published lookup has both an attempt bound and elapsed deadline", async () => {
+  let requests = 0;
+  await assert.rejects(verifyPublishedPackage("https://registry.npmjs.org/example/1.0.0", expected, {
+    request: async () => { requests++; return new Response(null, { status: 404 }); }, wait: async () => {}, maxAttempts: 2,
+  }), /do not republish/);
+  assert.equal(requests, 2);
+  let time = 0;
+  requests = 0;
+  await assert.rejects(verifyPublishedPackage("https://registry.npmjs.org/example/1.0.0", expected, {
+    request: async () => { requests++; return new Response(null, { status: 404 }); }, clock: () => time,
+    wait: async (ms) => { time += ms; }, maxWaitMs: 10, retryDelayMs: 10,
+  }), /lookup budget/);
+  assert.equal(requests, 1);
 });

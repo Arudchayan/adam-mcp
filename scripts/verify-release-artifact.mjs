@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
+import { verifyPublishedPackage } from "./published-package.mjs";
 
 const evidence = JSON.parse(await readFile(".release/release-evidence.json", "utf8"));
 const pkg = evidence.package;
@@ -20,11 +21,9 @@ assert.equal(evidence.registry.version, pkg.version);
 assert.equal(evidence.registry.packages[0].version, pkg.version);
 assert.equal(createHash("sha256").update(await readFile(`.release/${pkg.filename}`)).digest("hex"), pkg.sha256);
 if (process.argv.includes("--published")) {
-  const response = await fetch(`https://registry.npmjs.org/${pkg.name}/${pkg.version}`);
-  assert.ok(response.ok, `Published version lookup returned ${response.status}.`);
-  const published = await response.json();
-  assert.equal(published.dist.integrity, pkg.integrity);
-  assert.equal(published.mcpName, evidence.registry.name);
+  await verifyPublishedPackage(`https://registry.npmjs.org/${pkg.name}/${pkg.version}`, {
+    integrity: pkg.integrity, mcpName: evidence.registry.name,
+  });
   console.error("Published npm version and integrity match the reviewed artifact.");
 } else {
   assert.equal(pkg.version, process.env.RELEASE_VERSION, "Requested version must match the tarball.");
