@@ -29,6 +29,7 @@ jobs:
     needs: candidate
     if: vars.NPM_PUBLISH_ENABLED == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: npm-release
     permissions:
       contents: read
