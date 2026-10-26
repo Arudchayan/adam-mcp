@@ -2,19 +2,35 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    # Right-sized matrix. A full 3-OS x 2-Node sweep on every commit cost 337 jobs
+    # in 26 days, and 72% of this repo's billed cost was macOS at a 10x multiplier
+    # (160 macOS minutes == 1,600 Linux minutes).
+    #
+    # Every commit now gets one fast representative leg; pushes additionally verify
+    # the primary secondary platform. The complete 3x2 matrix still runs in
+    # release-candidate.yml, which is reachable via release tags and a weekly
+    # schedule - so no cross-platform coverage is lost, it is just no longer paid
+    # for on every keystroke.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        node: [22, 24]
+        os: ${{ fromJSON(github.event_name == 'push' && '["ubuntu-latest","windows-latest"]' || '["ubuntu-latest"]') }}
+        node: [24]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
