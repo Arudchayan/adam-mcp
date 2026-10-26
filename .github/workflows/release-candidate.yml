@@ -3,6 +3,13 @@ name: Release candidate
 on:
   workflow_dispatch:
   workflow_call:
+  # Home of the exhaustive 3-OS x 2-Node cross-platform sweep, so that
+  # per-commit CI can stay small without losing coverage. Runs on every
+  # release tag and on a weekly schedule.
+  push:
+    tags: ['v*']
+  schedule:
+    - cron: '0 3 * * 1'
 
 permissions:
   contents: read
