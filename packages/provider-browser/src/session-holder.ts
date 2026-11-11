@@ -1,7 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { readFileSync, readlinkSync } from "node:fs";
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -9,6 +8,7 @@ import { AdamError, throwIfCancelled } from "adam-core";
 import { chromium, type BrowserContext } from "playwright-core";
 import { assertUrlAllowed } from "./allowlist.ts";
 import { localCdpEndpoint, parseDevToolsActivePort } from "./cdp.ts";
+import { lifecycleOwnsGeneration, revokeHolderGeneration, withHolderLifecycle, withHolderMutation } from "./holder-lock.ts";
 import { defaultOrigin, defaultProfileDir } from "./config.ts";
 import { attachDownloadGuard, CHROME_LAUNCH_POLICY, chromeLaunchArgs } from "./download-guard.ts";
 import { isLoggedInSnapshot } from "./extract.ts";
@@ -57,14 +57,28 @@ export type HolderRecord = {
   startedAt: string;
   verifiedAt: string;
   origin: string;
+  /** New holders must acknowledge launch settlement before pending cleanup. */
+  launchPending?: boolean;
 };
+
+function holderStoppedPath(profileDir: string, generation: string): string {
+  if (!/^[a-f0-9-]{36}$/.test(generation)) throw new Error("Invalid session generation");
+  return join(profileDir, `session-stopped-${generation}.json`);
+}
+
+async function pendingLaunchStopped(profileDir: string, record: HolderRecord): Promise<boolean> {
+  if (!record.launchPending) return true;
+  try { return await readFile(holderStoppedPath(profileDir, record.generation), "utf8") === record.generation; }
+  catch { return false; }
+}
 
 export function holderRecordPath(profileDir = defaultProfileDir()): string {
   return join(profileDir, HOLDER_RECORD_FILE);
 }
 
-export function holderSeedPath(profileDir = defaultProfileDir()): string {
-  return join(profileDir, HOLDER_SEED_FILE);
+export function holderSeedPath(profileDir = defaultProfileDir(), generation?: string): string {
+  if (generation !== undefined && !/^[a-f0-9-]{36}$/.test(generation)) throw new Error("Invalid session generation");
+  return join(profileDir, generation ? `session-seed-${generation}.json` : HOLDER_SEED_FILE);
 }
 
 export function devToolsActivePortPath(profileDir = defaultProfileDir()): string {
@@ -301,8 +315,36 @@ async function holderRecordFilePresent(profileDir: string): Promise<boolean> {
 }
 
 export async function clearHolderFiles(profileDir = defaultProfileDir()): Promise<void> {
-  await rm(holderRecordPath(profileDir), { force: true }).catch(() => undefined);
-  await rm(holderSeedPath(profileDir), { force: true }).catch(() => undefined);
+  await withHolderLifecycle(profileDir, async () => {
+    const record = await readHolderRecord(profileDir);
+    if ((record && isBoundHolderAlive(record)) || await chromeOrCdpStillAlive(profileDir, record)) {
+      throw new AdamError("provider_unavailable", "The ADAM session is still running. Use logout before clearing session metadata.", false);
+    }
+    await clearObservedHolderFiles(profileDir);
+  });
+}
+
+export async function assertHolderLaunchSettled(profileDir: string): Promise<void> {
+  if ((await readHolderRecord(profileDir))?.launchPending) {
+    throw new AdamError("provider_unavailable", "A prior ADAM browser launch is pending or requires recovery. Do not attach or resume until it has verified or shut down.", false);
+  }
+}
+
+/** Caller holds the lifecycle claim, or is passive status cleanup. */
+async function clearObservedHolderFiles(profileDir: string, expected?: string): Promise<void> {
+  const observed = expected ?? await readFile(holderRecordPath(profileDir), "utf8").catch(() => undefined);
+  await withHolderMutation(profileDir, async () => {
+    const current = await readFile(holderRecordPath(profileDir), "utf8").catch(() => undefined);
+    if (observed !== undefined && current === observed) {
+      let parsed: Partial<HolderRecord> | undefined;
+      try { parsed = JSON.parse(current) as Partial<HolderRecord>; } catch { /* Stale malformed record. */ }
+      if (parsed && isValidHolderRecord(parsed) && !(await pendingLaunchStopped(profileDir, parsed))) return;
+      await rm(holderRecordPath(profileDir), { force: true });
+      if (parsed?.launchPending && parsed.generation) await rm(holderStoppedPath(profileDir, parsed.generation), { force: true });
+    }
+    // Fixed-path legacy seeds are ambiguous: neither status nor another
+    // generation may consume/delete them. New handoffs have unique paths.
+  });
 }
 
 export async function hasDevToolsActivePort(profileDir = defaultProfileDir()): Promise<boolean> {
@@ -348,16 +390,26 @@ async function chromeOrCdpStillAlive(
 export async function holderStatus(
   profileDir = defaultProfileDir(),
 ): Promise<{ running: boolean; record?: HolderRecord }> {
-  const record = await readHolderRecord(profileDir);
+  const observed = await readFile(holderRecordPath(profileDir), "utf8").catch(() => undefined);
+  let record: HolderRecord | undefined;
+  try {
+    const parsed = JSON.parse(observed ?? "null");
+    if (isValidHolderRecord(parsed)) record = parsed;
+  } catch { /* Unreadable records are not verified holders. */ }
   if (record && isBoundHolderAlive(record)) {
-    return { running: true, record };
+    return { running: Boolean(record.verifiedAt), record };
   }
   if (record || (await holderRecordFilePresent(profileDir))) {
     // Never clear while Chrome/CDP is still alive — even if the holder PID bind failed.
     if (await chromeOrCdpStillAlive(profileDir, record)) {
       return { running: false, record };
     }
-    await clearHolderFiles(profileDir);
+    if (record && !(await pendingLaunchStopped(profileDir, record))) return { running: false, record };
+    // Re-check the exact observed record under the publication lock. A record
+    // replaced during the CDP probe belongs to another operation.
+    if (observed !== undefined) {
+      await clearObservedHolderFiles(profileDir, observed);
+    }
   }
   return { running: false };
 }
@@ -392,7 +444,7 @@ async function sessionFullyStopped(
   if (await hasDevToolsActivePort(profileDir)) {
     return false;
   }
-  return true;
+  return pendingLaunchStopped(profileDir, record);
 }
 
 /**
@@ -401,7 +453,16 @@ async function sessionFullyStopped(
  * or DevToolsActivePort is still present. Never signals a PID that fails the
  * start-time/exe bind.
  */
-export async function stopSessionHolder(profileDir = defaultProfileDir()): Promise<boolean> {
+export async function stopSessionHolder(profileDir = defaultProfileDir(), lifecycleGeneration?: string): Promise<boolean> {
+  if (lifecycleGeneration !== undefined) {
+    if (!(await lifecycleOwnsGeneration(profileDir, lifecycleGeneration))) throw new AdamError("provider_unavailable", "ADAM lifecycle ownership expired.", false);
+    return stopSessionHolderOwned(profileDir);
+  }
+  return withHolderLifecycle(profileDir, () => stopSessionHolderOwned(profileDir));
+}
+
+async function stopSessionHolderOwned(profileDir: string): Promise<boolean> {
+  const observed = await readFile(holderRecordPath(profileDir), "utf8").catch(() => undefined);
   const record = await readHolderRecord(profileDir);
   const filePresent = record !== undefined || (await holderRecordFilePresent(profileDir));
   if (!filePresent) {
@@ -419,7 +480,7 @@ export async function stopSessionHolder(profileDir = defaultProfileDir()): Promi
       );
     }
     await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
-    await clearHolderFiles(profileDir);
+    await clearObservedHolderFiles(profileDir, observed);
     return false;
   }
 
@@ -434,8 +495,11 @@ export async function stopSessionHolder(profileDir = defaultProfileDir()): Promi
         "Session-holder PID bind failed but Chrome/CDP is still alive. Close the ADAM Chrome process, then retry adam-mcp logout.",
       );
     }
+    if (!(await pendingLaunchStopped(profileDir, record))) {
+      throw new AdamError("provider_unavailable", "The prior ADAM browser launch has no shutdown acknowledgement. Stop all dedicated ADAM Chrome and MCP processes before recovering the profile; a new session cannot safely start yet.", false);
+    }
     await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
-    await clearHolderFiles(profileDir);
+    await clearObservedHolderFiles(profileDir, observed);
     return false;
   }
 
@@ -469,7 +533,7 @@ export async function stopSessionHolder(profileDir = defaultProfileDir()): Promi
         await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
       }
       if (await sessionFullyStopped(profileDir, record)) {
-        await clearHolderFiles(profileDir);
+        await clearObservedHolderFiles(profileDir, observed);
         return true;
       }
     }
@@ -491,6 +555,8 @@ export type StartHolderOptions = {
   spawnHolder?: (seedFile: string) => ChildProcess | undefined;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Internal capability for an interactive/resume operation already holding ownership. */
+  lifecycleGeneration?: string;
 };
 
 export async function startSessionHolder(options: StartHolderOptions): Promise<HolderRecord> {
@@ -499,17 +565,29 @@ export async function startSessionHolder(options: StartHolderOptions): Promise<H
   const origin = options.origin ?? defaultOrigin();
   assertUrlAllowed(origin);
   await mkdir(profileDir, { recursive: true });
+  if (options.lifecycleGeneration !== undefined) {
+    if (!(await lifecycleOwnsGeneration(profileDir, options.lifecycleGeneration))) throw new AdamError("provider_unavailable", "ADAM lifecycle ownership expired.", false);
+    return startSessionHolderOwned(options, profileDir, options.lifecycleGeneration);
+  }
+  return withHolderLifecycle(profileDir, (generation) => startSessionHolderOwned(options, profileDir, generation), options.signal);
+}
+
+async function startSessionHolderOwned(options: StartHolderOptions, profileDir: string, generation: string): Promise<HolderRecord> {
+  // An old fixed-path handoff can belong to a pre-lock client. Do not overwrite
+  // or delete it, and do not start competing Chrome against the same profile.
+  if (await access(holderSeedPath(profileDir)).then(() => true, () => false)) {
+    throw new AdamError("provider_unavailable", "An older ADAM session handoff is pending. Stop all older ADAM MCP processes and recover the dedicated profile before retrying login.", false);
+  }
 
   // Re-login: stop + await the prior holder before writing a new seed.
-  await stopSessionHolder(profileDir);
+  await stopSessionHolderOwned(profileDir);
 
-  const generation = randomUUID();
-  const seedFile = holderSeedPath(profileDir);
+  const seedFile = holderSeedPath(profileDir, generation);
   // Transient handoff: the holder reads and unlinks this before launching Chrome.
   await writeFile(
     seedFile,
     JSON.stringify({ ...options.seed, generation } satisfies SessionSeed),
-    { encoding: "utf8", mode: 0o600 },
+    { encoding: "utf8", mode: 0o600, flag: "wx" },
   );
   const spawnHolder = options.spawnHolder ?? defaultHolderSpawn;
   const child = spawnHolder(seedFile);
@@ -540,17 +618,22 @@ export async function startSessionHolder(options: StartHolderOptions): Promise<H
       "The headless ADAM session did not start in time. Retry adam-mcp login.",
     );
   } catch (error) {
+    // Atomically revoke publication before observing ownership for cleanup.
+    // A child that has not yet published cannot race this failure path later.
+    await revokeHolderGeneration(profileDir, generation);
     const record = await readHolderRecord(profileDir);
     if (record?.generation === generation) {
-      await stopSessionHolder(profileDir);
+      await stopSessionHolderOwned(profileDir);
     } else {
       if (childIdentity && matchesProcessIdentity(childIdentity.pid, { startTime: childIdentity.startTime, exe: childIdentity.exe })) {
         signalProcessGroup(childIdentity.pid, "SIGKILL");
       }
       // Never erase ownership evidence while an unverified Chrome endpoint is live.
-      if (!(await isCdpAlive(profileDir))) await clearHolderFiles(profileDir);
+      // Do not remove any shared record or legacy seed from this failure path.
     }
     throw error;
+  } finally {
+    await withHolderMutation(profileDir, () => rm(seedFile, { force: true }));
   }
 }
 
@@ -599,41 +682,79 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
   const profileDir = dirname(seedFile);
   const origin = defaultOrigin();
   let seed: SessionSeed;
-  try {
+  await withHolderMutation(profileDir, async () => {
     seed = JSON.parse(await readFile(seedFile, "utf8")) as SessionSeed;
-  } finally {
-    await rm(seedFile, { force: true }).catch(() => undefined);
-  }
+    if (!seed.generation || seedFile !== holderSeedPath(profileDir, seed.generation) || !(await lifecycleOwnsGeneration(profileDir, seed.generation))) {
+      throw new AdamError("provider_unavailable", "The ADAM session handoff no longer owns startup.", false);
+    }
+    await rm(seedFile, { force: true });
+  });
 
-  const generation = seed.generation ?? randomUUID();
-  const context = await chromium.launchPersistentContext(profileDir, {
+  const generation = seed!.generation!;
+  const identity = readProcessIdentity(process.pid);
+  if (!identity) throw new AdamError("provider_unavailable", "Could not bind ADAM session process identity.", false);
+  const record: HolderRecord = {
+    version: HOLDER_RECORD_VERSION, pid: process.pid, generation,
+    pidStartTime: identity.startTime, exe: identity.exe,
+    startedAt: new Date().toISOString(), verifiedAt: "", origin, launchPending: true,
+  };
+  // Publish bound-but-unverified ownership BEFORE launching Chrome. If the
+  // starter times out afterwards, it can stop this exact process before a new
+  // startup is admitted. A late child cannot publish after capability revocation.
+  await withHolderMutation(profileDir, async () => {
+    if (!(await lifecycleOwnsGeneration(profileDir, generation))) {
+      throw new AdamError("provider_unavailable", "The ADAM session startup was abandoned.", false);
+    }
+    await writeFile(holderRecordPath(profileDir), JSON.stringify(record), { encoding: "utf8", flag: "wx", mode: 0o600 });
+  });
+  let launch: Promise<BrowserContext> | undefined;
+  let shuttingDown: Promise<void> | undefined;
+  const shutdown = (code = 0): Promise<void> => {
+    shuttingDown ??= (async () => {
+      // A signal during launch must wait for launch to settle and Chrome to
+      // close. If force-killed first, no acknowledgement is written: fail closed.
+      // A rejected launch may still have spawned Chrome. It must never produce
+      // a shutdown acknowledgement without a context whose close completed.
+      const opened = await launch;
+      if (!opened) { process.exit(1); return; }
+      await opened.close();
+      await withHolderMutation(profileDir, async () => {
+        const current = await readHolderRecord(profileDir);
+        if (current?.generation === generation && current.launchPending) {
+          await writeFile(holderStoppedPath(profileDir, generation), generation, { mode: 0o600 });
+        }
+      });
+      process.exit(code);
+    })();
+    return shuttingDown;
+  };
+  process.on("SIGTERM", () => { void shutdown(0).catch(() => process.exit(1)); });
+  process.on("SIGINT", () => { void shutdown(0).catch(() => process.exit(1)); });
+  launch = chromium.launchPersistentContext(profileDir, {
     channel: "chrome",
     headless: true,
     acceptDownloads: CHROME_LAUNCH_POLICY.acceptDownloads,
     viewport: { width: 1280, height: 900 },
     locale: "de-CH",
-    ...(seed.userAgent ? { userAgent: seed.userAgent } : {}),
+    ...(seed!.userAgent ? { userAgent: seed!.userAgent } : {}),
     args: chromeLaunchArgs(),
   });
+  const context = await launch;
+  if (shuttingDown) { await shuttingDown; return; }
   const page = context.pages()[0] ?? (await context.newPage());
   attachDownloadGuard(page);
   context.on("page", (opened) => {
     attachDownloadGuard(opened);
   });
 
-  const shutdown = async (code = 0): Promise<void> => {
-    await clearHolderFiles(profileDir);
-    await context.close().catch(() => undefined);
-    process.exit(code);
-  };
-  process.on("SIGTERM", () => void shutdown());
-  process.on("SIGINT", () => void shutdown());
   context.on("close", () => {
-    void clearHolderFiles(profileDir).then(() => process.exit(0));
+    // Leave the ownership record for serialized stop/status cleanup. A dying
+    // holder must never clear a newer generation's metadata.
+    void shutdown(0).catch(() => process.exit(1));
   });
 
   try {
-    await context.addCookies(seed.cookies);
+    await context.addCookies(seed!.cookies);
     assertUrlAllowed(origin);
     await page.goto(origin, { waitUntil: "domcontentloaded", timeout: 45_000 });
     await page
@@ -651,19 +772,11 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
     if (!isLoggedInSnapshot(snapshot)) {
       await shutdown(1);
     }
-    const identity = readProcessIdentity(process.pid);
-    if (!identity) {
-      await shutdown(1);
-      return;
-    }
     const browserIdentity = browserIdentityFromContext(context);
     const now = new Date().toISOString();
-    const record: HolderRecord = {
-      version: HOLDER_RECORD_VERSION,
-      pid: process.pid,
-      generation,
-      pidStartTime: identity.startTime,
-      exe: identity.exe,
+    const verified: HolderRecord = {
+      ...record,
+      launchPending: false,
       ...(browserIdentity
         ? {
             browserPid: browserIdentity.pid,
@@ -671,14 +784,20 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
             browserExe: browserIdentity.exe,
           }
         : {}),
-      startedAt: now,
       verifiedAt: now,
-      origin,
     };
-    await writeFile(holderRecordPath(profileDir), JSON.stringify(record), "utf8");
+    await withHolderMutation(profileDir, async () => {
+      if (!(await lifecycleOwnsGeneration(profileDir, generation)) || (await readHolderRecord(profileDir))?.generation !== generation) {
+        throw new AdamError("provider_unavailable", "The ADAM session startup was abandoned.", false);
+      }
+      const temporary = join(profileDir, `session-record-${generation}.tmp`);
+      try {
+        await writeFile(temporary, JSON.stringify(verified), { encoding: "utf8", flag: "wx", mode: 0o600 });
+        await rename(temporary, holderRecordPath(profileDir));
+      } finally { await rm(temporary, { force: true }); }
+    });
   } catch (error) {
-    await clearHolderFiles(profileDir);
-    await context.close().catch(() => undefined);
+    await shutdown(1);
     throw error;
   }
 
