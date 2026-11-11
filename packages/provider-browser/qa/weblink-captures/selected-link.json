@@ -1,0 +1,19 @@
+{
+  "capturedAt": "2026-11-11T15:28:25.392Z",
+  "iliasVersion": "10.12",
+  "approval": "selected course listing and Web Link page",
+  "sourceCommit": "756ea00699ddb74355c9cf091903b2494a860824",
+  "captureScript": "scripts/qa/capture-selected-weblink.mjs",
+  "syntheticIds": true,
+  "rawHtmlSaved": false,
+  "externalNavigation": false,
+  "notice": "Structural projection of a permitted live row and selected content table; wrapper reconstructed, all text masked, identities remapped. Not a full page capture.",
+  "listing": {
+    "url": "https://adam.unibas.ch/go/crs/710001",
+    "html": "<main><div id=\"il_center_col\"><div class=\"ilContainerListItemOuter\"><div></div><div><div><div class=\"il_ContainerItemTitle\"><h3 class=\"il_ContainerItemTitle\"><a class=\"il_ContainerItemTitle\" href=\"/ilias.php?baseClass=ilLinkResourceHandlerGUI&amp;ref_id=710002&amp;cmd=calldirectlink\">x</a></h3></div><div></div><div><div></div></div><div></div><div></div></div><div></div></div></div></div></main>"
+  },
+  "selected": {
+    "url": "https://adam.unibas.ch/go/webr/710002",
+    "html": "<main><div id=\"il_center_col\"><table class=\"table table-striped fullwidth\"><thead><tr><th><span>x</span></th></tr></thead><tbody><tr><td><a href=\"/ilias.php?baseClass=illinkresourcehandlergui&amp;cmdNode=aa%3Abb&amp;cmdClass=ilObjLinkResourceGUI&amp;cmd=callLink&amp;ref_id=710002&amp;link_id=720001\">x</a></td></tr></tbody></table></div></main>"
+  }
+}

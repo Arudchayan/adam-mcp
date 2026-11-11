@@ -5,6 +5,7 @@ import { AdamError, parseAdamRef, redactUrl, throwIfCancelled, type AdamObjectTy
 import { inactiveSessionStatus } from "./session-state.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
+import { readWebLinkRedirect, webLinkLaunchUrl } from "./weblink.ts";
 import { waitForAdamLogin } from "./login-wait.ts";
 import { disableSession, enableSession, sessionDisabled } from "./session-disabled.ts";
 import { assertUrlAllowed, sameOrigin, urlAllowed } from "./allowlist.ts";
@@ -550,6 +551,20 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         },
       }, signal);
       return { contentType: result.contentType, contentDisposition: result.contentDisposition, contentLength: result.contentLength };
+    }, options?.signal);
+  }
+
+  async resolveWebLink(url: string, refId: string, options?: { signal?: AbortSignal }): Promise<{ url: string; sourceUrl: string } | undefined> {
+    if (!webLinkLaunchUrl(url, refId)) throw new AdamError("unsupported_type", "Not a verified selected Web Link route.", false);
+    return this.serialize(async (signal) => {
+      throwIfAborted(signal);
+      const page = await this.ensurePage({ allowResume: true });
+      return readWebLinkRedirect(url, refId, {
+        headers: async (target) => {
+          const cookies = await page.context().cookies(target);
+          return { Cookie: cookies.map((cookie) => cookie.name + "=" + cookie.value).join("; ") };
+        },
+      }, signal);
     }, options?.signal);
   }
 

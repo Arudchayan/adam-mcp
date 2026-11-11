@@ -124,8 +124,12 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
       }
       const classes = url.searchParams.getAll("cmdClass").map((value) => value.toLowerCase());
       const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]);
+      const directWebLink = url.origin === DEFAULT_ADAM_ORIGIN && !url.username && !url.password &&
+        url.pathname === "/ilias.php" && classes.length === 0 && url.searchParams.getAll("ref_id").length === 1 &&
+        url.searchParams.getAll("baseClass").length === 1 && url.searchParams.get("baseClass")?.toLowerCase() === "illinkresourcehandlergui" &&
+        url.searchParams.getAll("cmd").length === 1 && url.searchParams.get("cmd") === "calldirectlink";
       return {
-        type: (mapped ? CMD_CLASS_TO_TYPE[mapped] : undefined) ?? "unknown",
+        type: (mapped ? CMD_CLASS_TO_TYPE[mapped] : undefined) ?? (directWebLink ? "webr" : "unknown"),
         refId,
       };
     }

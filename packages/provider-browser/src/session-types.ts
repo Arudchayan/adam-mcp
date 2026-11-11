@@ -82,6 +82,7 @@ export type AdamBrowserSession = {
   streamAuthorized?(url: string, options: AuthorizedStreamOptions): Promise<AuthorizedProbeResult>;
   /** Header-only probe (HEAD) for download metadata without pulling file bytes. */
   probeAuthorized?(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedProbeResult>;
+  resolveWebLink?(url: string, refId: string, options?: { signal?: AbortSignal }): Promise<{ url: string; sourceUrl: string } | undefined>;
   close(): Promise<void>;
   /** Export the authenticated cookie jar for the headless session holder (ADR 0009). */
   exportSessionState?(): Promise<{ cookies: SessionCookie[]; userAgent?: string } | undefined>;
