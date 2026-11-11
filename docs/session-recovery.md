@@ -51,6 +51,29 @@ Explicit logout also prevents resume, even when the profile still has valid cook
 
 ## Cache freshness and recovery
 
+### Ownership recovery after an interrupted startup
+
+Before upgrading to the generation-owned handoff, stop all older MCP clients and
+the dedicated ADAM Chrome session. Do not run old and new server builds against
+the same profile simultaneously; older builds do not honor the new locks.
+
+Startup, resume, interactive sign-in, attachment and logout coordinate through
+profile-local lifecycle ownership. A failed browser close, interrupted launch or
+crashed lock owner can deliberately block another startup. A dead holder with an
+unacknowledged browser launch is **not** proof that Chrome never started, even
+when CDP is absent. Do not repeatedly retry or remove locks while a client runs.
+
+For manual recovery, first close every ADAM MCP host/CLI and the dedicated ADAM
+Chrome processes. Only after their exit is established may you remove the
+profile-local `.adam-holder-lifecycle` and `.adam-holder-mutation` directories
+and stale `session-holder.json` startup record. Stale `session-seed.json` and
+generation-specific `session-seed-*.json` handoffs must also be removed locally
+without inspecting, uploading or sharing their contents. These paths belong to
+the dedicated profile, never the repository or your normal Chrome profile.
+If unsure, use a fresh empty dedicated `ADAM_BROWSER_PROFILE_DIR` consistently
+for login and your MCP host instead of deleting ambiguous files. Then sign in
+again and re-check status. No automatic age/PID-based lock stealing occurs.
+
 `login()` and `close()` call `clearSessionCaches`: the enrolled walk memo and
 inflight walk are dropped, the per-URL page map is cleared, the
 `typeByRefId` / `fileByRefId` maps are cleared, and the walk generation is

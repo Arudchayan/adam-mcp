@@ -29,7 +29,8 @@ import {
   mergeFrameLinks,
 } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
-import { boundHolderPid, holderStatus, isCdpAlive, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
+import { assertHolderLaunchSettled, boundHolderPid, holderStatus, isBoundHolderAlive, isCdpAlive, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
+import { lifecycleOwnsGeneration, retainHolderLifecycle, withHolderLifecycle } from "./holder-lock.ts";
 import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import { SharedOperation, throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
@@ -219,6 +220,18 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private readonly hideWindowAfterFeedback: boolean;
   private loginInflight: SharedOperation<SessionStatus> | undefined;
   private loginUncancellable: Promise<SessionStatus> | undefined;
+  private lifecycleGeneration: string | undefined;
+
+  private async withProfileLifecycle<T>(work: (generation: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (this.lifecycleGeneration) {
+      if (!(await lifecycleOwnsGeneration(this.profileDir, this.lifecycleGeneration))) throw new AdamError("provider_unavailable", "ADAM lifecycle ownership expired.", false);
+      return work(this.lifecycleGeneration);
+    }
+    return withHolderLifecycle(this.profileDir, async (generation) => {
+      this.lifecycleGeneration = generation;
+      try { return await work(generation); } finally { this.lifecycleGeneration = undefined; }
+    }, signal);
+  }
 
   constructor(options: PlaywrightSessionOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -243,6 +256,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         ...inactiveState,
       });
       if (inactiveState.connectionState === "signed-out") return loginRequired();
+      if (!holder.running && holder.record && isBoundHolderAlive(holder.record)) {
+        return {
+          ...loginRequired(), reason: "unknown", connectionState: "signing-in", recoveryAction: "check_status",
+          message: "The background ADAM session is starting and has not verified sign-in yet. Check status again shortly.",
+        };
+      }
       if (!holder.running && !this.page && !this.context) {
         const endpoint = await readLocalCdpEndpoint(this.profileDir);
         if (!endpoint) {
@@ -435,11 +454,11 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       throwIfCancelled(options.signal);
       if (current.loggedIn) { await report(4, "ADAM is already connected."); return current; }
     }
-    return this.serialize(async () => {
+    return this.serialize(() => this.withProfileLifecycle(async (lifecycleGeneration) => {
       throwIfCancelled(options.signal);
       // An expired headless session cannot accept interactive input. Release it first.
       await this.closeContext();
-      await stopSessionHolder(this.profileDir);
+      await stopSessionHolder(this.profileDir, lifecycleGeneration);
       throwIfCancelled(options.signal);
       this.headed = true;
       let closing: Promise<void> | undefined;
@@ -470,7 +489,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           const seed = await this.exportSessionState();
           await this.closeContext();
           if (!seed || seed.cookies.length === 0) throw new AdamError("unauthorized", "No session cookies were captured. Run adam-mcp login again.", false);
-          const holderRecord = await startSessionHolder({ profileDir: this.profileDir, origin: this.origin, seed, signal: options.signal });
+          const holderRecord = await startSessionHolder({ profileDir: this.profileDir, origin: this.origin, seed, signal: options.signal, lifecycleGeneration });
           throwIfCancelled(options.signal);
           if (!(await this.tryAttachCdp()) || !this.context) throw new AdamError("provider_unavailable", "The session started but could not be attached. Run adam-mcp status before retrying login.");
           this.page = this.context.pages()[0] ?? (await this.context.newPage());
@@ -493,7 +512,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         options.signal?.removeEventListener("abort", abort);
         await closing;
       }
-    });
+    }, options.signal));
   }
 
   async fetchAuthorized(url: string, options?: { signal?: AbortSignal }) {
@@ -617,15 +636,16 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         attachDownloadGuard(this.page);
         return this.page;
       } catch {
-        this.context = undefined;
-        this.attachedBrowser = undefined;
-        this.ownsChrome = false;
+        // A failed page operation does not prove an owned Chrome process is
+        // gone. Close (or retain recovery ownership) before any replacement.
+        await this.closeContext();
       }
     }
 
     const attached = await this.tryAttachCdp();
     if (!attached) {
       if (options.allowLaunch) {
+        if (!this.lifecycleGeneration || !(await lifecycleOwnsGeneration(this.profileDir, this.lifecycleGeneration))) throw new AdamError("provider_unavailable", "Chrome launch requires ADAM lifecycle ownership.", false);
         await mkdir(this.profileDir, { recursive: true });
         try {
           this.context = await chromium.launchPersistentContext(this.profileDir, {
@@ -640,6 +660,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         } catch (error) {
           const retry = await this.tryAttachCdp();
           if (!retry) {
+            await retainHolderLifecycle(this.profileDir, this.lifecycleGeneration!);
             const detail = error instanceof Error ? error.message : "unknown error";
             throw new AdamError(
               "provider_unavailable",
@@ -673,13 +694,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
    * existing profile, verify the dashboard, then hand off to a new holder.
    */
   private async resumeDeadHolderOrUnauthorized(): Promise<void> {
+    return this.withProfileLifecycle(async (lifecycleGeneration) => {
+    await assertHolderLaunchSettled(this.profileDir);
     const holder = await holderStatus(this.profileDir);
     const outcome = await resumeDeadHolderSession({
-      holderRunning: holder.running,
+      holderRunning: holder.running || Boolean(holder.record && isBoundHolderAlive(holder.record)),
       profileDir: this.profileDir,
       origin: this.origin,
       launchHeadlessAndVerify: () => this.launchHeadlessResumeAndVerify(),
-      startHolder: startSessionHolder,
+      startHolder: (options) => startSessionHolder({ ...options, lifecycleGeneration }),
     });
     switch (outcome) {
       case "already-attached":
@@ -705,9 +728,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         throw new AdamError("provider_unavailable", `Unhandled resume ${String(exhaustive)}`);
       }
     }
+    });
   }
 
   private async launchHeadlessResumeAndVerify(): Promise<ResumeLaunch> {
+    await assertHolderLaunchSettled(this.profileDir);
+    if (!this.lifecycleGeneration || !(await lifecycleOwnsGeneration(this.profileDir, this.lifecycleGeneration))) throw new AdamError("provider_unavailable", "Chrome resume requires ADAM lifecycle ownership.", false);
     await mkdir(this.profileDir, { recursive: true });
     try {
       this.context = await chromium.launchPersistentContext(this.profileDir, {
@@ -730,11 +756,13 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         };
       }
       const detail = error instanceof Error ? error.message : "unknown error";
+      await retainHolderLifecycle(this.profileDir, this.lifecycleGeneration!);
       throw new AdamError(
         "provider_unavailable",
         `Could not open Google Chrome with a local ADAM profile. Close other adam-mcp Chrome windows and try again. ${detail}`,
       );
     }
+    try {
     this.context.on("page", (opened) => {
       attachDownloadGuard(opened);
     });
@@ -751,21 +779,33 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         await this.closeContext();
       },
     };
+    } catch (error) {
+      await this.closeContext();
+      throw error;
+    }
   }
 
   private async tryAttachCdp(): Promise<boolean> {
+    return this.withProfileLifecycle(() => this.attachCdpOwned());
+  }
+
+  private async attachCdpOwned(): Promise<boolean> {
+    await assertHolderLaunchSettled(this.profileDir);
     const endpoint = await readLocalCdpEndpoint(this.profileDir);
     if (!endpoint) {
       return false;
     }
     try {
       this.attachedBrowser = await chromium.connectOverCDP(endpoint);
+      await assertHolderLaunchSettled(this.profileDir);
       this.context = this.attachedBrowser.contexts()[0];
       this.ownsChrome = false;
       return Boolean(this.context);
-    } catch {
+    } catch (error) {
+      await this.attachedBrowser?.close().catch(() => undefined);
       this.attachedBrowser = undefined;
       this.context = undefined;
+      if (error instanceof AdamError) throw error;
       return false;
     }
   }
@@ -899,14 +939,20 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private async closeContext(): Promise<void> {
     const context = this.context;
     const attached = this.attachedBrowser;
+    if (this.ownsChrome && context) {
+      await this.withProfileLifecycle(async (generation) => {
+        try { await context.close(); }
+        catch {
+          await retainHolderLifecycle(this.profileDir, generation);
+          throw new AdamError("provider_unavailable", "Could not confirm ADAM Chrome closure. Stop all dedicated ADAM Chrome and MCP processes before recovering profile ownership.", false);
+        }
+      });
+    } else if (attached) {
+      await attached.close();
+    }
     this.context = undefined;
     this.page = undefined;
     this.attachedBrowser = undefined;
-    if (this.ownsChrome && context) {
-      await context.close().catch(() => undefined);
-    } else if (attached) {
-      await attached.close().catch(() => undefined);
-    }
     this.ownsChrome = false;
   }
 }
