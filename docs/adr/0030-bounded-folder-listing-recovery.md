@@ -47,6 +47,13 @@ not a confirmed explanation of the four reported folders.
   and pagination behavior.
 - Walks distinguish unknown listings (including the new session error) from
   other unreadable pages in `partialReasons`. Neither partial result is memoized.
+- Typed getters preserve different-type landings for operation-specific
+  validation before folder recovery. A `getCourse` landing on a same-ref blank
+  folder remains `unsupported_type`, without a Content-tab navigation. General
+  reads/listings can reopen a verified folder through its canonical URL within
+  the existing type-attempt budget. Explicitly conflicting operation expectations
+  have separate in-flight keys; normal same-URL course reads still share work,
+  and successful snapshot caching remains URL-based.
 
 ## Verification
 

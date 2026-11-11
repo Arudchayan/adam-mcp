@@ -1,7 +1,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { AdamError, parseAdamRef, redactUrl, throwIfCancelled, type ProgressReporter } from "adam-core";
+import { AdamError, parseAdamRef, redactUrl, throwIfCancelled, type AdamObjectType, type ProgressReporter } from "adam-core";
 import { inactiveSessionStatus } from "./session-state.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
@@ -301,7 +301,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return { cookies: state.cookies as SessionCookie[], userAgent };
   }
 
-  async open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot> {
+  async open(url: string, options?: { signal?: AbortSignal; expectedType?: AdamObjectType }): Promise<PageSnapshot> {
     return this.serialize(async (signal) => {
       throwIfAborted(signal);
       const target = this.resolveUrl(url);
@@ -346,7 +346,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         const dom = await this.probeListing(page);
         let snapshot = await this.readSnapshot(page, dom);
         const requested = parseAdamRef(target);
-        const folderRefId = requested && (requested.type === "fold" || parseAdamRef(snapshot.url)?.type === "fold")
+        // A typed operation must validate a different-type landing before listing recovery.
+        const expectedType = options?.expectedType ?? requested?.type;
+        const folderRefId = expectedType === "fold" && requested
           ? requested.refId : undefined;
         let folderRecoveryAttempted = false;
         const recoverableFolder = () => folderRefId !== undefined && sameFolderLanding(snapshot, folderRefId) &&

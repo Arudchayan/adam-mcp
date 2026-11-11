@@ -267,7 +267,7 @@ export class BrowserAdamProvider implements AdamProvider {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation, signal: options?.signal });
+    const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation, signal: options?.signal, expectedType: "crs" });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
@@ -381,7 +381,7 @@ export class BrowserAdamProvider implements AdamProvider {
     try {
       // Capture listing cache before rememberTypes overwrites with the page parse.
       const priorListing = this.fileByRefId.get(refId);
-      const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation, signal: options?.signal });
+      const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation, signal: options?.signal, expectedType: "file" });
       const catalog = this.catalog(snapshot);
       this.rememberTypes(catalog, generation);
       const file =
@@ -502,7 +502,7 @@ export class BrowserAdamProvider implements AdamProvider {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal });
+    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal, expectedType: "exc" });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
@@ -547,7 +547,7 @@ export class BrowserAdamProvider implements AdamProvider {
       );
     }
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation, signal: options?.signal });
+    const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation, signal: options?.signal, expectedType: "frm" });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
@@ -946,7 +946,7 @@ export class BrowserAdamProvider implements AdamProvider {
   private async openObject(
     refId: RefId,
     typeHint?: AdamObjectType,
-    opts?: { listingFastFail?: boolean; cacheGeneration?: number; signal?: AbortSignal },
+    opts?: { listingFastFail?: boolean; cacheGeneration?: number; signal?: AbortSignal; expectedType?: AdamObjectType },
   ): Promise<PageSnapshot> {
     if (!/^\d+$/.test(refId)) {
       throw new AdamError("not_found", "ADAM ref_id must contain digits only.");
@@ -969,8 +969,15 @@ export class BrowserAdamProvider implements AdamProvider {
       tried.add(type);
       assertReadableObjectType(type, refId);
       try {
-        const snapshot = await this.openAuthorized(objectUrl(type, refId, this.origin), opts?.signal);
+        const snapshot = await this.openAuthorized(objectUrl(type, refId, this.origin), opts?.signal, opts?.expectedType);
         const landed = parseAdamRef(snapshot.url);
+        // General reads/lists may follow a verified folder identity, but typed getters
+        // must retain the landing for their operation-specific unsupported_type check.
+        if (!opts?.expectedType && type !== "fold" && landed?.type === "fold" && landed.refId === refId &&
+          classifyListing(snapshot, this.catalog(snapshot).objects.length).state === "unknown") {
+          const folder = await tryType("fold");
+          if (folder) return folder;
+        }
         // Only cache when the landed object is the requested one (ADR 0005).
         // Folder GUIs render as ilias.php?ref_id=PARENT&item_ref_id=CHILD, which
         // now parses as unknown/CHILD — never cache that as the parent's type.
@@ -1017,35 +1024,38 @@ export class BrowserAdamProvider implements AdamProvider {
     return this.sessionHandle;
   }
 
-  private async openAuthorized(url: string, signal?: AbortSignal): Promise<PageSnapshot> {
+  private async openAuthorized(url: string, signal?: AbortSignal, expectedType?: AdamObjectType): Promise<PageSnapshot> {
     throwIfAborted(signal);
     const generation = this.walkGeneration;
     const cached = this.pageByUrl.get(url);
     if (cached && this.cachesCurrent(generation) && this.clock() - cached.fetchedAt < 60_000) {
       return cached.snapshot;
     }
-    const existing = this.pageInflight.get(url);
+    // Normal same-URL reads still share work. A conflicting explicit expectation
+    // must not inherit another caller's folder recovery/error before validating type.
+    const key = expectedType && expectedType !== parseAdamRef(url)?.type ? `${url}|expected:${expectedType}` : url;
+    const existing = this.pageInflight.get(key);
     if (existing && !existing.aborted && this.cachesCurrent(generation)) {
       return existing.join(signal);
     }
-    const pending = new SharedOperation((workSignal) => this.openAuthorizedOnce(url, generation, workSignal));
-    this.pageInflight.set(url, pending);
+    const pending = new SharedOperation((workSignal) => this.openAuthorizedOnce(url, generation, workSignal, expectedType));
+    this.pageInflight.set(key, pending);
     this.ownedPages.add(pending);
     void pending.promise.finally(() => {
       this.ownedPages.delete(pending);
-      if (this.pageInflight.get(url) === pending) {
-        this.pageInflight.delete(url);
+      if (this.pageInflight.get(key) === pending) {
+        this.pageInflight.delete(key);
       }
     }).catch(() => undefined);
     return pending.join(signal);
   }
 
-  private async openAuthorizedOnce(url: string, generation: number, signal: AbortSignal): Promise<PageSnapshot> {
+  private async openAuthorizedOnce(url: string, generation: number, signal: AbortSignal, expectedType?: AdamObjectType): Promise<PageSnapshot> {
     const parsed = parseAdamRef(url);
     if (parsed) {
       assertReadableObjectType(parsed.type, parsed.refId);
     }
-    const snapshot = await this.session().open(url, { signal });
+    const snapshot = await this.session().open(url, { signal, expectedType });
     throwIfAborted(signal);
     // Test/in-process sessions may reuse the same snapshot object on a fresh open.
     this.catalogBySnapshot.delete(snapshot);

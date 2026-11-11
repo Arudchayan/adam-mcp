@@ -52,9 +52,38 @@ it("does not recover an already populated or explicitly empty folder", async () 
 });
 
 it("recovers a typed folder landing even when the caller omitted its type", async () => {
-  const { provider, opens } = setup([blank, full]);
+  const { provider, opens } = setup([blank, blank, full]);
   assert.equal((await provider.listChildren("100010")).listingState, "ok");
-  assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), tab]);
+  assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
+});
+
+it("getCourse preserves a verified same-ref blank folder for unsupported_type without recovery", async () => {
+  for (const type of [undefined, "fold"] as const) {
+    const { provider, opens } = setup([blank]);
+    await assert.rejects(() => provider.getCourse("100010", { type }),
+      (error: unknown) => error instanceof AdamError && error.code === "unsupported_type" && /is fold, not a course/.test(error.message));
+    assert.deepEqual(opens, [type === "fold" ? url : url.replace("/fold/", "/crs/")], "no content-tab recovery for a course operation");
+  }
+});
+
+it("a shared course probe keeps getter type validation independent of untyped listing recovery", async () => {
+  const { provider, opens } = setup([blank]);
+  const results = await Promise.allSettled([provider.getCourse("100010"), provider.listChildren("100010")]);
+  assert.equal(results[0].status, "rejected");
+  assert.equal(results[1].status, "rejected");
+  if (results[0].status === "rejected") assert.equal(results[0].reason.code, "unsupported_type");
+  if (results[1].status === "rejected") assert.equal(results[1].reason.code, "provider_unavailable");
+  assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
+});
+
+it("conflicting operation expectations do not share an in-flight folder failure", async () => {
+  const { provider, opens } = setup([blank]);
+  const results = await Promise.allSettled([provider.listChildren("100010", { type: "fold" }), provider.getCourse("100010", { type: "fold" })]);
+  assert.equal(results[0].status, "rejected");
+  assert.equal(results[1].status, "rejected");
+  if (results[0].status === "rejected") assert.equal(results[0].reason.code, "provider_unavailable");
+  if (results[1].status === "rejected") assert.equal(results[1].reason.code, "unsupported_type");
+  assert.deepEqual(opens, [url, tab, url]);
 });
 
 it("a listing with unrelated empty-folder prose is unknown when its DOM has no empty message", () => {
