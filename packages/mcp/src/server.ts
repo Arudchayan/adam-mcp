@@ -553,15 +553,15 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "Course index for the current session. Attach instead of re-listing when the host supports resources. Errors return code (retryable=) like tools (unauthorized/forbidden/stale_id/provider_unavailable carry runId; not_found → -32602).",
       mimeType: "application/json",
     },
-    async (uri) => {
+    async (uri, ctx) => {
       try {
-        const listed = sanitizeListingItems(await provider.listCourses());
+        const listed = sanitizeListingItems(await provider.listCourses({ signal: signalFromContext(ctx) }));
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(listed),
+              text: resourceJsonText(listed, paginatedObjectsOutputSchema),
             },
           ],
         };
@@ -582,16 +582,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "One course by ref_id. Pins type=crs (use adam_get_course / adam_list_children tools for other types). Use as a citation handle; https://adam.unibas.ch/go/crs/{refId} is the live URL. Errors return code (retryable=) like tools.",
       mimeType: "application/json",
     },
-    async (uri, variables) => {
+    async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const course = sanitizeListingObject(await provider.getCourse(id, { type: "crs" }));
+        const course = sanitizeListingObject(await provider.getCourse(id, { type: "crs", signal: signalFromContext(ctx) }));
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(course),
+              text: resourceJsonText(course, adamObjectOutputSchema),
             },
           ],
         };
@@ -612,16 +612,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "Folder children by ref_id. Pins type=fold (use adam_get_course / adam_list_children tools for other types). Canonical live URL is https://adam.unibas.ch/go/fold/{refId}. Errors return code (retryable=) like tools.",
       mimeType: "application/json",
     },
-    async (uri, variables) => {
+    async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const listed = sanitizeListingItems(await provider.listChildren(id, { type: "fold" }));
+        const listed = sanitizeListingItems(await provider.listChildren(id, { type: "fold", signal: signalFromContext(ctx) }));
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(listed),
+              text: resourceJsonText(listed, paginatedObjectsOutputSchema),
             },
           ],
         };
@@ -642,16 +642,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "File metadata only. Pins type=file (use adam_get_course / adam_list_children tools for other types). Canonical live URL is https://adam.unibas.ch/go/file/{refId}. Not file bytes. Errors return code (retryable=) like tools.",
       mimeType: "application/json",
     },
-    async (uri, variables) => {
+    async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const file = await provider.getFile(id, { type: "file" });
+        const file = await provider.getFile(id, { type: "file", signal: signalFromContext(ctx) });
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(file),
+              text: resourceJsonText(file, fileObjectOutputSchema),
             },
           ],
         };
@@ -672,16 +672,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "Exercise metadata only (deadline, status, title, url, refId) — no instructionText / unit bodies. Pins type=exc (use adam_get_course / adam_list_children tools for other types). Canonical live URL is https://adam.unibas.ch/go/exc/{refId}. Use adam_get_exercise with confirm:true OR elicitation for instruction bodies. Errors return code (retryable=) like tools. No submit.",
       mimeType: "application/json",
     },
-    async (uri, variables) => {
+    async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const exercise = stripExerciseInstructionBodies(await provider.getExercise(id, { type: "exc" }));
+        const exercise = stripExerciseInstructionBodies(await provider.getExercise(id, { type: "exc", signal: signalFromContext(ctx) }));
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(exercise),
+              text: resourceJsonText(exercise, exerciseOutputSchema),
             },
           ],
         };
@@ -702,16 +702,16 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         "Forum meta + thread summaries (no post bodies). Pins type=frm (use adam_get_course / adam_list_children tools for other types). Canonical live URL is https://adam.unibas.ch/go/frm/{refId}. Use adam_get_forum with threadId+confirm:true OR elicitation for posts. Errors return code (retryable=) like tools. No write.",
       mimeType: "application/json",
     },
-    async (uri, variables) => {
+    async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const forum = await provider.getForum(id, { type: "frm" });
+        const forum = await provider.getForum(id, { type: "frm", signal: signalFromContext(ctx) });
         return {
           contents: [
             {
               uri: uri.href,
               mimeType: "application/json",
-              text: resourceJsonText(forum),
+              text: resourceJsonText(forum, forumOutputSchema),
             },
           ],
         };

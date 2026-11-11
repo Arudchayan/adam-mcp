@@ -333,19 +333,22 @@ export function asStructured(data: unknown): Record<string, unknown> {
   return { value: data };
 }
 
-export function ok(data: unknown, schema?: { safeParse: (value: unknown) => { success: boolean; error?: unknown } }): ToolResponse {
+type SuccessSchema = { safeParse: (value: unknown) => { success: boolean; error?: unknown } };
+
+function validateSuccess(data: unknown, schema?: SuccessSchema): void {
+  if (schema && !schema.safeParse(data).success) {
+    throw new AdamError(
+      "provider_unavailable",
+      "Provider returned a shape that does not match the advertised output schema.",
+      false,
+    );
+  }
+}
+
+export function ok(data: unknown, schema?: SuccessSchema): ToolResponse {
   const enriched = ResourceLinks.enrich(data);
   const structuredContent = asStructured(deepRedact(enriched));
-  if (schema) {
-    const parsed = schema.safeParse(structuredContent);
-    if (!parsed.success) {
-      throw new AdamError(
-        "provider_unavailable",
-        "Provider returned a shape that does not match the advertised output schema.",
-        false,
-      );
-    }
-  }
+  validateSuccess(structuredContent, schema);
   const links = ResourceLinks.contentBlocks(structuredContent);
   return {
     content: [
@@ -383,11 +386,12 @@ export function deepRedact(value: unknown, keyHint?: string): unknown {
 
 
 /** ADR 0008: every resources/read payload is untrusted + deep-redacted JSON text. */
-export function resourceJsonText(data: object): string {
+export function resourceJsonText(data: object, schema?: SuccessSchema): string {
   const enveloped = UntrustedContent.wrap(
     deepRedact(data) as object,
     UntrustedContent.DATA_NOTICE,
   );
+  validateSuccess(asStructured(deepRedact(ResourceLinks.enrich(enveloped))), schema);
   return redactText(JSON.stringify(enveloped, null, 2));
 }
 
