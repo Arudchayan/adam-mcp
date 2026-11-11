@@ -39,11 +39,13 @@ const OVERVIEW_PDF_BYTES = syntheticPdfWithText(
   "Synthetic lecture overview: Fourier transforms, multimedia retrieval, ranking, and evaluation.",
 );
 
-function requireRecord(refId: RefId) {
+function requireRecord(refId: RefId, type?: AdamObject["type"]) {
+  if (type) assertReadableObjectType(type, refId);
   const record = fixtureCatalog[refId];
   if (!record) {
     throw new AdamError("not_found", `No ADAM object with ref_id ${refId} in the fixture catalog.`);
   }
+  assertReadableObjectType(record.object.type, refId);
   return record;
 }
 
@@ -62,11 +64,11 @@ function childSummary(object: AdamObject): AdamObject {
   return summary;
 }
 
-function resolveChildren(refId: RefId): AdamObject[] {
-  const record = requireRecord(refId);
+function resolveChildren(refId: RefId, type?: AdamObject["type"]): AdamObject[] {
+  const record = requireRecord(refId, type);
   return record.children
-    .map((childId) => childSummary(requireRecord(childId).object))
-    .filter((child) => !isDeniedObjectType(child.type));
+    .filter((childId) => !isDeniedObjectType(fixtureCatalog[childId]?.object.type ?? "unknown"))
+    .map((childId) => childSummary(requireRecord(childId).object));
 }
 
 export class FixtureAdamProvider implements AdamProvider {
@@ -85,8 +87,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getCourse(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<AdamObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId);
-    assertReadableObjectType(record.object.type, refId);
+    const record = requireRecord(refId, options?.type);
     if (record.object.type !== "crs") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a course.`);
     }
@@ -95,7 +96,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>> {
     throwIfCancelled(options?.signal);
-    const children = resolveChildren(refId);
+    const children = resolveChildren(refId, options?.type);
     const page = paginate(children, options);
     // Fixture catalog is complete data: zero children is honest empty (100020).
     return withListingState(page, children.length > 0 ? "ok" : "empty", {
@@ -107,8 +108,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async readPage(refId: RefId, options?: { type?: PageContent["type"]; signal?: AbortSignal }): Promise<PageContent> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId);
-    assertReadableObjectType(record.object.type, refId);
+    const record = requireRecord(refId, options?.type);
     if (!record.page) {
       throw new AdamError(
         "unsupported_type",
@@ -124,10 +124,11 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
     throwIfCancelled(options?.signal);
-    const files = resolveChildren(refId).filter((child): child is FileObject => child.type === "file");
+    const children = resolveChildren(refId, options?.type);
+    const files = children.filter((child): child is FileObject => child.type === "file");
     const nested = files.length > 0
       ? files
-      : resolveChildren(refId).flatMap((child) =>
+      : children.flatMap((child) =>
           child.type === "fold"
             ? resolveChildren(child.refId).filter((item): item is FileObject => item.type === "file")
             : [],
@@ -135,7 +136,7 @@ export class FixtureAdamProvider implements AdamProvider {
     const page = paginate(nested, options);
     // Files filtered to zero while the container has children is complete + [],
     // not an empty container (ADR 0005).
-    const hydrated = resolveChildren(refId).length;
+    const hydrated = children.length;
     const state = nested.length > 0 || hydrated > 0 ? "ok" : "empty";
     return withListingState(
       page,
@@ -153,8 +154,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getFile(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<FileObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId);
-    assertReadableObjectType(record.object.type, refId);
+    const record = requireRecord(refId, options?.type);
     if (!record.file) {
       throw new AdamError("unsupported_type", `ref_id ${refId} is not a file.`);
     }
@@ -176,8 +176,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId);
-    assertReadableObjectType(record.object.type, refId);
+    const record = requireRecord(refId, options?.type);
     if (record.object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not an exercise.`);
     }
@@ -210,8 +209,7 @@ export class FixtureAdamProvider implements AdamProvider {
         `Client type hint "${options.type}" is not frm; refusing forum read for ref_id ${refId}.`,
       );
     }
-    const record = requireRecord(refId);
-    assertReadableObjectType(record.object.type, refId);
+    const record = requireRecord(refId, options?.type);
     if (record.object.type !== "frm") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a forum.`);
     }
