@@ -70,10 +70,13 @@ above. The destination must still be outside the checkout (including worktrees).
 
 Downloads use the dedicated authenticated Chrome session and stream at most 256 MiB.
 The 120-second transfer timer aborts fetch and its response stream; queue/session
-verification time is separate. Credential acquisition and sink callbacks are
-awaited cooperatively: a stalled callback can delay timeout or cancellation
-until it returns. In particular, an in-progress filesystem write must finish
-before the temporary file is closed and removed. They never execute or open downloaded files. Text extraction remains
+verification time is separate. A stalled credential acquisition no longer delays
+timeout or cancellation, and cannot trigger a later authenticated request. Sink
+callbacks receive the transfer abort signal but must settle cooperatively; a
+stalled callback can still delay completion. In particular, an in-progress
+filesystem write must finish before the temporary file is closed and removed.
+Filesystem setup, sync, publication and cleanup are outside the transfer timer.
+Downloads never execute or open downloaded files. Text extraction remains
 separate, approved and limited to 8 MiB. There is no batch, recursive, overwrite
 or resume mode. Empty files and responses explicitly labelled HTML are refused.
 A heuristic also rejects HTML signatures in the first 4096 bytes (UTF-8 or
