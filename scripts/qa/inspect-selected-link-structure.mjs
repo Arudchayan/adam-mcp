@@ -1,5 +1,5 @@
 import { createPlaywrightSession } from "../../packages/provider-browser/src/playwright-session.ts";
-import { patternizeHref } from "../../packages/provider-browser/src/debug-capture.ts";
+import { structuralHref } from "./structural-href.mjs";
 
 const refId = process.argv[2];
 if (!/^\d+$/.test(refId ?? "") || !process.argv.includes("--confirm")) {
@@ -15,16 +15,13 @@ try {
     const root = document.querySelector("#il_center_col") ?? document.querySelector("#ilContentContainer") ?? document.querySelector("main");
     return {
       rootFound: Boolean(root),
-      anchors: [...(root?.querySelectorAll("a") ?? [])].slice(0, 100).map((a) => ({ href: a.getAttribute("href") ?? "", hasClickHandler: a.hasAttribute("onclick"), classes: a.className })),
+      anchors: [...(root?.querySelectorAll("a") ?? [])].slice(0, 100).map((a) => ({ href: a.getAttribute("href") ?? "", hasClickHandler: a.hasAttribute("onclick") })),
       tables: [...(root?.querySelectorAll("table") ?? [])].map((table) => ({ rows: table.rows.length, links: table.querySelectorAll("a").length })),
       webLinksTabAnchors: [...document.querySelectorAll("#ilTab a, [role='tab']")].filter((a) => /^Weblinks$/i.test((a.textContent ?? "").trim())).length,
     };
   });
-  const anchors = structure.anchors.map(({ href, hasClickHandler, classes }) => {
-    const pattern = patternizeHref(href, "https://adam.unibas.ch");
-    return { hrefPattern: pattern.startsWith("[external]") ? "[external destination omitted]" : pattern, hasClickHandler, classes: String(classes).replace(/\d+/g, "{id}") };
-  });
-  console.log(JSON.stringify({ selectedPageApproved: true, capturedAt: new Date().toISOString(), landedPattern: patternizeHref(snapshot.url, "https://adam.unibas.ch"), rootFound: structure.rootFound, anchors, tables: structure.tables, webLinksTabAnchors: structure.webLinksTabAnchors, externalNavigation: false, note: "Structural observations only. No titles, page text, destination values, live IDs, cookies, storage state or bytes emitted." }, null, 2));
+  const anchors = structure.anchors.map(({ href, hasClickHandler }) => ({ ...structuralHref(href, snapshot.url), hasClickHandler }));
+  console.log(JSON.stringify({ selectedPageApproved: true, capturedAt: new Date().toISOString(), landingStructure: structuralHref(snapshot.url, "https://adam.unibas.ch"), rootFound: structure.rootFound, anchors, tables: structure.tables, webLinksTabAnchors: structure.webLinksTabAnchors, externalNavigation: false, note: "Structural counts and allowlisted labels only. No titles, classes, arbitrary paths, page text, destination values, live IDs, cookies, storage state or bytes emitted." }, null, 2));
 } finally {
   await session.close();
 }
