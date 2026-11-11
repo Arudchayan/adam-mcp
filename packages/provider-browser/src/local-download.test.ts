@@ -48,6 +48,8 @@ it("accepts files over the extraction cap while preserving download limits", asy
   const bytes = new Uint8Array(8 * 1024 * 1024 + 1).fill(42);
   const result = await saveLocalDownload(session(async () => new Response(bytes)), file, directory);
   assert.equal(result.sizeBytes, bytes.byteLength);
+  assert.deepEqual(await readFile(result.path), Buffer.from(bytes));
+  assert.equal(result.sha256, createHash("sha256").update(bytes).digest("hex"));
 }));
 
 it("concurrent saves publish distinct complete files without overwriting", async () => temporary(async (directory) => {
@@ -111,10 +113,47 @@ it("sanitizes traversal, reserved names, controls and long Unicode filenames", (
 
 it("requires selected file, explicit destination and confirmation before creating a session", async () => {
   assert.deepEqual(parseDownloadArgs([file.url, "--output-dir", "D:/Study", "--confirm"]), { refId: file.refId, directory: "D:/Study" });
+  assert.deepEqual(parseDownloadArgs([`adam://file/${file.refId}`, "--confirm", "--output-dir", "D:/Study notes"]), { refId: file.refId, directory: "D:/Study notes" });
   for (const args of [[], ["100011"], ["100011", "--output-dir", "x"], ["100011", "--output-dir", "x", "--confirm", "--wat"], ["https://example.org/go/file/100011", "--output-dir", "x", "--confirm"], ["https://adam.unibas.ch/go/tst/100011", "--output-dir", "x", "--confirm"]]) {
     await assert.rejects(runDownloadCli(args, () => assert.fail("invalid input must not create a session")));
   }
 });
+
+it("CLI saves an opaque binary original and prints only verifiable completion metadata", async (t) => temporary(async (directory) => {
+  const bytes = Buffer.from([0, 255, 128, 13, 10, 0, 42, 254]);
+  const authenticated = session(async () => new Response(new ReadableStream({ start(stream) {
+    stream.enqueue(bytes.subarray(0, 3));
+    stream.enqueue(bytes.subarray(3));
+    stream.close();
+  } }), { headers: { "content-type": "application/octet-stream" } }));
+  const stdout = t.mock.method(console, "log", () => {});
+  const stderr = t.mock.method(console, "error", () => {});
+  const interruptListeners = process.listenerCount("SIGINT");
+  const terminateListeners = process.listenerCount("SIGTERM");
+  let closed = 0;
+  await runDownloadCli([`adam://file/${file.refId}`, "--output-dir", directory, "--confirm"], () => ({
+    async downloadFile(refId, destination, options) {
+      assert.equal(refId, file.refId);
+      assert.equal(destination, directory);
+      assert.ok(options?.signal instanceof AbortSignal);
+      return saveLocalDownload(authenticated, { ...file, title: "Original.bin" }, destination, options.signal);
+    },
+    async close() { closed++; },
+  }));
+  assert.equal(stdout.mock.callCount(), 1);
+  assert.equal(stdout.mock.calls[0].arguments.length, 1);
+  const result = JSON.parse(stdout.mock.calls[0].arguments[0]);
+  assert.deepEqual(result, {
+    path: join(directory, "Original.bin"), url: file.url, refId: file.refId,
+    sizeBytes: bytes.byteLength, sha256: createHash("sha256").update(bytes).digest("hex"),
+  });
+  assert.deepEqual(await readFile(result.path), bytes);
+  assert.deepEqual(await readdir(directory), ["Original.bin"]);
+  assert.equal(stderr.mock.callCount(), 1);
+  assert.equal(closed, 1);
+  assert.equal(process.listenerCount("SIGINT"), interruptListeners);
+  assert.equal(process.listenerCount("SIGTERM"), terminateListeners);
+}));
 
 it("closes the CLI provider and removes signal handlers after failure", async () => {
   let closed = 0;

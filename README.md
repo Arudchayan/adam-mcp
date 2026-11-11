@@ -8,9 +8,9 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-Source now targets **0.3.0 (unreleased)**. The published installation below remains
-0.2.0; candidate download and efficiency features require a source build. See the
-[candidate checklist](docs/qa/v0.3.0-release-candidate.md).
+**0.3.0 is published**, including selected local downloads and discovery
+efficiency improvements. See the
+[release and public-package verification record](docs/audit/2026-10-21-v0.3.0-release-readiness.md).
 
 ![Demo](docs/demo/demo.gif)
 
@@ -35,7 +35,7 @@ You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 Install the published package. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
 
 ```bash
-npm install -g adam-mcp@0.2.0
+npm install -g adam-mcp@0.3.0
 adam-mcp setup --client codex --write --login
 ```
 
@@ -50,10 +50,10 @@ See [client compatibility](docs/client-compatibility.md) for what has been verif
 The [published package](https://www.npmjs.com/package/adam-mcp) ships a self-contained CLI:
 
 ```bash
-npx -y adam-mcp@0.2.0
+npx -y adam-mcp@0.3.0
 ```
 
-The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-10-21-npm-publication.md) for source, integrity, client evidence and limits.
+The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-10-21-v0.3.0-release-readiness.md) for source, integrity, client evidence and limits.
 
 ### Build from source
 
@@ -86,14 +86,13 @@ other browsers.
 
 Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code, ChatGPT desktop, Codex): [docs/setup.md](docs/setup.md).
 
-### Save a selected file locally (0.3.0 source candidate)
+### Save a selected file locally (0.3.0)
 
-Find the file ID using `adam_list_files`, then run this command from the checkout.
+Find the file ID using `adam_list_files`, then run this command in your terminal.
 Use an existing directory outside any Git checkout:
 
 ```bash
-npm run build
-node packages/mcp/dist/adam-mcp.mjs download 100011 --output-dir "D:/Study/ADAM" --confirm
+adam-mcp download 100011 --output-dir "D:/Study/ADAM" --confirm
 ```
 
 `100011` is an example; replace it with your selected file ID. This explicitly
@@ -144,7 +143,7 @@ For page, file-text, exercise, and forum-post reads, request the specific object
   when reached. The browser queue admits at most 32 waiting operations and limits
   waiting to 30 seconds. Cancelling a request releases its work when nobody else
   needs it; cached reads reuse navigation and parsing.
-- Candidate 0.3.0 also shares complete discovery walks within each enrolled course.
+- Version 0.3.0 also shares complete discovery walks within each enrolled course.
   PDF parsing admits at most eight waiting requests and 32 MiB of waiting input;
   queued requests expire after 30 seconds. Overload returns a retryable error.
 - Search, calendar and news accept an enrolled `courseRefId` to narrow discovery. Use `refresh: true` without a cursor for fresh results. `snapshotAt` identifies the listing snapshot; each item's provenance records when it was fetched. Partial results include coverage reasons.
