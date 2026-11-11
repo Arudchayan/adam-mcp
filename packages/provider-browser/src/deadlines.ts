@@ -86,16 +86,17 @@ export function inferDates(text: string): InferredDate[] {
  * Do not promote unrelated page dates (exam, published, session) into invented deadlines.
  */
 export function exerciseDeadlineFromPage(text: string, _inferredDates?: InferredDate[]): string | undefined {
-  const labeled = [
-    ...text.matchAll(/\b(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:\s+date)?)\s*(?::|bis)\s*([^\n;]{3,120})/gi),
-  ];
-  if (labeled.length === 0) {
-    return undefined;
-  }
-  for (const match of labeled) {
-    const raw = match[1].trim();
+  const labels = [...text.matchAll(/\b(?:deadline|abgabefrist|abgabetermin|abgabe|frist|due(?:[ \t]+date)?)[ \t]*(?::|bis)[ \t]*/gi)];
+  for (const [index, match] of labels.entries()) {
+    const start = match.index + match[0].length;
+    const raw = text.slice(start, Math.min(start + 120, labels[index + 1]?.index ?? text.length)).split(/[\r\n;!?]/, 1)[0].trim();
     const date = inferDates(raw).sort((a, b) => raw.indexOf(a.raw) - raw.indexOf(b.raw))[0];
     if (!date?.iso) continue;
+    // A date must be the labelled value, optionally introduced by deadline-specific
+    // prose. Arbitrary prose (including unknown or negated values and other
+    // sentences) is not evidence that a later date is a deadline.
+    const prefix = raw.slice(0, raw.indexOf(date.raw)).trim();
+    if (!/^(?:(?:is|on|by|at|am|bis|ist|spätestens|spaetestens|fällig|faellig|due|submit|submission|einzureichen|abzugeben|the|der|die|den|zum|until|before|no later than)\s+)*$/i.test(prefix ? `${prefix} ` : "")) continue;
     const tail = raw.slice(raw.indexOf(date.raw) + date.raw.length);
     const time = tail.match(/^(?:\s*(?:,|um|at|T))?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(Z|[+-]\d{2}:?\d{2})?/i);
     if (!time) return date.iso; // Date-only evidence stays date-only (UTC midnight convention).
