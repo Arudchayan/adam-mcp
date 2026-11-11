@@ -33,6 +33,20 @@ function setup(snapshots: PageSnapshot[], tabs = [tab], failure?: number) {
   return { session, opens, waits, provider: createBrowserProvider({ session }) };
 }
 
+async function within<T>(promise: Promise<T>, description: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), 5_000);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 it("recovers a folder through one advertised Content/Inhalt tab, inventories files and keeps tst denied", async () => {
   const { provider, opens, waits } = setup([blank, full]);
   const children = await provider.listChildren("100010", { type: "fold" });
@@ -90,19 +104,20 @@ it("a shared course probe keeps getter type validation independent of untyped li
       const listing = () => provider.listChildren("100010");
       const firstResult = (first === "getter" ? getter : listing)();
       const firstSettled = Promise.allSettled([firstResult]);
-      await probing;
-      const secondResult = (first === "getter" ? listing : getter)();
-      const secondSettled = Promise.allSettled([secondResult]);
       try {
-        await secondProbe;
+        await within(probing, `${first} initial probe`);
+        const secondResult = (first === "getter" ? listing : getter)();
+        const secondSettled = Promise.allSettled([secondResult]);
+        await within(secondProbe, `${first} second caller joining the probe`);
+        release();
+        const results = [...await within(firstSettled, "first caller"), ...await within(secondSettled, "second caller")];
+        assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
+          first === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
+        assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
       } finally {
         release();
+        await within(provider.close(), "provider cleanup");
       }
-      const results = [...await firstSettled, ...await secondSettled];
-      assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
-        first === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
-      assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
-      await provider.close();
     }
   }
 });
@@ -124,17 +139,21 @@ it("delayed callers do not assume completed course probes are still shared", asy
       const listing = () => provider.listChildren("100010");
       const delayedResult = (delayed === "getter" ? getter : listing)();
       const delayedSettled = Promise.allSettled([delayedResult]);
-      await checking;
-      const immediateResult = (delayed === "getter" ? listing : getter)();
-      const immediateSettled = await Promise.allSettled([immediateResult]);
-      release();
-      const results = [...await delayedSettled, ...immediateSettled];
-      assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
-        delayed === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
-      assert.deepEqual(opens, delayed === "getter"
-        ? [url.replace("/fold/", "/crs/"), url, tab, url.replace("/fold/", "/crs/")]
-        : [url.replace("/fold/", "/crs/"), url, tab]);
-      await provider.close();
+      try {
+        await within(checking, `${delayed} logout check`);
+        const immediateResult = (delayed === "getter" ? listing : getter)();
+        const immediateSettled = await within(Promise.allSettled([immediateResult]), "immediate caller");
+        release();
+        const results = [...await within(delayedSettled, "delayed caller"), ...immediateSettled];
+        assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
+          delayed === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
+        assert.deepEqual(opens, delayed === "getter"
+          ? [url.replace("/fold/", "/crs/"), url, tab, url.replace("/fold/", "/crs/")]
+          : [url.replace("/fold/", "/crs/"), url, tab]);
+      } finally {
+        release();
+        await within(provider.close(), "provider cleanup");
+      }
     }
   }
 });
