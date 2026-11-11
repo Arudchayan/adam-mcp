@@ -72,8 +72,13 @@ Downloads use the dedicated authenticated Chrome session, stream at most 256 MiB
 and have a 120-second transfer deadline. Queue/session verification time is
 separate. They never execute or open downloaded files. Text extraction remains
 separate, approved and limited to 8 MiB. There is no batch, recursive, overwrite
-or resume mode. Empty and HTML-shaped files are refused, including legitimate
-HTML originals, to avoid saving a sign-in page as a successful download.
+or resume mode. Empty files and responses explicitly labelled HTML are refused.
+A heuristic also rejects HTML signatures in the first 4096 bytes (UTF-8 or
+BOM-marked UTF-16), including some legitimate originals. It is not a complete
+HTML detector: longer padding, other encodings or unrecognized markup can pass.
+Check suspicious files before opening them; downloads are never opened automatically.
+Unsolicited partial responses are refused; size and hash alone do not prove that
+the server supplied the complete original.
 
 Response filenames are sanitized for Windows/macOS/Linux. Directory components,
 unsafe/control characters and reserved names are handled. A missing response

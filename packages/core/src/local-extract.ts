@@ -7,6 +7,7 @@ export const MAX_EXTRACT_BYTES = 8 * 1024 * 1024;
 export const MAX_EXTRACT_CHARS = 40_000;
 export const DEFAULT_EXTRACT_PAGES = 8;
 export const MAX_EXTRACT_PAGES = 20;
+export const HTML_SNIFF_BYTES = 4096;
 
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
@@ -23,7 +24,10 @@ export function looksLikeHtml(bytes: Uint8Array, contentType?: string): boolean 
   if (contentType?.toLowerCase().includes("html")) {
     return true;
   }
-  const head = Buffer.from(bytes.slice(0, 1024)).toString("utf8").trimStart().toLowerCase();
+  const prefix = bytes.subarray(0, HTML_SNIFF_BYTES);
+  const encoding = prefix[0] === 0xff && prefix[1] === 0xfe ? "utf-16le"
+    : prefix[0] === 0xfe && prefix[1] === 0xff ? "utf-16be" : "utf-8";
+  const head = new TextDecoder(encoding).decode(prefix).trimStart().toLowerCase();
   return (
     head.startsWith("<!doctype") ||
     head.startsWith("<html") ||

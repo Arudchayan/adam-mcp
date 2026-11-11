@@ -10,6 +10,7 @@ export {
   DEFAULT_EXTRACT_PAGES,
   extractLocalFileText,
   extractPagesHaveText,
+  HTML_SNIFF_BYTES,
   isPdfGarbageText,
   looksLikeHtml,
   MAX_EXTRACT_BYTES,
