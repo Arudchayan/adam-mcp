@@ -29,7 +29,7 @@ it("cancels active navigation by closing only its tab and recovers the queue", a
   });
   Reflect.set(session, "rejectIfBlocked", async () => {});
   Reflect.set(session, "probeListing", async () => undefined);
-  Reflect.set(session, "readSnapshot", async () => snapshotFromHtml("https://adam.unibas.ch/go/fold/100010", "Folder", "<main>Folder</main>", "Folder"));
+  Reflect.set(session, "readSnapshot", async () => snapshotFromHtml("https://adam.unibas.ch/go/fold/100010", "Folder", "<main>This folder is empty</main>", "This folder is empty"));
   Reflect.set(session, "captureDebug", async () => {});
   const controller = new AbortController();
   const read = session.open("https://adam.unibas.ch/go/fold/100010", { signal: controller.signal });

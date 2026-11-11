@@ -46,6 +46,7 @@ import { pageHeading, parseForumPage, resolveForumThreadUrl, threadIdFromHref } 
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
 import { SnapshotPagination } from "./snapshot-pagination.ts";
+import { FolderListingError } from "./folder-listing.ts";
 import { SharedOperation, throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
 
 export type BrowserProviderOptions = {
@@ -840,6 +841,8 @@ export class BrowserAdamProvider implements AdamProvider {
     }
 
     let skipped = 0;
+    let unknownListings = homeListing.state === "unknown" ? 1 : 0;
+    let unreadablePages = 0;
     while (queue.length > 0 && pages.length < MAX_LIVE_PAGES) {
       if (expired()) break;
       throwIfAborted(signal);
@@ -866,6 +869,7 @@ export class BrowserAdamProvider implements AdamProvider {
         const listing = classifyListing(snapshot, childCount);
         if (listing.state === "unknown" && (catalog.current?.type === "crs" || catalog.current?.type === "fold")) {
           skipped += 1;
+          unknownListings += 1;
         }
         // PERF-1 / ADR 0005: unknown (and empty) — prune branch; never deepen from untrustworthy list.
         if (listing.state !== "ok") {
@@ -889,6 +893,8 @@ export class BrowserAdamProvider implements AdamProvider {
           throw error;
         }
         skipped += 1;
+        if (error instanceof FolderListingError) unknownListings += 1;
+        else unreadablePages += 1;
         continue;
       }
     }
@@ -900,8 +906,8 @@ export class BrowserAdamProvider implements AdamProvider {
       partialReasons: [
         ...(expired() ? ["time_budget" as const] : []),
         ...(queue.length > 0 && pages.length >= MAX_LIVE_PAGES ? ["page_budget" as const] : []),
-        ...(skipped > 0 ? ["unreadable_page" as const] : []),
-        ...(homeListing.state === "unknown" ? ["unknown_listing" as const] : []),
+        ...(unreadablePages > 0 ? ["unreadable_page" as const] : []),
+        ...(unknownListings > 0 ? ["unknown_listing" as const] : []),
       ],
     };
   }

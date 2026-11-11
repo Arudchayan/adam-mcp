@@ -478,7 +478,7 @@ export function classifyListing(
 ): ListingClassification {
   const hasDom = snapshot.dom !== undefined;
   const domRows = snapshot.dom?.itemRows ?? 0;
-  const emptyCopy = isAdamEmptyContainerPage(snapshot) || snapshot.dom?.emptyCopy === true;
+  const emptyCopy = hasDom ? snapshot.dom?.emptyCopy === true : isAdamEmptyContainerPage(snapshot);
   // Visible rows beat empty copy: a stray empty widget or frame must never hide content.
   if (domRows > 0) {
     if (keptCount > 0) {
