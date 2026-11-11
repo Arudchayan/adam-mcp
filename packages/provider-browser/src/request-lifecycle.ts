@@ -28,8 +28,9 @@ export function waitForSignal<T>(promise: Promise<T>, signal?: AbortSignal): Pro
 /** Shared work owns its signal; cancellation belongs to each subscriber. */
 export class SharedOperation<T> {
   private readonly controller = new AbortController();
-  private readonly subscribers = new Set<{ progress?: ProgressReporter; signal?: AbortSignal }>();
+  private readonly subscribers = new Set<{ progress?: ProgressReporter; signal?: AbortSignal; busy?: boolean }>();
   private settled = false;
+  private pendingProgress = 0;
   private latest?: ProgressUpdate;
   readonly promise: Promise<T>;
 
@@ -48,12 +49,10 @@ export class SharedOperation<T> {
 
   async join(signal?: AbortSignal, progress?: ProgressReporter): Promise<T> {
     throwIfAborted(signal);
-    const subscriber = { progress, signal };
+    const subscriber: { progress?: ProgressReporter; signal?: AbortSignal; busy?: boolean } = { progress, signal };
     this.subscribers.add(subscriber);
     if (progress && this.latest) {
-      void Promise.resolve().then(() => {
-        if (this.subscribers.has(subscriber) && !signal?.aborted) return progress(this.latest!);
-      }).catch(() => undefined);
+      this.deliver(subscriber, this.latest);
     }
     try {
       return await waitForSignal(waitForSignal(this.promise, this.controller.signal), signal);
@@ -66,11 +65,18 @@ export class SharedOperation<T> {
   private async report(update: ProgressUpdate): Promise<void> {
     throwIfAborted(this.controller.signal);
     this.latest = update;
-    // One host's failed notification must not fail another subscriber's read.
-    await waitForSignal(Promise.allSettled([...this.subscribers].map(async (subscriber) => {
-      if (this.subscribers.has(subscriber) && !subscriber.signal?.aborted) {
-        await waitForSignal(Promise.resolve(subscriber.progress?.(update)), subscriber.signal);
-      }
-    })), this.controller.signal);
+    // Best effort: at most one outstanding callback per subscriber; drop updates
+    // while busy. A callback cannot stall work or accumulate pending deliveries.
+    for (const subscriber of this.subscribers) this.deliver(subscriber, update);
+    await Promise.resolve();
+  }
+
+  private deliver(subscriber: { progress?: ProgressReporter; signal?: AbortSignal; busy?: boolean }, update: ProgressUpdate): void {
+    if (!subscriber.progress || subscriber.busy || subscriber.signal?.aborted || this.pendingProgress >= 32) return;
+    subscriber.busy = true;
+    this.pendingProgress++;
+    void Promise.resolve().then(() => {
+      if (this.subscribers.has(subscriber) && !subscriber.signal?.aborted) return subscriber.progress?.(update);
+    }).catch(() => undefined).finally(() => { subscriber.busy = false; this.pendingProgress--; });
   }
 }

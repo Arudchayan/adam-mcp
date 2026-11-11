@@ -32,7 +32,7 @@ import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } f
 import { boundHolderPid, holderStatus, isCdpAlive, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
 import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
-import { throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
+import { SharedOperation, throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
 import { FOLDER_CONTENT_TABS_SCRIPT, folderContentTab, folderListingState, rejectUnresolvedFolder, sameFolderLanding } from "./folder-listing.ts";
 import type {
   AdamBrowserSession,
@@ -210,7 +210,8 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private headed: boolean;
   private readonly feedbackHoldMs: number;
   private readonly hideWindowAfterFeedback: boolean;
-  private loginInflight: Promise<SessionStatus> | undefined;
+  private loginInflight: SharedOperation<SessionStatus> | undefined;
+  private loginUncancellable: Promise<SessionStatus> | undefined;
 
   constructor(options: PlaywrightSessionOptions = {}) {
     this.origin = options.origin ?? defaultOrigin();
@@ -388,18 +389,37 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   }
 
   loginInteractively(timeoutMs = DEFAULT_LOGIN_TIMEOUT_MS, options: { signal?: AbortSignal; force?: boolean; onProgress?: ProgressReporter } = {}): Promise<SessionStatus> {
-    if (this.loginInflight) return this.loginInflight;
-    const operation = this.runInteractiveLogin(timeoutMs, options).finally(() => {
-      if (this.loginInflight === operation) this.loginInflight = undefined;
-    });
-    this.loginInflight = operation;
-    return operation;
+    if (options.signal?.aborted) {
+      try { throwIfAborted(options.signal); } catch (error) { return Promise.reject(error); }
+    }
+    const existing = this.loginInflight;
+    if (existing?.aborted) {
+      // Wait for the previous owner's cleanup before starting another window.
+      return waitForSignal(existing.promise.catch(() => undefined), options.signal)
+        .then(() => this.loginInteractively(timeoutMs, options));
+    }
+    if (!existing) {
+      const operation = new SharedOperation<SessionStatus>((signal, onProgress) =>
+        this.runInteractiveLogin(timeoutMs, { force: options.force, signal, onProgress }));
+      this.loginInflight = operation;
+      void operation.promise.finally(() => {
+        if (this.loginInflight === operation) {
+          this.loginInflight = undefined;
+          this.loginUncancellable = undefined;
+        }
+      }).catch(() => undefined);
+    }
+    const operation = this.loginInflight!;
+    if (!options.signal && !options.onProgress) {
+      return this.loginUncancellable ??= operation.join();
+    }
+    return operation.join(options.signal, options.onProgress);
   }
 
   private async runInteractiveLogin(timeoutMs: number, options: { signal?: AbortSignal; force?: boolean; onProgress?: ProgressReporter }): Promise<SessionStatus> {
     const report = async (progress: number, message: string) => {
       // Feedback failure must not change authentication or strand Chrome.
-      try { await waitForSignal(Promise.resolve(options.onProgress?.({ progress, total: 4, message })), options.signal); } catch { /* Host feedback is best effort. */ }
+      try { await options.onProgress?.({ progress, total: 4, message }); } catch { /* Host feedback is best effort. */ }
       throwIfCancelled(options.signal);
     };
     throwIfCancelled(options.signal);
@@ -413,8 +433,10 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       // An expired headless session cannot accept interactive input. Release it first.
       await this.closeContext();
       await stopSessionHolder(this.profileDir);
+      throwIfCancelled(options.signal);
       this.headed = true;
-      const abort = () => { void this.closeContext(); };
+      let closing: Promise<void> | undefined;
+      const abort = () => { closing ??= this.closeContext(); };
       options.signal?.addEventListener("abort", abort, { once: true });
       try {
         await report(1, "Opening Chrome for ADAM sign-in.");
@@ -462,8 +484,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         throw error;
       } finally {
         options.signal?.removeEventListener("abort", abort);
+        await closing;
       }
-    }, options.signal);
+    });
   }
 
   async fetchAuthorized(url: string, options?: { signal?: AbortSignal }) {
