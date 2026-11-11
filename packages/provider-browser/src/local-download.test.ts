@@ -44,6 +44,13 @@ it("saves a streamed selected file with digest, server filename, no bytes result
   assert.equal((await readdir(directory)).length, 2);
 }));
 
+it("does not publish an unsolicited partial original", async () => temporary(async (directory) => {
+  await assert.rejects(saveLocalDownload(session(async () => new Response("abc", {
+    status: 206, headers: { "content-range": "bytes 0-2/100", "content-length": "3" },
+  })), file, directory), /partial file content/);
+  assert.deepEqual(await readdir(directory), []);
+}));
+
 it("accepts files over the extraction cap while preserving download limits", async () => temporary(async (directory) => {
   const bytes = new Uint8Array(8 * 1024 * 1024 + 1).fill(42);
   const result = await saveLocalDownload(session(async () => new Response(bytes)), file, directory);

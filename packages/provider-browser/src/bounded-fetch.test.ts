@@ -4,6 +4,17 @@ import { AdamError, MAX_EXTRACT_BYTES } from "adam-core";
 import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
 
 const origin = "https://adam.unibas.ch";
+it("rejects unsolicited partial responses before delivering headers or bytes", async () => {
+  for (const status of [200, 206]) {
+    let delivered = false, cancelled = false;
+    const body = new ReadableStream({ cancel() { cancelled = true; } });
+    await assert.rejects(boundedAuthorizedStream(`${origin}/file`, {
+      origin, headers: async () => ({}), fetch: async () => new Response(body, { status, headers: { "content-range": "bytes 0-2/100" } }),
+    }, { maxBytes: 10, timeoutMs: 1000, onHeaders: async () => { delivered = true; }, onChunk: async () => { delivered = true; } }), /partial file content/);
+    assert.equal(delivered, false);
+    assert.equal(cancelled, true);
+  }
+});
 it("HEAD probes preserve large-file metadata without reading response bytes", async () => {
   let cancelled = false;
   const result = await boundedAuthorizedFetch(`${origin}/file`, {
