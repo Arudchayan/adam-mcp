@@ -1,6 +1,6 @@
 # Architecture
 
-The 0.3.0 source candidate adds a CLI-only local download sink (ADR 0027),
+Version 0.3.0 adds a CLI-only local download sink (ADR 0027),
 scope-keyed discovery sharing and bounded PDF waiting demand (ADR 0028).
 No MCP tool or resource gains local filesystem write access.
 

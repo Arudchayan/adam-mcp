@@ -1,6 +1,7 @@
 # ADR 0028 — Scoped walk sharing and extraction backpressure
 
-Date: 2026-10-21. Status: implemented for the 0.3.0 candidate.
+Date: 2026-10-21. Status: implemented and published in 0.3.0; see the
+[public-package verification record](../audit/2026-10-21-v0.3.0-release-readiness.md).
 
 ## Context
 
