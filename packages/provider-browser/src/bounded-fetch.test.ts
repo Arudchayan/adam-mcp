@@ -120,23 +120,66 @@ it("times out a stalled download and never exposes credentials to redirect targe
   assert.equal(headers, 1);
 });
 
-it("waits for a blocked credential callback before reporting timeout", async () => {
+it("times out blocked credentials without a late authenticated request", async () => {
   let release!: () => void, entered!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const started = new Promise<void>((resolve) => { entered = resolve; });
-  let settled = false, requests = 0;
+  let requests = 0, credentialSignal: AbortSignal | undefined;
   const operation = boundedAuthorizedStream(`${origin}/file`, {
-    origin, headers: async () => { entered(); await gate; return {}; },
+    origin, headers: async (_url, signal) => { credentialSignal = signal; entered(); await gate; throw new Error("late credential failure"); },
     fetch: async (_url, options) => { requests++; options?.signal?.throwIfAborted(); return new Response("abc"); },
   }, { maxBytes: 10, timeoutMs: 10, onHeaders: async () => {}, onChunk: async () => {} });
-  const observed = operation.then(() => { settled = true; }, () => { settled = true; });
   await started;
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  assert.equal(settled, false);
-  release();
   await assert.rejects(operation, /timed out/);
-  await observed;
-  assert.equal(requests, 1);
+  assert.equal(credentialSignal?.aborted, true);
+  release();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(requests, 0);
+});
+
+it("does not fetch after cancelled credentials resolve late", async () => {
+  let release!: () => void, entered!: () => void, requests = 0;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const controller = new AbortController();
+  const operation = boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => { entered(); await gate; return { Cookie: "synthetic=value" }; },
+    fetch: async () => { requests++; return new Response("abc"); },
+  }, { signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async () => {} });
+  await started; controller.abort();
+  await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  release(); await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(requests, 0);
+});
+
+it("cancels a late non-cooperative fetch response without invoking the sink", async () => {
+  let release!: (response: Response) => void, entered!: () => void, cancelled = false, delivered = false;
+  const pending = new Promise<Response>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const controller = new AbortController();
+  const operation = boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => ({}), fetch: async () => { entered(); return pending; },
+  }, { signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => { delivered = true; }, onChunk: async () => { delivered = true; } });
+  await started; controller.abort();
+  await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  release(new Response(new ReadableStream({ cancel() { cancelled = true; } })));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(cancelled, true); assert.equal(delivered, false);
+});
+
+it("aborts a non-cooperative body read and does not deliver late chunks", async () => {
+  let bodyController!: ReadableStreamDefaultController<Uint8Array>, entered!: () => void, cancelled = false, chunks = 0;
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const controller = new AbortController();
+  const body = new ReadableStream<Uint8Array>({ start(stream) { bodyController = stream; }, cancel() { cancelled = true; return new Promise<void>(() => {}); } });
+  const operation = boundedAuthorizedStream(`${origin}/file`, { origin, headers: async () => ({}), fetch: async () => new Response(body) }, {
+    signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => { entered(); }, onChunk: async () => { chunks++; },
+  });
+  await started; await new Promise<void>((resolve) => setImmediate(resolve)); controller.abort();
+  await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  assert.equal(cancelled, true);
+  assert.throws(() => bodyController.enqueue(Uint8Array.of(1)));
+  assert.equal(chunks, 0);
 });
 
 it("waits for an in-flight sink callback before cancellation completes", async () => {
@@ -144,14 +187,15 @@ it("waits for an in-flight sink callback before cancellation completes", async (
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const started = new Promise<void>((resolve) => { entered = resolve; });
   const controller = new AbortController();
-  let settled = false, chunks = 0;
+  let settled = false, chunks = 0, sinkSignal: AbortSignal | undefined;
   const operation = boundedAuthorizedStream(`${origin}/file`, {
     origin, headers: async () => ({}), fetch: async () => new Response("abc"),
-  }, { signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async () => { chunks++; entered(); await gate; } });
+  }, { signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async (_chunk, signal) => { sinkSignal = signal; chunks++; entered(); await gate; } });
   const observed = operation.then(() => { settled = true; }, () => { settled = true; });
   await started; controller.abort();
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(settled, false);
+  assert.equal(sinkSignal?.aborted, true);
   release();
   await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
   await observed;
