@@ -11,6 +11,8 @@ import { createPlaywrightSession } from "./playwright-session.ts";
 import { HOLDER_LIFECYCLE_LOCK, lifecycleOwnsGeneration, revokeHolderGeneration, withHolderLifecycle, withHolderMutation } from "./holder-lock.ts";
 import { devToolsActivePortPath, holderRecordPath, holderSeedPath, holderStatus, runSessionHolder, startSessionHolder, stopSessionHolder } from "./session-holder.ts";
 
+const syntheticIdentity = () => ({ pid: process.pid, startTime: "synthetic-runner", exe: "synthetic-node" });
+
 test("failed startup preserves a foreign fixed-path handoff", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "adam-owner-"));
   t.mock.method(process, "kill", () => { throw new Error("unexpected signal"); });
@@ -110,7 +112,7 @@ test("a valid child consumes its own seed and publishes pending ownership before
     await withHolderLifecycle(directory, async (generation) => {
       const seed = holderSeedPath(directory, generation);
       await writeFile(seed, JSON.stringify({ generation, cookies: [] }));
-      await assert.rejects(runSessionHolder(seed), /synthetic launch failure/);
+      await assert.rejects(runSessionHolder(seed, { readOwnIdentity: syntheticIdentity }), /synthetic launch failure/);
       assert.equal(launched, true);
       await assert.rejects(access(seed));
     });
@@ -147,6 +149,21 @@ test("resume verification failure closes Chrome before releasing lifecycle owner
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test("an unavailable identity still refuses child launch", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "adam-owner-no-identity-"));
+  let launched = false;
+  t.mock.method(chromium, "launchPersistentContext", async () => { launched = true; throw new Error("must not launch"); });
+  try {
+    await withHolderLifecycle(directory, async (generation) => {
+      const seed = holderSeedPath(directory, generation);
+      await writeFile(seed, JSON.stringify({ generation, cookies: [] }));
+      await assert.rejects(runSessionHolder(seed, { readOwnIdentity: () => undefined }), /Could not bind ADAM session process identity/);
+      assert.equal(launched, false);
+      await assert.rejects(access(holderRecordPath(directory)));
+    });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("signal during a rejected holder launch never acknowledges Chrome shutdown", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "adam-owner-launch-reject-"));
   const handlers = new Map((["SIGTERM", "SIGINT"] as const).map((name) => [name, new Set(process.listeners(name))]));
@@ -162,7 +179,7 @@ test("signal during a rejected holder launch never acknowledges Chrome shutdown"
     await withHolderLifecycle(directory, async (generation) => {
       const seed = holderSeedPath(directory, generation);
       await writeFile(seed, JSON.stringify({ generation, cookies: [] }));
-      const operation = runSessionHolder(seed).catch((error: unknown) => error);
+      const operation = runSessionHolder(seed, { readOwnIdentity: syntheticIdentity }).catch((error: unknown) => error);
       await started;
       const handler = process.listeners("SIGTERM").find((candidate) => !handlers.get("SIGTERM")!.has(candidate));
       assert.ok(handler);
