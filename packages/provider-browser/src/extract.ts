@@ -193,13 +193,15 @@ function inRanges(index: number, ranges: Array<[number, number]>): boolean {
 /** Merge main-frame links with links collected inside content frames (dedupe by href+text). */
 export function mergeFrameLinks(mainLinks: SnapshotLink[], frameLinks: SnapshotLink[]): SnapshotLink[] {
   const merged = [...mainLinks];
-  const seen = new Set(mainLinks.map((link) => `${link.href}\n${link.text}`));
+  const seen = new Map(mainLinks.map((link, index) => [`${link.href}\n${link.text}\n${link.inBreadcrumb}`, index]));
   for (const link of frameLinks) {
-    const key = `${link.href}\n${link.text}`;
-    if (seen.has(key)) {
+    const key = `${link.href}\n${link.text}\n${link.inBreadcrumb}`;
+    const existing = seen.get(key);
+    if (existing !== undefined) {
+      if (merged[existing].inChrome && !link.inChrome) merged[existing] = link;
       continue;
     }
-    seen.add(key);
+    seen.set(key, merged.length);
     merged.push(link);
   }
   return merged;

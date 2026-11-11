@@ -74,10 +74,12 @@ export type LivePage = {
 
 /** Drop full HTML/aria snapshot body after extract; keep objects, text, dates, news, provenance. */
 export function retainWalkPage(snapshot: PageSnapshot, catalog: ExtractedCatalog): LivePage {
+  const children = catalog.objects.filter((item) => item.refId !== catalog.current?.refId && !isDeniedObjectType(item.type));
+  const verified = classifyListing(snapshot, children.length).state === "ok";
   return {
     url: snapshot.url,
     title: snapshot.title,
-    catalog,
+    catalog: verified ? catalog : { ...catalog, objects: [], files: [] },
   };
 }
 
