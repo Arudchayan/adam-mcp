@@ -29,7 +29,22 @@ function setup(snapshots: PageSnapshot[], tabs = [tab], failure?: number) {
   Reflect.set(session, "rejectIfBlocked", async () => {});
   Reflect.set(session, "probeListing", async () => undefined);
   Reflect.set(session, "readSnapshot", async () => snapshots[Math.min(index, snapshots.length - 1)]!);
+  session.explicitlyLoggedOut = async () => false;
   return { session, opens, waits, provider: createBrowserProvider({ session }) };
+}
+
+async function within<T>(promise: Promise<T>, description: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timed out waiting for ${description}`)), 5_000);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 it("recovers a folder through one advertised Content/Inhalt tab, inventories files and keeps tst denied", async () => {
@@ -67,13 +82,80 @@ it("getCourse preserves a verified same-ref blank folder for unsupported_type wi
 });
 
 it("a shared course probe keeps getter type validation independent of untyped listing recovery", async () => {
-  const { provider, opens } = setup([blank]);
-  const results = await Promise.allSettled([provider.getCourse("100010"), provider.listChildren("100010")]);
-  assert.equal(results[0].status, "rejected");
-  assert.equal(results[1].status, "rejected");
-  if (results[0].status === "rejected") assert.equal(results[0].reason.code, "unsupported_type");
-  if (results[1].status === "rejected") assert.equal(results[1].reason.code, "provider_unavailable");
-  assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
+  for (const first of ["getter", "listing"] as const) {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const { provider, session, opens } = setup([blank]);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      let entered!: () => void;
+      const probing = new Promise<void>((resolve) => { entered = resolve; });
+      const open = session.open.bind(session);
+      session.open = async (...args) => { entered(); await gate; return open(...args); };
+      const original = Reflect.get(provider, "openAuthorized").bind(provider);
+      let joined!: () => void;
+      const secondProbe = new Promise<void>((resolve) => { joined = resolve; });
+      let calls = 0;
+      Reflect.set(provider, "openAuthorized", (...args: unknown[]) => {
+        const result = original(...args);
+        if (++calls === 2) joined();
+        return result;
+      });
+      const getter = () => provider.getCourse("100010");
+      const listing = () => provider.listChildren("100010");
+      const firstResult = (first === "getter" ? getter : listing)();
+      const firstSettled = Promise.allSettled([firstResult]);
+      try {
+        await within(probing, `${first} initial probe`);
+        const secondResult = (first === "getter" ? listing : getter)();
+        const secondSettled = Promise.allSettled([secondResult]);
+        await within(secondProbe, `${first} second caller joining the probe`);
+        release();
+        const results = [...await within(firstSettled, "first caller"), ...await within(secondSettled, "second caller")];
+        assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
+          first === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
+        assert.deepEqual(opens, [url.replace("/fold/", "/crs/"), url, tab]);
+      } finally {
+        release();
+        await within(provider.close(), "provider cleanup");
+      }
+    }
+  }
+});
+
+it("delayed callers do not assume completed course probes are still shared", async () => {
+  for (const delayed of ["getter", "listing"] as const) {
+    for (let iteration = 0; iteration < 20; iteration++) {
+      const { provider, session, opens } = setup([blank]);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      let entered!: () => void;
+      const checking = new Promise<void>((resolve) => { entered = resolve; });
+      let checks = 0;
+      session.explicitlyLoggedOut = async () => {
+        if (++checks === 1) { entered(); await gate; }
+        return false;
+      };
+      const getter = () => provider.getCourse("100010");
+      const listing = () => provider.listChildren("100010");
+      const delayedResult = (delayed === "getter" ? getter : listing)();
+      const delayedSettled = Promise.allSettled([delayedResult]);
+      try {
+        await within(checking, `${delayed} logout check`);
+        const immediateResult = (delayed === "getter" ? listing : getter)();
+        const immediateSettled = await within(Promise.allSettled([immediateResult]), "immediate caller");
+        release();
+        const results = [...await within(delayedSettled, "delayed caller"), ...immediateSettled];
+        assert.deepEqual(results.map((result) => result.status === "rejected" && result.reason.code),
+          delayed === "getter" ? ["unsupported_type", "provider_unavailable"] : ["provider_unavailable", "unsupported_type"]);
+        assert.deepEqual(opens, delayed === "getter"
+          ? [url.replace("/fold/", "/crs/"), url, tab, url.replace("/fold/", "/crs/")]
+          : [url.replace("/fold/", "/crs/"), url, tab]);
+      } finally {
+        release();
+        await within(provider.close(), "provider cleanup");
+      }
+    }
+  }
 });
 
 it("conflicting operation expectations do not share an in-flight folder failure", async () => {
