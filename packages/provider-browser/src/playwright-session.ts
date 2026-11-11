@@ -175,11 +175,18 @@ export function classifyStatus(snapshot: PageSnapshot): "logged-in" | "login" | 
 }
 
 const COLLECT_LINKS_SCRIPT = `(() => {
+  const root = document.querySelector("main #il_center_col") ?? document.querySelector("#il_center_col") ??
+    document.querySelector("main") ?? document.body;
+  const rows = root ? [...root.querySelectorAll(${JSON.stringify(LISTING_ITEM_SELECTOR)})].map((item) =>
+    item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item) : [];
   return [...document.querySelectorAll("a[href]")].map((anchor) => {
     return {
       href: anchor.href,
       text: (anchor.textContent || "").replace(/\\s+/g, " ").trim(),
       inChrome: Boolean(
+        (root && !root.contains(anchor)) ||
+        (anchor.closest("aside, nav") && !anchor.closest("article")) ||
+        !rows.some((row) => row.contains(anchor)) ||
         anchor.closest(
           ".il-layout-page > header, header.il-layout-page-header, [aria-label='Hauptnavigationsleiste'], .il-mainbar, #ilTopBar, .il-footer, footer.il-footer, .ilMainMenu",
         ),
