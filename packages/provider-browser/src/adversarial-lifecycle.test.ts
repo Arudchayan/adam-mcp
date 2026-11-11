@@ -6,6 +6,27 @@ import { SharedOperation } from "./request-lifecycle.ts";
 import { createBrowserProvider } from "./browser-provider.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
+test("drops progress while a subscriber is busy without holding shared completion", async () => {
+  let release!: () => void;
+  let entered!: () => void;
+  const blocked = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  let calls = 0;
+  const operation = new SharedOperation(async (_signal, report) => {
+    await report({ progress: 1 });
+    await started;
+    for (let i = 0; i < 100; i++) await report({ progress: i + 2 });
+    return 42;
+  });
+  const slow = operation.join(undefined, () => { calls++; entered(); return blocked; });
+  const healthy = operation.join();
+  try {
+    assert.equal(await healthy, 42);
+    assert.equal(await slow, 42);
+    assert.equal(calls, 1);
+  } finally { release(); }
+});
+
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
   const promise = new Promise<T>((done) => { resolve = done; });

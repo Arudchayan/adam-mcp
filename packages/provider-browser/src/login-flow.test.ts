@@ -79,6 +79,83 @@ it("concurrent login requests reuse the same operation and a valid session", asy
   assert.equal(checks, 1);
 });
 
+it("coalesced login callers cancel independently, including an already-aborted caller", async () => {
+  const session = createPlaywrightSession();
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  session.status = async () => { entered(); await gate; return { loggedIn: true, reason: "signed-in" }; };
+  const firstController = new AbortController();
+  const first = session.loginInteractively(undefined, { signal: firstController.signal });
+  const firstRejected = assert.rejects(first, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  await started;
+  const second = session.loginInteractively();
+  const aborted = new AbortController(); aborted.abort();
+  await assert.rejects(session.loginInteractively(undefined, { signal: aborted.signal }), /cancelled/i);
+  firstController.abort();
+  await firstRejected;
+  release();
+  assert.equal((await second).loggedIn, true);
+});
+
+it("last login owner aborts shared work and a new login waits for cleanup", async () => {
+  const session = createPlaywrightSession();
+  let started!: () => void, cleaned!: () => void, release!: () => void;
+  const began = new Promise<void>((resolve) => { started = resolve; });
+  const cleanup = new Promise<void>((resolve) => { release = resolve; });
+  const aborted = new Promise<void>((resolve) => { cleaned = resolve; });
+  let runs = 0;
+  const internal = session as unknown as { runInteractiveLogin: (timeout: number, options: { signal: AbortSignal }) => Promise<{ loggedIn: boolean }> };
+  internal.runInteractiveLogin = async (_timeout, options) => {
+    runs++;
+    if (runs > 1) return { loggedIn: true };
+    started();
+    await new Promise<void>((resolve) => options.signal.addEventListener("abort", () => { cleaned(); resolve(); }, { once: true }));
+    await cleanup;
+    throw new AdamError("cancelled", "cancelled", false);
+  };
+  const controller = new AbortController();
+  const first = session.loginInteractively(undefined, { signal: controller.signal });
+  const rejected = assert.rejects(first, /cancelled/i);
+  await began;
+  controller.abort();
+  await rejected;
+  await aborted;
+  const next = session.loginInteractively();
+  assert.equal(runs, 1);
+  release();
+  assert.equal((await next).loggedIn, true);
+  assert.equal(runs, 2);
+});
+
+it("closes a window that appears after the last login caller cancels", async () => {
+  const profileDir = await mkdtemp(join(tmpdir(), "adam-login-cancel-"));
+  const session = createPlaywrightSession({ profileDir });
+  let entered!: () => void, release!: () => void;
+  const began = new Promise<void>((resolve) => { entered = resolve; });
+  const launch = new Promise<void>((resolve) => { release = resolve; });
+  let windowOpen = false;
+  const internal = session as unknown as {
+    ensurePage: () => Promise<unknown>;
+    closeContext: () => Promise<void>;
+    loginInflight: { promise: Promise<unknown> };
+  };
+  internal.ensurePage = async () => { entered(); await launch; windowOpen = true; return {}; };
+  internal.closeContext = async () => { windowOpen = false; };
+  try {
+    const controller = new AbortController();
+    const login = session.loginInteractively(undefined, { force: true, signal: controller.signal });
+    const rejected = assert.rejects(login, /cancelled/i);
+    await began;
+    const completion = internal.loginInflight.promise.catch(() => undefined);
+    controller.abort();
+    await rejected;
+    release();
+    await completion;
+    assert.equal(windowOpen, false);
+  } finally { release(); await session.close(); await rm(profileDir, { recursive: true, force: true }); }
+});
+
 it("verified login reuse reports safe progress and tolerates a failed host notification", async () => {
   const session = createPlaywrightSession();
   session.status = async () => ({ loggedIn: true, reason: "signed-in" });

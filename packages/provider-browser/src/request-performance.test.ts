@@ -157,16 +157,19 @@ it("refreshes a reused in-process snapshot's parsed catalog after the TTL", asyn
   assert.equal(opens, 2);
 });
 
-it("bounds a walk even when the host's progress callback never resolves", async () => {
+it("completes a walk even when the host's progress callback never resolves", async () => {
   const provider = createBrowserProvider({ walkTimeoutMs: 20, session: createMemorySession({ [origin]: home(), [url]: course() }) });
-  await assert.rejects(() => provider.search("Notes", { onProgress: () => new Promise<void>(() => {}) }),
-    (error: unknown) => error instanceof AdamError && error.code === "provider_unavailable" && error.retryable);
+  assert.ok((await provider.search("Notes", { onProgress: () => new Promise<void>(() => {}) })).items.length > 0);
   assert.ok((await provider.search("Notes")).items.length > 0);
 });
 
 it("a cancelled caller's stuck progress callback does not hold up another subscriber", async () => {
   const reporting = deferred();
-  const provider = createBrowserProvider({ session: createMemorySession({ [origin]: home(), [url]: course() }) });
+  const release = deferred();
+  const session = createMemorySession({ [origin]: home(), [url]: course() });
+  const open = session.open.bind(session);
+  session.open = async (...args) => { if (args[0] === url) await release.promise; return open(...args); };
+  const provider = createBrowserProvider({ session });
   const controller = new AbortController();
   const first = provider.search("Notes", { signal: controller.signal, onProgress: () => {
     reporting.resolve();
@@ -175,7 +178,7 @@ it("a cancelled caller's stuck progress callback does not hold up another subscr
   const rejected = assert.rejects(first, cancelled);
   await reporting.promise;
   const second = provider.search("Notes");
-  await new Promise<void>((done) => setImmediate(done));
   controller.abort(); await rejected;
+  release.resolve();
   assert.ok((await second).items.some((item) => item.refId === "100011"));
 });
