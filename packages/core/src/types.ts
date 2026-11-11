@@ -80,6 +80,9 @@ export type PageContent = AdamObject & {
   inferredDates: InferredDate[];
   /** True when page text was capped at MAX_PAGE_CHARS (ADR 0011). */
   truncated?: boolean;
+  /** Selected Web Link redirect metadata only; destinations are never fetched. */
+  destinations?: Array<{ url: string; sourceUrl: string }>;
+  destinationNotice?: string;
 };
 
 export type FileObject = AdamObject & {

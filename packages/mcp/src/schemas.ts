@@ -284,6 +284,8 @@ export const untrustedPageOutputSchema = adamObjectOutputSchema.extend({
   notice: z.string(),
   text: z.string(),
   truncated: z.boolean().optional().describe("True when page text was capped at MAX_PAGE_CHARS"),
+  destinations: z.array(z.object({ url: z.string().url(), sourceUrl: z.string().url() })).optional(),
+  destinationNotice: z.string().optional(),
   inferredDates: z.array(
     z
       .object({

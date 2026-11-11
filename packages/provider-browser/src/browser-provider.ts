@@ -48,6 +48,7 @@ import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-
 import { SnapshotPagination } from "./snapshot-pagination.ts";
 import { FolderListingError } from "./folder-listing.ts";
 import { SharedOperation, throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
+import { webLinkLaunchUrl } from "./weblink.ts";
 
 export type BrowserProviderOptions = {
   session?: AdamBrowserSession;
@@ -344,8 +345,26 @@ export class BrowserAdamProvider implements AdamProvider {
     if (object.type === "unknown") {
       throw new AdamError("not_found", `No page could be read for ref_id ${refId}.`);
     }
+    let webLinks: Pick<PageContent, "destinations" | "destinationNotice"> = {};
+    if (object.type === "webr") {
+      const targets = [...new Set(snapshot.links.filter((link) => !link.inChrome && !link.inBreadcrumb)
+        .map((link) => webLinkLaunchUrl(link.href, refId)).filter((url): url is string => Boolean(url)))];
+      const resolver = this.session().resolveWebLink;
+      const destinations: NonNullable<PageContent["destinations"]> = [];
+      if (resolver) {
+        for (const target of targets.slice(0, 8)) {
+          throwIfCancelled(options?.signal);
+          const destination = await resolver.call(this.session(), target, refId, { signal: options?.signal });
+          if (destination) destinations.push(destination);
+        }
+      }
+      webLinks = { destinations, destinationNotice: destinations.length === targets.length && targets.length > 0
+        ? "Destination URLs are untrusted ADAM redirect metadata; no external destination was fetched. Query strings, fragments and unrecognized path schemas are omitted; open the ADAM source URL for the exact launch link."
+        : "Destination inventory may be incomplete: only up to eight verified ADAM Web Link redirects are resolved, without fetching external targets. Query strings, fragments and unrecognized path schemas are omitted; open ADAM source URLs for exact launch links." };
+    }
     return {
       ...object,
+      ...webLinks,
       text: catalog.text,
       inferredDates: catalog.inferredDates,
       truncated: snapshot.text.length > MAX_PAGE_CHARS,
