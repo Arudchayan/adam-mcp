@@ -74,8 +74,8 @@ export async function saveLocalDownload(
           throw new AdamError("unsupported_type", "ADAM returned an HTML page. Recheck your session and selected file.", false);
         }
       },
-      onChunk: async (chunk) => {
-        throwIfCancelled(signal);
+      onChunk: async (chunk, transferSignal) => {
+        transferSignal.throwIfAborted();
         if (chunk.byteLength > MAX_DOWNLOAD_BYTES - sizeBytes) throw new AdamError("provider_unavailable", "Download exceeds the 256 MiB limit.", false);
         if (prefix.length < HTML_SNIFF_BYTES) {
           prefix = Buffer.concat([prefix, chunk.subarray(0, HTML_SNIFF_BYTES - prefix.length)]);
@@ -84,11 +84,12 @@ export async function saveLocalDownload(
         // FileHandle.write can write less than the supplied chunk.
         let offset = 0;
         while (offset < chunk.byteLength) {
-          throwIfCancelled(signal);
+          transferSignal.throwIfAborted();
           const { bytesWritten } = await sink.write(chunk, offset, chunk.byteLength - offset);
           if (!bytesWritten) throw new Error("File write made no progress");
           offset += bytesWritten;
         }
+        transferSignal.throwIfAborted();
         hash.update(chunk);
         sizeBytes += chunk.byteLength;
       },

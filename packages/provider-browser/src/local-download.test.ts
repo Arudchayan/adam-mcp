@@ -51,6 +51,32 @@ it("does not publish an unsolicited partial original", async () => temporary(asy
   assert.deepEqual(await readdir(directory), []);
 }));
 
+it("waits for an active sink before cleanup and prevents a late write or publication", async () => temporary(async (directory) => {
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const controller = new AbortController();
+  const authenticated: AdamBrowserSession = {
+    ...createMemorySession({}),
+    streamAuthorized: (url, options) => boundedAuthorizedStream(url, { origin, headers: async () => ({}), fetch: async () => new Response("%PDF-synthetic") }, {
+      ...options, onChunk: async (chunk, signal) => { entered(); await gate; await options.onChunk(chunk, signal); },
+    }),
+  };
+  let settled = false;
+  const operation = saveLocalDownload(authenticated, file, directory, controller.signal);
+  const observed = operation.then(() => { settled = true; }, () => { settled = true; });
+  await started; controller.abort();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  assert.match((await readdir(directory))[0], /^\.adam-download-.*\.part$/);
+  release();
+  await assert.rejects(operation, /cancelled/);
+  await observed;
+  assert.deepEqual(await readdir(directory), []);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.deepEqual(await readdir(directory), []);
+}));
+
 it("refuses bounded HTML signatures despite misleading MIME and split byte chunks", async () => temporary(async (directory) => {
   const samples = [
     Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("<!doctype html><html>", "utf16le")]),

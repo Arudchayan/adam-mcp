@@ -68,8 +68,9 @@ export type AuthorizedStreamOptions = {
   signal?: AbortSignal;
   maxBytes: number;
   timeoutMs: number;
-  onHeaders: (headers: AuthorizedProbeResult) => Promise<void>;
-  onChunk: (chunk: Uint8Array) => Promise<void>;
+  /** Callbacks must observe the transfer signal and settle before sink cleanup. */
+  onHeaders: (headers: AuthorizedProbeResult, signal: AbortSignal) => Promise<void>;
+  onChunk: (chunk: Uint8Array, signal: AbortSignal) => Promise<void>;
 };
 
 export type AdamBrowserSession = {
