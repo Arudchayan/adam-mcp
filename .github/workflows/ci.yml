@@ -21,9 +21,8 @@ jobs:
     #
     # Every commit now gets one fast representative leg; pushes additionally verify
     # the primary secondary platform. The complete 3x2 matrix still runs in
-    # release-candidate.yml, which is reachable via release tags and a weekly
-    # schedule - so no cross-platform coverage is lost, it is just no longer paid
-    # for on every keystroke.
+    # release-candidate.yml. Run it manually on the exact release commit before
+    # tagging or publishing; a weekly or post-tag run is not a substitute.
     strategy:
       fail-fast: false
       matrix:
