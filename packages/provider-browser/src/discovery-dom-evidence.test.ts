@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { chromium } from "playwright-core";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createBrowserProvider } from "./browser-provider.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import { extractCatalog, mergeFrameLinks } from "./extract.ts";
@@ -14,7 +17,15 @@ it("a chrome duplicate cannot mask a same-origin frame's content link", () => {
     [{ ...link, inBreadcrumb: true }, { ...link, inChrome: false }]);
 });
 
-it("intercepted Chrome retains parsed identities from scrubbed captured dashboard and course layouts", { skip: process.env.ADAM_TEST_CHROME !== "1" }, async () => {
+async function temporaryProfile(): Promise<string> {
+  const root = join(tmpdir(), "opencode");
+  await mkdir(root, { recursive: true });
+  return mkdtemp(join(root, "adam-discovery-test-"));
+}
+
+it("intercepted Chrome retains parsed identities from scrubbed captured dashboard and course layouts", { skip: process.env.ADAM_TEST_CHROME !== "1" }, async (t) => {
+  const profileDir = await temporaryProfile();
+  t.after(() => rm(profileDir, { recursive: true, force: true }));
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   try {
     const context = await browser.newContext({ serviceWorkers: "block" });
@@ -24,22 +35,26 @@ it("intercepted Chrome retains parsed identities from scrubbed captured dashboar
       await route.fulfill({ contentType: "text/html", body: html });
     });
     const page = await context.newPage();
-    const session = createPlaywrightSession();
+    const session = createPlaywrightSession({ profileDir });
     Reflect.set(session, "ensurePage", async () => page);
-    for (const name of ["dashboard", "course-multimedia"]) {
-      const fixture = JSON.parse(readFileSync(new URL(`../fixtures/live/${name}.json`, import.meta.url), "utf8"));
-      html = fixture.html;
-      const original = extractCatalog(snapshotFromHtml(fixture.url, fixture.title, html, fixture.text), "");
-      const expected = original.objects.filter((item) => name === "dashboard" ? item.type === "crs" : item.type !== "tst").map((item) => item.refId).sort();
-      assert.notDeepEqual(expected, [], `${name} fixture must contain identities`);
-      const snapshot = await session.open("https://adam.unibas.ch/go/crs/710001");
-      const actual = extractCatalog(snapshot, "").objects.filter((item) => name === "dashboard" ? item.type === "crs" : item.type !== "tst").map((item) => item.refId).sort();
-      assert.deepEqual(actual, expected, name);
-    }
+    try {
+      for (const name of ["dashboard", "course-multimedia"]) {
+        const fixture = JSON.parse(readFileSync(new URL(`../fixtures/live/${name}.json`, import.meta.url), "utf8"));
+        html = fixture.html;
+        const original = extractCatalog(snapshotFromHtml(fixture.url, fixture.title, html, fixture.text), "");
+        const expected = original.objects.filter((item) => name === "dashboard" ? item.type === "crs" : item.type !== "tst").map((item) => item.refId).sort();
+        assert.notDeepEqual(expected, [], `${name} fixture must contain identities`);
+        const snapshot = await session.open("https://adam.unibas.ch/go/crs/710001");
+        const actual = extractCatalog(snapshot, "").objects.filter((item) => name === "dashboard" ? item.type === "crs" : item.type !== "tst").map((item) => item.refId).sort();
+        assert.deepEqual(actual, expected, name);
+      }
+    } finally { await session.close(); }
   } finally { await browser.close(); }
 });
 
-it("intercepted DOM correlates listing rows and identities within content regions", { skip: process.env.ADAM_TEST_CHROME !== "1" }, async () => {
+it("intercepted DOM correlates listing rows and identities within content regions", { skip: process.env.ADAM_TEST_CHROME !== "1" }, async (t) => {
+  const profileDir = await temporaryProfile();
+  t.after(() => rm(profileDir, { recursive: true, force: true }));
   const origin = "https://adam.unibas.ch";
   const course = `${origin}/go/crs/710001`;
   const browser = await chromium.launch({ channel: "chrome", headless: true });
@@ -67,20 +82,25 @@ it("intercepted DOM correlates listing rows and identities within content region
     ];
     for (const entry of cases) {
       content = `<title>Course</title>${entry.html}`;
-      const session = createPlaywrightSession();
+      const session = createPlaywrightSession({ profileDir });
       Reflect.set(session, "ensurePage", async () => page);
       const provider = createBrowserProvider({ session });
-      const result = await provider.listChildren("710001", { type: "crs" });
-      assert.equal(result.listingState, entry.state, entry.html);
-      assert.deepEqual(result.items.map((item) => item.refId), entry.refs, entry.html);
+      try {
+        const result = await provider.listChildren("710001", { type: "crs" });
+        assert.equal(result.listingState, entry.state, entry.html);
+        assert.deepEqual(result.items.map((item) => item.refId), entry.refs, entry.html);
+      } finally { await provider.close(); }
     }
     frameContent = '<main><div id="il_center_col"><div class="ilContainerListItemOuter">Unparsed frame row</div></div></main>';
     content = '<title>Course</title><main><a href="/go/crs/710099">Unrelated shell link</a><iframe src="/frame"></iframe></main>';
-    const session = createPlaywrightSession();
+    const session = createPlaywrightSession({ profileDir });
     Reflect.set(session, "ensurePage", async () => page);
-    const result = await createBrowserProvider({ session }).listChildren("710001", { type: "crs" });
-    assert.equal(result.listingState, "unknown");
-    assert.deepEqual(result.items, []);
+    const provider = createBrowserProvider({ session });
+    try {
+      const result = await provider.listChildren("710001", { type: "crs" });
+      assert.equal(result.listingState, "unknown");
+      assert.deepEqual(result.items, []);
+    } finally { await provider.close(); }
     assert.deepEqual(requests, [course, course, course, course, course, course, `${origin}/frame`, course, `${origin}/frame`]);
   } finally { await browser.close(); }
 });
