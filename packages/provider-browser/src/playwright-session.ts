@@ -1,7 +1,7 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { AdamError, redactUrl, throwIfCancelled, type ProgressReporter } from "adam-core";
+import { AdamError, parseAdamRef, redactUrl, throwIfCancelled, type AdamObjectType, type ProgressReporter } from "adam-core";
 import { inactiveSessionStatus } from "./session-state.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
 import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
@@ -24,6 +24,8 @@ import {
   capText,
   isLoggedInSnapshot,
   isLoginSnapshot,
+  isAdamFailurePage,
+  isAdamPermissionPage,
   mergeFrameLinks,
 } from "./extract.ts";
 import { DEFAULT_FEEDBACK_HOLD_MS, minimizeChromeWindow, showSessionFeedback } from "./session-feedback.ts";
@@ -31,6 +33,7 @@ import { boundHolderPid, holderStatus, isCdpAlive, startSessionHolder, stopSessi
 import { resumeDeadHolderSession, type ResumeLaunch } from "./session-resume.ts";
 import { SerialQueue } from "./serial-queue.ts";
 import { throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
+import { FOLDER_CONTENT_TABS_SCRIPT, folderContentTab, folderListingState, rejectUnresolvedFolder, sameFolderLanding } from "./folder-listing.ts";
 import type {
   AdamBrowserSession,
   AuthorizedStreamOptions,
@@ -58,7 +61,7 @@ const SESSION_SETTLED_SCRIPT = `(() => {
 const LISTING_ITEM_SELECTOR =
   ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']";
 
-const LISTING_PROBE_SCRIPT = `(() => {
+const LISTING_PROBE_FUNCTION = `((document) => {
   const root =
     document.querySelector("main #il_center_col") ??
     document.querySelector("#il_center_col") ??
@@ -70,16 +73,31 @@ const LISTING_PROBE_SCRIPT = `(() => {
     rows.add(item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item);
   }
   const text = root ? root.innerText || "" : "";
-  const emptyCopy = (${EMPTY_CONTAINER_COPY.toString()}).test(text || "");
+  // Match a standalone empty message, not the same words inside unrelated prose.
+  const emptyPattern = new RegExp("^(?:" + ${JSON.stringify(EMPTY_CONTAINER_COPY.source)} + ")[.!]?$", "i");
+  const emptyCopy = text.split(/\\n/).some((line) => emptyPattern.test(line.trim()));
   const content =
     document.querySelector("#il_center_col") ?? document.querySelector("#ilContentContainer");
-  const contentBlank = Boolean(content) && content.childElementCount === 0 && (content.innerText || "").trim().length === 0;
+  const contentBlank = Boolean(content) && rows.size === 0 && (content.innerText || "").trim().length === 0 &&
+    !content.querySelector("img, video, audio, canvas, iframe, input, button");
   return { itemRows: rows.size, emptyCopy, contentBlank };
-})()`;
+})`;
+
+export const LISTING_PROBE_SCRIPT = `${LISTING_PROBE_FUNCTION}(document)`;
 
 const LISTING_READY_SCRIPT = `(() => {
-  const probe = ${LISTING_PROBE_SCRIPT};
-  return probe.itemRows > 0 || probe.emptyCopy;
+  const probe = ${LISTING_PROBE_FUNCTION};
+  const documents = [document];
+  // A bounded readiness probe includes same-origin content frames, not just the shell.
+  for (const frame of [...document.querySelectorAll("iframe, frame")].slice(0, 20)) {
+    try {
+      if (frame.contentDocument && frame.contentWindow.location.origin === location.origin) documents.push(frame.contentDocument);
+    } catch { /* Cross-origin frames never contribute content. */ }
+  }
+  const results = documents.map(probe);
+  return results.some((result) => result.itemRows > 0) ||
+    (documents.length === 1 && results[0].emptyCopy) ||
+    (documents.length > 1 && results.slice(1).some((result) => result.emptyCopy));
 })()`;
 
 /** Runs in the page: text-free tag/class skeleton of the main content area (debug capture). */
@@ -283,7 +301,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
     return { cookies: state.cookies as SessionCookie[], userAgent };
   }
 
-  async open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot> {
+  async open(url: string, options?: { signal?: AbortSignal; expectedType?: AdamObjectType }): Promise<PageSnapshot> {
     return this.serialize(async (signal) => {
       throwIfAborted(signal);
       const target = this.resolveUrl(url);
@@ -326,16 +344,42 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 12_000 }).catch(() => undefined);
         await this.rejectIfBlocked(page);
         const dom = await this.probeListing(page);
-        const snapshot = await this.readSnapshot(page, dom);
+        let snapshot = await this.readSnapshot(page, dom);
+        const requested = parseAdamRef(target);
+        // A typed operation must validate a different-type landing before listing recovery.
+        const expectedType = options?.expectedType ?? requested?.type;
+        const folderRefId = expectedType === "fold" && requested
+          ? requested.refId : undefined;
+        let folderRecoveryAttempted = false;
+        const recoverableFolder = () => folderRefId !== undefined && sameFolderLanding(snapshot, folderRefId) &&
+          !isLoginSnapshot(snapshot) && !isAdamFailurePage(snapshot) && !isAdamPermissionPage(snapshot);
+        if (recoverableFolder() && folderRefId && folderListingState(snapshot).state === "unknown") {
+          throwIfAborted(signal);
+          // One advertised, validated read-only tab only; no guessed endpoints or reload loop.
+          const hrefs = await page.evaluate(FOLDER_CONTENT_TABS_SCRIPT) as string[];
+          const contentTab = folderContentTab(hrefs, snapshot.url, folderRefId);
+          if (contentTab) {
+            folderRecoveryAttempted = true;
+            throwIfAborted(signal);
+            const response = await page.goto(contentTab, { waitUntil: "domcontentloaded", timeout: 15_000 });
+            rejectIfGotoHttpFailed(response);
+            await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 5_000 }).catch(() => undefined);
+            snapshot = await this.readSnapshot(page, await this.probeListing(page));
+          }
+        }
         throwIfAborted(signal);
         if (debugCaptureEnabled()) {
           await this.captureDebug(page, snapshot);
+        }
+        // Auth, permission and different-object landings retain provider error precedence.
+        if (recoverableFolder() && folderRefId) {
+          rejectUnresolvedFolder(snapshot, folderRefId, folderRecoveryAttempted);
         }
         throwIfAborted(signal);
         return snapshot;
       } catch (error) {
         throwIfAborted(signal);
-        throw error;
+        throw adamErrorFromNavigationFailure(error) ?? error;
       } finally {
         signal.removeEventListener("abort", abort);
         await closing;

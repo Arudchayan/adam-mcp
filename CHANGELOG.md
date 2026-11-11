@@ -7,9 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Browser folder reads attempt one validated same-folder Content/Inhalt tab and
+  provide actionable diagnostics if inventory remains unresolved; blank content
+  is not treated as empty or denied access (ADR 0030, #86).
+- Listing evidence handles textless wrappers and delayed same-origin frames;
+  incomplete discovery distinguishes unknown listings from unreadable pages.
+- Installation/download guidance reflects published 0.3.0; original binary saves
+  have exact-byte and SHA-256 regression coverage (#85). Existing Web Link URL
+  behavior is regression-tested; destination metadata remains evidence-gated (#84).
+
+## [0.3.0 npm publication] - 2026-10-21
+
+Public availability and artifact identity were verified on 11 November 2026.
+See the [publication record](docs/audit/2026-10-21-v0.3.0-release-readiness.md),
+which preserves the original workflow's propagation-time verification failure.
+
 ### Added
 
-- 0.3.0 candidate: selected-file CLI download with explicit confirmation, an
+- Selected-file CLI download with explicit confirmation, an
   existing destination outside Git, streaming 256 MiB/120-second limits, SHA-256,
   safe filenames, collision preservation and temporary-file cleanup (ADR 0027).
 - Synthetic discovery benchmark for cold/large trees, scoped concurrent reads,
@@ -23,8 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with a 30-second queue deadline and retryable overload errors.
 - Extraction and CLI saving share the credential-pinned streaming transfer loop;
   extraction retains its 8 MiB limit. MCP adds no tools and still returns no bytes.
-
-This candidate is not published or tagged. See the [release checklist](docs/qa/v0.3.0-release-candidate.md).
 
 ## [0.2.0 npm publication] - 2026-10-21
 

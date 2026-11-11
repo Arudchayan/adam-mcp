@@ -76,7 +76,7 @@ export type AdamBrowserSession = {
   /** Cheap local logout check, without launching or probing Chrome. */
   explicitlyLoggedOut?(): Promise<boolean>;
   status(): Promise<SessionStatus>;
-  open(url: string, options?: { signal?: AbortSignal }): Promise<PageSnapshot>;
+  open(url: string, options?: { signal?: AbortSignal; expectedType?: import("adam-core").AdamObjectType }): Promise<PageSnapshot>;
   loginInteractively(timeoutMs?: number, options?: { signal?: AbortSignal; force?: boolean; onProgress?: import("adam-core").ProgressReporter }): Promise<SessionStatus>;
   fetchAuthorized(url: string, options?: { signal?: AbortSignal }): Promise<AuthorizedFetchResult>;
   streamAuthorized?(url: string, options: AuthorizedStreamOptions): Promise<AuthorizedProbeResult>;

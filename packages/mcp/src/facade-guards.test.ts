@@ -212,6 +212,40 @@ describe("facade listing guards", () => {
     rpc = undefined;
   });
 
+  it("preserves unknown folder diagnostics across children, files and resource reads", async () => {
+    const provider = createFixtureProvider();
+    const unknown = {
+      items: [],
+      listingState: "unknown" as const,
+      listingSignals: { contentItemCount: 0, emptyCopy: false, chromeOnly: true },
+      notice: "The folder view rendered a blank content area; check access in ADAM. password=fixture-secret",
+    };
+    provider.listChildren = async () => unknown;
+    provider.listFiles = async () => unknown;
+    rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+
+    const results = [
+      toolResult(await rpc.request("tools/call", {
+        name: "adam_list_children", arguments: { refId: "100010", type: "fold" },
+      })),
+      toolResult(await rpc.request("tools/call", {
+        name: "adam_list_files", arguments: { refId: "100010", type: "fold" },
+      })),
+      await resourceJson(rpc, "adam://fold/100010"),
+    ];
+    for (const result of results) {
+      assert.equal(result.listingState, "unknown");
+      assert.deepEqual(result.items, []);
+      assert.equal("totalHint" in result, false);
+      assert.deepEqual(result.listingSignals, unknown.listingSignals);
+      assert.equal(result.untrusted, true);
+      assert.match(String(result.notice), /untrusted/i);
+      assert.match(String(result.listingNotice), /blank content area; check access in ADAM/i);
+      assert.equal(JSON.stringify(result).includes("fixture-secret"), false);
+    }
+  });
+
   it("never surfaces denied types or exercise units when a provider leaks them", async () => {
     const provider = createFixtureProvider();
 
