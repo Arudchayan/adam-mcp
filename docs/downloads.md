@@ -68,12 +68,20 @@ above. The destination must still be outside the checkout (including worktrees).
 
 ## Limits and filenames
 
-Downloads use the dedicated authenticated Chrome session, stream at most 256 MiB,
-and have a 120-second transfer deadline. Queue/session verification time is
-separate. They never execute or open downloaded files. Text extraction remains
+Downloads use the dedicated authenticated Chrome session and stream at most 256 MiB.
+The 120-second transfer timer aborts fetch and its response stream; queue/session
+verification time is separate. Credential acquisition and sink callbacks are
+awaited cooperatively: a stalled callback can delay timeout or cancellation
+until it returns. In particular, an in-progress filesystem write must finish
+before the temporary file is closed and removed. They never execute or open downloaded files. Text extraction remains
 separate, approved and limited to 8 MiB. There is no batch, recursive, overwrite
-or resume mode. Empty and HTML-shaped files are refused, including legitimate
-HTML originals, to avoid saving a sign-in page as a successful download.
+or resume mode. Empty files and responses explicitly labelled HTML are refused.
+A heuristic also rejects HTML signatures in the first 4096 bytes (UTF-8 or
+BOM-marked UTF-16), including some legitimate originals. It is not a complete
+HTML detector: longer padding, other encodings or unrecognized markup can pass.
+Check suspicious files before opening them; downloads are never opened automatically.
+Unsolicited partial responses are refused; size and hash alone do not prove that
+the server supplied the complete original.
 
 Response filenames are sanitized for Windows/macOS/Linux. Directory components,
 unsafe/control characters and reserved names are handled. A missing response

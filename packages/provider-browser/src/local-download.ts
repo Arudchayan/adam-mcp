@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { link, lstat, open, realpath, stat, unlink, type FileHandle } from "node:fs/promises";
 import { basename, dirname, extname, join, parse } from "node:path";
-import { AdamError, looksLikeHtml, throwIfCancelled, type FileObject } from "adam-core";
+import { AdamError, HTML_SNIFF_BYTES, looksLikeHtml, throwIfCancelled, type FileObject } from "adam-core";
 import type { AdamBrowserSession, AuthorizedProbeResult } from "./session-types.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
 
@@ -77,8 +77,8 @@ export async function saveLocalDownload(
       onChunk: async (chunk) => {
         throwIfCancelled(signal);
         if (chunk.byteLength > MAX_DOWNLOAD_BYTES - sizeBytes) throw new AdamError("provider_unavailable", "Download exceeds the 256 MiB limit.", false);
-        if (prefix.length < 1024) {
-          prefix = Buffer.concat([prefix, chunk.subarray(0, 1024 - prefix.length)]);
+        if (prefix.length < HTML_SNIFF_BYTES) {
+          prefix = Buffer.concat([prefix, chunk.subarray(0, HTML_SNIFF_BYTES - prefix.length)]);
           if (looksLikeHtml(prefix, metadata.contentType)) throw new AdamError("unsupported_type", "ADAM returned a web page instead of the selected file.", false);
         }
         // FileHandle.write can write less than the supplied chunk.

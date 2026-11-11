@@ -44,6 +44,26 @@ it("saves a streamed selected file with digest, server filename, no bytes result
   assert.equal((await readdir(directory)).length, 2);
 }));
 
+it("does not publish an unsolicited partial original", async () => temporary(async (directory) => {
+  await assert.rejects(saveLocalDownload(session(async () => new Response("abc", {
+    status: 206, headers: { "content-range": "bytes 0-2/100", "content-length": "3" },
+  })), file, directory), /partial file content/);
+  assert.deepEqual(await readdir(directory), []);
+}));
+
+it("refuses bounded HTML signatures despite misleading MIME and split byte chunks", async () => temporary(async (directory) => {
+  const samples = [
+    Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("<!doctype html><html>", "utf16le")]),
+    Buffer.from([0xfe, 0xff, 0, 60, 0, 104, 0, 116, 0, 109, 0, 108, 0, 62]),
+    Buffer.from(" ".repeat(1024) + "<!doctype html><html>"),
+  ];
+  for (const bytes of samples) {
+    const body = new ReadableStream<Uint8Array>({ start(stream) { for (const byte of bytes) stream.enqueue(Uint8Array.of(byte)); stream.close(); } });
+    await assert.rejects(saveLocalDownload(session(async () => new Response(body, { headers: { "content-type": "application/octet-stream" } })), file, directory), /web page/);
+    assert.deepEqual(await readdir(directory), []);
+  }
+}));
+
 it("accepts files over the extraction cap while preserving download limits", async () => temporary(async (directory) => {
   const bytes = new Uint8Array(8 * 1024 * 1024 + 1).fill(42);
   const result = await saveLocalDownload(session(async () => new Response(bytes)), file, directory);

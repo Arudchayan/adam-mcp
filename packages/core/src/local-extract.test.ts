@@ -105,7 +105,9 @@ describe("extractLocalFileText", () => {
     assert.equal(looksLikeHtml(Buffer.from("<html lang='de'></html>")), true);
     assert.equal(looksLikeHtml(Buffer.from("<script>alert(1)</script>")), true);
     assert.equal(looksLikeHtml(Buffer.from(`${"x".repeat(200)}<form action='/login'>`)), true);
-    assert.equal(looksLikeHtml(Buffer.from(`${"x".repeat(1_100)}<form action='/login'>`)), false);
+    assert.equal(looksLikeHtml(Buffer.from(`${"x".repeat(4_100)}<form action='/login'>`)), false);
+    assert.equal(looksLikeHtml(Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("<html>", "utf16le")])), true);
+    assert.equal(looksLikeHtml(Buffer.from([0xfe, 0xff, 0, 60, 0, 104, 0, 116, 0, 109, 0, 108])), true);
     assert.equal(looksLikeHtml(Buffer.from("%PDF-1.4"), undefined), false);
     assert.equal(looksLikeHtml(syntheticPdfWithText("x"), "application/pdf"), false);
   });

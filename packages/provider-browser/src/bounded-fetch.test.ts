@@ -4,6 +4,17 @@ import { AdamError, MAX_EXTRACT_BYTES } from "adam-core";
 import { boundedAuthorizedFetch, boundedAuthorizedStream } from "./bounded-fetch.ts";
 
 const origin = "https://adam.unibas.ch";
+it("rejects unsolicited partial responses before delivering headers or bytes", async () => {
+  for (const status of [200, 206]) {
+    let delivered = false, cancelled = false;
+    const body = new ReadableStream({ cancel() { cancelled = true; } });
+    await assert.rejects(boundedAuthorizedStream(`${origin}/file`, {
+      origin, headers: async () => ({}), fetch: async () => new Response(body, { status, headers: { "content-range": "bytes 0-2/100" } }),
+    }, { maxBytes: 10, timeoutMs: 1000, onHeaders: async () => { delivered = true; }, onChunk: async () => { delivered = true; } }), /partial file content/);
+    assert.equal(delivered, false);
+    assert.equal(cancelled, true);
+  }
+});
 it("HEAD probes preserve large-file metadata without reading response bytes", async () => {
   let cancelled = false;
   const result = await boundedAuthorizedFetch(`${origin}/file`, {
@@ -107,4 +118,42 @@ it("times out a stalled download and never exposes credentials to redirect targe
     },
   }, { maxBytes: 10, timeoutMs: 10, onHeaders: async () => {}, onChunk: async () => {} }), /timed out/);
   assert.equal(headers, 1);
+});
+
+it("waits for a blocked credential callback before reporting timeout", async () => {
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  let settled = false, requests = 0;
+  const operation = boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => { entered(); await gate; return {}; },
+    fetch: async (_url, options) => { requests++; options?.signal?.throwIfAborted(); return new Response("abc"); },
+  }, { maxBytes: 10, timeoutMs: 10, onHeaders: async () => {}, onChunk: async () => {} });
+  const observed = operation.then(() => { settled = true; }, () => { settled = true; });
+  await started;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  assert.equal(settled, false);
+  release();
+  await assert.rejects(operation, /timed out/);
+  await observed;
+  assert.equal(requests, 1);
+});
+
+it("waits for an in-flight sink callback before cancellation completes", async () => {
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const controller = new AbortController();
+  let settled = false, chunks = 0;
+  const operation = boundedAuthorizedStream(`${origin}/file`, {
+    origin, headers: async () => ({}), fetch: async () => new Response("abc"),
+  }, { signal: controller.signal, maxBytes: 10, timeoutMs: 1000, onHeaders: async () => {}, onChunk: async () => { chunks++; entered(); await gate; } });
+  const observed = operation.then(() => { settled = true; }, () => { settled = true; });
+  await started; controller.abort();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  release();
+  await assert.rejects(operation, (error: unknown) => error instanceof AdamError && error.code === "cancelled");
+  await observed;
+  assert.equal(chunks, 1);
 });

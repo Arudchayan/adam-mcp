@@ -1,4 +1,6 @@
 // Deliberately failing contract reproductions; not part of ordinary *.test.ts discovery.
+// HTML and partial-response cases now reject before their historical success assertions;
+// passing regression coverage lives in the ordinary core/browser test suites.
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { it } from "node:test";

@@ -45,6 +45,9 @@ export async function boundedAuthorizedStream(url: string, host: FetchHost, opti
         continue;
       }
       if (!response.ok) throw adamErrorFromAuthorizedHttpStatus(response.status, "fetch");
+      if (response.status === 206 || response.headers.has("content-range")) {
+        throw new AdamError("provider_unavailable", "ADAM returned partial file content; no complete file was received.", true);
+      }
       const rawLength = response.headers.get("content-length");
       const contentLength = rawLength !== null && /^\d+$/.test(rawLength) ? Number(rawLength) : undefined;
       const metadata = {
