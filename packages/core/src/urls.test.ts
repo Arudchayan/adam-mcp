@@ -67,6 +67,28 @@ describe("canonicalUrl and parseAdamRef", () => {
     assert.equal(parseAdamRef("http://["), undefined);
   });
 
+  it("recognizes the existing Web Link URL contract without inferring a destination", () => {
+    // Synthetic parser inputs, not evidence of enrolled inventory (#84).
+    for (const url of [
+      "https://adam.unibas.ch/go/webr/100050",
+      "adam://webr/100050",
+      "https://adam.unibas.ch/goto_adam_webr_100050.html",
+      "https://adam.unibas.ch/goto.php?target=webr_100050",
+      "https://adam.unibas.ch/ilias.php?ref_id=100050&cmdClass=ilobjlinkresourcegui",
+      "https://adam.unibas.ch/ilias.php?ref_id=100050&cmdClass=ilobjweblinkgui",
+    ]) {
+      assert.deepEqual(parseAdamRef(url), { type: "webr", refId: "100050" }, url);
+    }
+    assert.equal(parseAdamRef("https://materials.example/go/webr/100050"), undefined);
+  });
+
+  it("does not apply a Web Link parent GUI class to a distinct child ref", () => {
+    assert.deepEqual(
+      parseAdamRef("https://adam.unibas.ch/ilias.php?ref_id=100050&item_ref_id=100051&cmdClass=ilobjlinkresourcegui"),
+      { type: "unknown", refId: "100051" },
+    );
+  });
+
   it("parses adam:// resource handles", () => {
     assert.deepEqual(parseAdamRef("adam://exc/100021"), { type: "exc", refId: "100021" });
     assert.deepEqual(parseAdamRef("adam://crs/100001"), { type: "crs", refId: "100001" });

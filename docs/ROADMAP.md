@@ -16,7 +16,7 @@ Living sequencing for University of Basel ADAM coverage. Community project — n
 | **Unknown** | May exist on ADAM; **no live sighting yet — gated, not hunting**. Code unlock requires live refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored) + capabilities.md promotion + fixture mirror. No code without inventory |
 | **Wait-for-inventory** | Empty re-verify of enrolled courses found none; **parked** — not actively hunting; unlock when inventory/sighting appears |
 
-We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, promote it in capabilities.md and unlock Phase B work. `sess` / `webr` remain **wait-for-inventory** after empty enrolled re-verify. `frm` is **Known/live** 2026-09-14 (tip 5099529).
+We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, record it in capabilities.md; expansion still requires the capture gate below. `sess` remains **wait-for-inventory** after empty enrolled re-verify. `webr` is **Known/live (page-text only)** from the 2026-10-02 sightings recorded in capabilities.md; no matching scrubbed listing/Weblinks-tab capture was found in the issue #84 repository review. `frm` is **Known/live** 2026-09-14 (tip 5099529).
 
 **Stop rule:** do not expand `sess` / `webr` / `htlm` / `lm` / Postbox / `grp` / `svy` / `wiki` / `blog` / Etherpad / LP without an enrolled-inventory sighting (live refId + scrubbed capture). No code without inventory.
 
@@ -52,13 +52,13 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 
 After **live sighting** of each type. Labeled synthetic mirrors allowed for an already-unlocked type only (e.g., AT5 `100021`, B-frm `100040`). Prefer resources for read-by-id; keep tool count tight.
 
-`sess` / `webr`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting; wait for inventory.
+`sess`: parked as **wait-for-inventory** after empty re-verify of enrolled courses — not actively hunting. `webr`: historically live-seen for page text, but listing heuristics and destination metadata remain **capture-gated**, not actively hunting. See [issue #84 evidence boundary](qa/issue-84-web-links.md); this corrects the older blanket wait-for-inventory label without unlocking expansion.
 
 | Item | Confidence | Gate |
 | --- | --- | --- |
 | Forum thread read (`frm`) | Known + live | Live `frm` Domain 2026-09-14 tip 5099529 `list_children`; live HTML threads when parse succeeds (ADR 0012) |
 | Session / timetable (`sess`) | Wait-for-inventory | Live `sess` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (parked; not hunting) |
-| Web links (`webr`) | Wait-for-inventory | Live `webr` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror; no generic fetch (parked; not hunting) |
+| Web links (`webr`) | Known + live (page-text only) | Historical sightings in capabilities.md do not supply the scrubbed listing/Weblinks-tab capture needed for new classification heuristics or destination metadata. Require live refId + matching scrubbed capture, then fixture mirror; no generic fetch (capture-gated; not hunting) |
 | HTML / LM modules | Unknown | Live `htlm` / `lm` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
 | Postbox / MWA **list** | Unknown | Live Postbox / MWA refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror; upload = Phase C (gated; not hunting) |
 | ADAMtools `grp` / `svy` discover | Unknown | Live `grp` / `svy` refId + scrubbed capture (`ADAM_DEBUG_CAPTURE=1`, `scratch/` gitignored); then capabilities.md promotion + fixture mirror (gated; not hunting) |
