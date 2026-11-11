@@ -5,7 +5,7 @@ import { createPlaywrightSession } from "../../packages/provider-browser/src/pla
 if (!process.argv.includes("--live")) throw new Error("Explicit --live is required; metadata only, no bodies or bytes.");
 const session = createPlaywrightSession();
 const provider = createBrowserProvider({ session });
-const summary = { metadataOnly: true, courses: 0, containers: 0, objects: 0, fileMetadata: 0, folders: 0, paginationChecks: 0, identityChecks: 0, incompleteInventories: 0, listingStates: {}, providerErrors: {}, elapsedMs: 0 };
+const summary = { metadataOnly: true, folderSelection: process.argv.includes("--exercise-folders") ? "exercise-named-first" : "listing-order", courses: 0, containers: 0, objects: 0, fileMetadata: 0, folders: 0, paginationChecks: 0, identityChecks: 0, incompleteInventories: 0, listingStates: {}, providerErrors: {}, elapsedMs: 0 };
 const started = Date.now();
 async function inventory(read) {
   let cursor;
@@ -70,7 +70,11 @@ try {
   summary.courses = courses.items.length;
   const folders = [];
   for (const course of courses.items.slice(0, 8)) folders.push(...await inspect(course));
-  for (const folder of folders.slice(0, 4)) {
+  const uniqueFolders = [...new Map(folders.map((folder) => [folder.refId, folder])).values()];
+  const selected = process.argv.includes("--exercise-folders")
+    ? [...uniqueFolders.filter((folder) => /exercise|übung|prakti|sheet|blatt/i.test(folder.title)), ...uniqueFolders.filter((folder) => !/exercise|übung|prakti|sheet|blatt/i.test(folder.title))]
+    : uniqueFolders;
+  for (const folder of selected.slice(0, 4)) {
     summary.folders++;
     await inspect(folder);
   }
