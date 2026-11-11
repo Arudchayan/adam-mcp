@@ -1,23 +1,70 @@
-# Selected local downloads — 0.3.0 candidate
+# Save a selected original file locally
 
-This feature is in the source candidate, not published 0.2.0. It saves an original
-file on your computer. It never sends file bytes to an MCP client or model.
+Available in published `adam-mcp@0.3.0`; `0.2.0` does not have this command.
+It saves an original file on your computer, including non-text files and files
+larger than the text-extraction limit. It never sends file bytes to an MCP client
+or model and does not modify anything on ADAM.
 
-1. Build source with `npm run build`, then sign in with `npm run login`.
+## Installed CLI
+
+You need Node.js 22+ and Google Chrome. Install or upgrade explicitly:
+
+```sh
+npm install -g adam-mcp@0.3.0
+adam-mcp --help
+```
+
+Check that help lists `download FILE_ID`. If it does not, your shell is still
+resolving an older executable; check `Get-Command adam-mcp` (PowerShell) or
+`command -v adam-mcp` (POSIX shell) and update that installation.
+
+1. Sign in with `adam-mcp login`, then check `adam-mcp status`.
 2. Use `adam_list_files` to choose a file and obtain its ID/canonical ADAM link.
 3. Create a destination directory outside all Git checkouts.
-4. Run `node packages/mcp/dist/adam-mcp.mjs download FILE_ID --output-dir DIRECTORY --confirm`.
+4. Run `adam-mcp download FILE_ID --output-dir "DIRECTORY" --confirm` in your
+   terminal, separately from your MCP client.
 
 Quote destination paths containing spaces. Replace `FILE_ID` and `DIRECTORY` with
 your selection. Canonical `https://adam.unibas.ch/go/file/ID` URLs and
-`adam://file/ID` handles also work. After publication/install, `adam-mcp download`
-will expose the same command. The command validates arguments and confirmation
+`adam://file/ID` handles also work. Select one file per invocation, not a course,
+folder, exercise, web link or arbitrary URL. The destination is an existing
+directory, not a full output filename; the filename comes from ADAM and is
+sanitized as described below. The command validates arguments and confirmation
 before creating a browser session. `--confirm` authorizes only that local save;
 it does not approve sending text to a model.
 
 CLI stdout is a single JSON completion object containing `path`, `url`, `refId`,
 `sizeBytes` and `sha256`. Progress and errors go to stderr. This command runs
 separately from the MCP stdio server; no new MCP tool is registered.
+
+## Verify the saved original
+
+Keep the completion metadata if you need to reconcile the saved file later. The
+returned `sizeBytes` and SHA-256 describe the actual saved bytes, not extracted
+text or a digest supplied by ADAM. This verifies local integrity, not authorship.
+
+For example, in PowerShell, replace `FILE_ID` with your selected file's ID:
+
+```powershell
+$destination = Join-Path $HOME "Downloads/ADAM"
+New-Item -ItemType Directory -Force -Path $destination | Out-Null
+$saved = adam-mcp download FILE_ID --output-dir "$destination" --confirm | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw "Download failed; check stderr." }
+if ((Get-Item -LiteralPath $saved.path).Length -ne $saved.sizeBytes) { throw "Size mismatch" }
+if ((Get-FileHash -LiteralPath $saved.path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $saved.sha256) { throw "SHA-256 mismatch" }
+```
+
+On macOS/Linux, compare the returned size with `wc -c < "SAVED_PATH"` and the
+digest with `shasum -a 256 "SAVED_PATH"` (macOS) or
+`sha256sum "SAVED_PATH"` (Linux). Use the returned path: collisions can change
+the filename. A nonzero exit or absent completion object is not a successful save.
+
+## From a source checkout
+
+After installing the checkout's dependencies with `npm ci`, run `npm run build`,
+`npm run login` and `npm run status`. Substitute
+`node packages/mcp/dist/adam-mcp.mjs download` for `adam-mcp download` in the steps
+above. The destination must still be outside the checkout (including worktrees).
 
 ## Limits and filenames
 

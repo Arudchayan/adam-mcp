@@ -22,19 +22,20 @@ Spike behavior (both eras, shim default-on, `confirm: true` fallback intact): [A
 
 Writes (submit, forum, mail, enroll). Exam taking (`tst` denied). File bytes/base64 to the model. Generic URL fetch. Hosted HTTP MCP. Gradebook. Member gallery. OCR for scanned PDFs.
 
-### Local CLI download (0.3.0 candidate)
+### Local CLI download (published in 0.3.0)
 
 `adam-mcp download FILE_ID --output-dir DIRECTORY --confirm` saves one selected
 file into an existing directory outside Git. This is a local filesystem action,
 not an ADAM write or MCP tool. It streams at most 256 MiB within 120 seconds;
 it returns a path and digest, never file bytes to the model. No batch or recursive
-downloads. See [ADR 0027](adr/0027-selected-local-downloads.md).
+downloads. See [download instructions and verification](downloads.md) and
+[ADR 0027](adr/0027-selected-local-downloads.md).
 
 ## Install
 
-Published version: `adam-mcp@0.2.0`; see the [publication record](audit/2026-10-21-npm-publication.md).
-Source targets `0.3.0`, currently unreleased. Build source to try candidate features;
-do not claim they are available in the published 0.2.0 package.
+Published version: `adam-mcp@0.3.0`; see the
+[publication and public-package verification record](audit/2026-10-21-v0.3.0-release-readiness.md).
+The selected-file download command is included; users of 0.2.0 must upgrade.
 
 ## Changes that need an ADR
 

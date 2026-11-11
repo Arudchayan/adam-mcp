@@ -1,13 +1,13 @@
 # Setup
 
-Source targets **0.3.0 (unreleased)**; the installation below is published 0.2.0.
-Build source for [selected local downloads](downloads.md) and the candidate read
-efficiency improvements. No 0.3.0 tag or publication is implied by source versioning.
+**0.3.0 is published**, including [selected local downloads](downloads.md).
+See the [public-package verification record](audit/2026-10-21-v0.3.0-release-readiness.md)
+for artifact identity and installed-command checks.
 
 You need Node.js 22+ and Google Chrome. For the published package:
 
 ```bash
-npm install -g adam-mcp@0.2.0
+npm install -g adam-mcp@0.3.0
 adam-mcp setup --client codex --write --login
 ```
 
@@ -24,7 +24,7 @@ Choose `codex`, `cursor`, `claude-desktop`, `windsurf`, or `vscode`. This builds
 
 To restore, close the client and copy the backup over its configuration file. `--login` can be used separately from `--write`. No sign-in or configuration change is triggered by diagnostics or preview.
 
-The npm installation and both protocol paths were verified outside the repository. See the [publication record](audit/2026-10-21-npm-publication.md). The all-snippet/manual setup path is still available with `npm run setup` in a noninteractive terminal.
+The npm installation and both protocol paths were verified outside the repository. See the [publication record](audit/2026-10-21-v0.3.0-release-readiness.md). The all-snippet/manual setup path is still available with `npm run setup` in a noninteractive terminal.
 
 ## Diagnose a connection
 
@@ -54,7 +54,7 @@ If the holder is gone but the Chrome profile is still signed in, the next tool c
 
 After a reboot or a SWITCH timeout, run `npm run login` again if resume does not find a signed-in dashboard. `ADAM_BROWSER_HEADED=1 npm run login` keeps the headed window in-process for debugging instead of handing off to the headless session.
 
-**Published version:** `adam-mcp@0.2.0` bundles workspace code into its CLI; npm installs declared runtime dependencies. Its exact source revision is recorded in the package's `SOURCE.md`. The older repository tag `v0.2.0` predates npm publication; use the publication record and immutable source archive to identify the npm build.
+**Published version:** `adam-mcp@0.3.0` bundles workspace code into its CLI; npm installs declared runtime dependencies. Its exact source revision is recorded in the package's `SOURCE.md`. Use the publication record and immutable source archive to identify the npm build rather than inferring it from a similarly named repository tag.
 
 ## Operators (rebuild, incidents)
 

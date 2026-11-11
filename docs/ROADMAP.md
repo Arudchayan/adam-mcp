@@ -35,7 +35,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
 | A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
-| Release tag / npm | Known | **0.2.0 published** 21 October 2026; see [publication evidence](audit/2026-10-21-npm-publication.md). Source now targets **0.3.0 (unreleased)**; [candidate checklist](qa/v0.3.0-release-candidate.md) tracks remaining gates. |
+| Release tag / npm | Known | **0.3.0 published**; public registry integrity and installed CLI help/refusal verified 11 November 2026. See [publication evidence](audit/2026-10-21-v0.3.0-release-readiness.md). The original publication workflow's propagation-time verification failure remains recorded. |
 
 ## Phase A-thin — must-ship reads still incomplete
 
@@ -97,12 +97,15 @@ SOAP/REST on public ADAM remain unavailable per historical notes — browser ses
 
 ## How to pick up work
 
-### Next release: 0.3.0 — downloads and dependable discovery
+### Published: 0.3.0 — downloads and dependable discovery
 
-- Implemented candidate: selected single-file CLI downloads (ADR 0027), bounded
+- Published: selected single-file CLI downloads (ADR 0027), bounded
   PDF waiting demand and scope-keyed shared discovery (ADR 0028), synthetic benchmarks.
-- Pending release gates: exact-commit cross-platform CI, independent review,
-  selected-file live verification and installed-client walkthrough. No tag or publication yet.
+- Exact-commit cross-platform CI, independent review, selected-file live verification
+  and installed-client walkthrough are recorded in the
+  [release evidence](audit/2026-10-21-v0.3.0-release-readiness.md). Public npm
+  availability and installed CLI help/refusal were independently checked on
+  11 November 2026; no new publication was performed.
 - Deferred: batches, metadata inventory diffs, resumable traversal, OCR and new
   object types. Existing Phase B inventory gates remain in force.
 
