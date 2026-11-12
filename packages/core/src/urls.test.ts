@@ -101,6 +101,12 @@ describe("canonicalUrl and parseAdamRef", () => {
     assert.equal(parseAdamRef("https://github.com/Arudchayan/adam-mcp"), undefined);
   });
 
+  it("rejects URL credentials without changing ordinary references", () => {
+    assert.equal(parseAdamRef("https://synthetic-user:prefix!part%40tail@adam.unibas.ch/go/crs/100001"), undefined);
+    assert.equal(parseAdamRef("https://synthetic-user@adam.unibas.ch/go/crs/100001"), undefined);
+    assert.deepEqual(parseAdamRef("/go/crs/100001"), { type: "crs", refId: "100001" });
+  });
+
   it("parses ADAM goto permalinks", () => {
     assert.deepEqual(
       parseAdamRef("https://adam.unibas.ch/goto_adam_file_1428835_download.html"),
@@ -130,6 +136,15 @@ describe("paginate", () => {
 });
 
 describe("redaction", () => {
+  it("removes URL userinfo before email redaction, including in prose", () => {
+    const url = "https://synthetic-user:prefix!part%40tail@adam.unibas.ch/go/crs/100001?token=hidden&ref_id=42";
+    for (const output of [redactUrl(url), redactText(`See ${url} for details`)]) {
+      assert.doesNotMatch(output, /synthetic-user|prefix|part%40tail|hidden/);
+      assert.match(output, /adam\.unibas\.ch\/go\/crs\/100001/);
+      assert.match(output, /ref_id=42/);
+    }
+    assert.equal(redactText("See the course: ordinary prose!"), "See the course: ordinary prose!");
+  });
   it("removes emails, cookies, and token query values", () => {
     assert.equal(redactText("write student@unibas.ch"), "write [redacted-email]");
     assert.match(redactUrl("https://adam.unibas.ch/go/file/1?token=secret"), /\[redacted\]/);

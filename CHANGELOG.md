@@ -7,8 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - In preparation
+
+### Added
+
+- Approved selected Web Link reads resolve up to eight validated ADAM redirect
+  routes without fetching external destinations. Queries, fragments and unknown
+  path schemas are omitted; ADAM source URLs retain exact launch routes (#84).
+
 ### Fixed
 
+- Stdio EOF releases provider connections without stopping the separately owned
+  session holder; shutdown waits for in-flight SDK initialization (ADR 0044).
+- Cross-process Chrome lifecycle ownership, generation-owned handoffs and
+  fail-closed recovery prevent competing launches and foreign cleanup (#98).
+- Transfer cancellation bounds credential/fetch/read waits and prevents late
+  authenticated requests while allowing active file writes to settle (#96).
+- Credential-bearing URL references are rejected and URL userinfo is redacted.
+  Resource errors use safe envelopes; forum summaries exclude post bodies.
+- Owned handoff seeds are cleaned across synchronous startup failures without
+  removing pre-existing or foreign handoffs (ADR 0043).
 - Browser folder reads attempt one validated same-folder Content/Inhalt tab and
   provide actionable diagnostics if inventory remains unresolved; blank content
   is not treated as empty or denied access (ADR 0030, #86).
@@ -16,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   incomplete discovery distinguishes unknown listings from unreadable pages.
 - Installation/download guidance reflects published 0.3.0; original binary saves
   have exact-byte and SHA-256 regression coverage (#85). Existing Web Link URL
-  behavior is regression-tested; destination metadata remains evidence-gated (#84).
+  behavior and conservative selected destination metadata are regression-tested (#84).
 
 ## [0.3.0 npm publication] - 2026-10-21
 

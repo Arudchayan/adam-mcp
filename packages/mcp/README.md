@@ -2,7 +2,7 @@
 
 MCP server for University of Basel ADAM.
 
-Version `0.3.0`. The CLI bundles the project's workspace code;
+Version `0.4.0` is in preparation and is not yet published. The CLI bundles the project's workspace code;
 npm installs its declared runtime dependencies.
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.

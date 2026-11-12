@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0044](0044-stdio-eof-provider-cleanup.md) | Close the configured provider when stdio ends |
 | [0001](0001-browser-session.md) | Local Chrome session as the live ADAM adapter |
 | [0002](0002-local-extract-and-exercise.md) | Local file extract and read-only exercises |
 | [0003](0003-session-feedback-page.md) | Session feedback page, then headless continuation |

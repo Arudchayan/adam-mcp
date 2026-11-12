@@ -93,7 +93,7 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
   try {
     const looksAbsolute = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
     const url = looksAbsolute ? new URL(trimmed) : new URL(trimmed, DEFAULT_ADAM_ORIGIN);
-    if (url.protocol !== "https:" || url.hostname !== new URL(DEFAULT_ADAM_ORIGIN).hostname) {
+    if (url.protocol !== "https:" || url.hostname !== new URL(DEFAULT_ADAM_ORIGIN).hostname || url.username || url.password) {
       return undefined;
     }
 

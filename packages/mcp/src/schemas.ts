@@ -372,6 +372,22 @@ export const forumOutputSchema = adamObjectOutputSchema.extend({
     .optional(),
 });
 
+// Summary routes are not approved to expose posts. Strip unknown fields at
+// every structured level rather than trusting a provider's passthrough shape.
+export const forumSummarySchema = adamObjectOutputSchema.strip().extend({
+  type: z.literal("frm"),
+  breadcrumb: z.array(breadcrumbSchema.strip()),
+  provenance: provenanceSchema.strip(),
+  threads: z.array(z.object({
+    threadId: z.string(),
+    title: z.string(),
+    author: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    postCount: z.number().optional(),
+  })),
+});
+
 export const paginatedNewsOutputSchema = z
   .object({
     items: z.array(
