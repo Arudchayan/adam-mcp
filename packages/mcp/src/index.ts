@@ -1,7 +1,8 @@
 import { isMainModule } from "./main-entry.ts";
 import { fileURLToPath } from "node:url";
+import type { Readable, Writable } from "node:stream";
 import { AdamError, isAdamError, redactText } from "adam-core";
-import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { serveStdio, StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { closeConfiguredProvider, createConfiguredProvider, detectProviderName } from "./providers.ts";
 import { createAdamMcpServer } from "./server.ts";
 
@@ -59,8 +60,11 @@ Usage:
                        Save one selected file outside Git (256 MiB / 120 seconds)`);
 }
 
-async function runStdio(): Promise<void> {
-  const configured = await createConfiguredProvider();
+export async function runStdio(
+  configuredOverride?: Awaited<ReturnType<typeof createConfiguredProvider>>,
+  streams?: { stdin: Readable; stdout: Writable },
+): Promise<void> {
+  const configured = configuredOverride ?? await createConfiguredProvider();
   const name = detectProviderName();
   const banner =
     name === "fixture"
@@ -70,12 +74,42 @@ async function runStdio(): Promise<void> {
   if (name === "browser") {
     console.error("Live ADAM: run `adam-mcp login` once, then the session runs headless.");
   }
+  const transport = new StdioServerTransport(streams?.stdin, streams?.stdout);
+  let finish!: () => void;
+  const closed = new Promise<void>((resolve) => { finish = resolve; });
+  let closing: Promise<void> | undefined;
   const shutdown = () => {
-    void closeConfiguredProvider(configured).finally(() => process.exit(0));
+    if (!closing) {
+      closing = (async () => {
+        await finishAndClose();
+        await closeConfiguredProvider(configured);
+      })();
+      closing.catch((error: unknown) => console.error(formatCliError(error)));
+    }
+    return closing;
   };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
-  await serveStdio(() => createAdamMcpServer(configured));
+  const onEnd = () => { void shutdown(); };
+  const onSignal = () => { void shutdown().finally(() => process.exit(0)); };
+  const finishAndClose = async () => {
+    finish();
+    await closed;
+    await handle?.close();
+  };
+  const input = streams?.stdin ?? process.stdin;
+  input.once("end", onEnd);
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
+  let handle: ReturnType<typeof serveStdio> | undefined;
+  try {
+    handle = serveStdio(() => createAdamMcpServer(configured), { transport });
+    await closed;
+    await shutdown();
+  } finally {
+    input.off("end", onEnd);
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
+    if (!closing) await shutdown();
+  }
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<void> {
