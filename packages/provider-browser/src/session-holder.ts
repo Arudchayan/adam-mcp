@@ -678,7 +678,10 @@ function browserIdentityFromContext(context: BrowserContext): ProcessIdentity | 
  * Hidden CLI command: own a headless Chrome with the authenticated cookie jar,
  * write the holder record, and stay alive until signaled.
  */
-export async function runSessionHolder(seedFile: string): Promise<void> {
+export async function runSessionHolder(seedFile: string, options: {
+  /** Test seam: logical handoff tests do not depend on native OS probe latency. */
+  readOwnIdentity?: () => ProcessIdentity | undefined;
+} = {}): Promise<void> {
   const profileDir = dirname(seedFile);
   const origin = defaultOrigin();
   let seed: SessionSeed;
@@ -691,7 +694,7 @@ export async function runSessionHolder(seedFile: string): Promise<void> {
   });
 
   const generation = seed!.generation!;
-  const identity = readProcessIdentity(process.pid);
+  const identity = options.readOwnIdentity ? options.readOwnIdentity() : readProcessIdentity(process.pid);
   if (!identity) throw new AdamError("provider_unavailable", "Could not bind ADAM session process identity.", false);
   const record: HolderRecord = {
     version: HOLDER_RECORD_VERSION, pid: process.pid, generation,
