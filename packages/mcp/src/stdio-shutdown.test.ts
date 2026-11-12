@@ -93,6 +93,70 @@ test("provider cleanup waits for SDK product close on EOF", async () => {
   assert.equal(providerCloses, 1);
 });
 
+test("EOF during SDK connect waits for the created product before provider cleanup", async () => {
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  let output = "";
+  stdout.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); });
+  let releaseConnect!: () => void;
+  let connectStarted!: () => void;
+  const connectGate = new Promise<void>((resolve) => { releaseConnect = resolve; });
+  const started = new Promise<void>((resolve) => { connectStarted = resolve; });
+  let providerCloses = 0;
+  let productCloses = 0;
+  const provider = createFixtureProvider() as ReturnType<typeof createFixtureProvider> & { close(): Promise<void> };
+  provider.close = async () => { providerCloses++; assert.equal(productCloses, 1); };
+  const serving = runStdio({ provider }, { stdin, stdout }, undefined, () => {
+    const server = createAdamMcpServer({ provider });
+    const connect = server.connect.bind(server);
+    server.connect = async (transport) => { connectStarted(); await connectGate; await connect(transport); };
+    const close = server.close.bind(server);
+    server.close = async () => { productCloses++; await close(); };
+    return server;
+  });
+  stdin.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"connect-race-test","version":"1"}}}\n');
+  await withTimeout(started);
+  stdin.end();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(providerCloses, 0);
+  releaseConnect();
+  await withTimeout(serving);
+  assert.equal(productCloses, 1);
+  assert.equal(providerCloses, 1);
+});
+
+test("SIGTERM during SDK connect waits for product cleanup before provider cleanup and exit", async () => {
+  const stdin = new PassThrough();
+  const stdout = new PassThrough();
+  let output = "";
+  stdout.on("data", (chunk: Buffer) => { output += chunk.toString("utf8"); });
+  let releaseConnect!: () => void;
+  let connectStarted!: () => void;
+  const connectGate = new Promise<void>((resolve) => { releaseConnect = resolve; });
+  const started = new Promise<void>((resolve) => { connectStarted = resolve; });
+  const order = [] as string[];
+  const provider = createFixtureProvider() as ReturnType<typeof createFixtureProvider> & { close(): Promise<void> };
+  provider.close = async () => { order.push("provider"); };
+  const serving = runStdio({ provider }, { stdin, stdout }, undefined, () => {
+    const server = createAdamMcpServer({ provider });
+    const connect = server.connect.bind(server);
+    server.connect = async (transport) => { connectStarted(); await connectGate; await connect(transport); };
+    const close = server.close.bind(server);
+    server.close = async () => { order.push("server"); await close(); };
+    return server;
+  }, (code) => { order.push(`exit:${code}`); });
+  stdin.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"signal-connect-race-test","version":"1"}}}\n');
+  await withTimeout(started);
+  process.emit("SIGTERM");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(order, []);
+  releaseConnect();
+  await withTimeout(serving);
+  await withTimeout((async () => { while (!order.some((item: string) => item === "exit:0")) await new Promise((resolve) => setImmediate(resolve)); })());
+  assert.deepEqual(order, ["server", "provider", "exit:0"]);
+  assert.ok(!output.includes("SYNTHETIC"));
+});
+
 test("stdio stream failure still closes the provider and reports cleanup failure", async () => {
   const stdin = new PassThrough();
   const stdout = new PassThrough();
