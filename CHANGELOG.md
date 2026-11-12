@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Stdio EOF releases provider connections without stopping the separately owned
+  session holder; shutdown waits for in-flight SDK initialization (ADR 0044).
 - Cross-process Chrome lifecycle ownership, generation-owned handoffs and
   fail-closed recovery prevent competing launches and foreign cleanup (#98).
 - Transfer cancellation bounds credential/fetch/read waits and prevents late
