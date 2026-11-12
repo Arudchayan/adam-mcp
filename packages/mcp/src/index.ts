@@ -64,6 +64,7 @@ export async function runStdio(
   configuredOverride?: Awaited<ReturnType<typeof createConfiguredProvider>>,
   streams?: { stdin: Readable; stdout: Writable },
   serve: typeof serveStdio = serveStdio,
+  createServer?: () => ReturnType<typeof createAdamMcpServer>,
 ): Promise<void> {
   const configured = configuredOverride ?? await createConfiguredProvider();
   const name = detectProviderName();
@@ -76,24 +77,35 @@ export async function runStdio(
     console.error("Live ADAM: run `adam-mcp login` once, then the session runs headless.");
   }
   const transport = new StdioServerTransport(streams?.stdin, streams?.stdout);
-  let finish!: (error?: unknown) => void;
-  const closed = new Promise<void>((resolve, reject) => {
-    finish = (error) => error === undefined ? resolve() : reject(error);
-  });
+  let finish!: () => void;
+  const closed = new Promise<void>((resolve) => { finish = resolve; });
+  let completionError: unknown;
+  let sdkClose: Promise<void> = Promise.resolve();
   let providerClose: Promise<void> | undefined;
   const closeProviderOnce = () => providerClose ??= closeConfiguredProvider(configured);
   let closing: Promise<void> | undefined;
   let handle: ReturnType<typeof serveStdio> | undefined;
   const shutdown = () => {
     if (!closing) {
-      closing = (async () => {
+      // Defer side effects until after `closing` is assigned: handle.close()
+      // can synchronously emit transport close and signal another shutdown.
+      closing = Promise.resolve().then(async () => {
+        let sdkError: unknown;
         try {
           await handle?.close();
+          await sdkClose;
+        } catch (error) {
+          sdkError = error;
         } finally {
-          await closeProviderOnce();
+          try {
+            await closeProviderOnce();
+          } catch (providerError) {
+            throw sdkError === undefined ? providerError : new AggregateError([sdkError, providerError], "MCP and provider shutdown failed.");
+          }
         }
-      })();
-      closing.then(() => finish(), (error: unknown) => finish(error));
+        if (sdkError !== undefined) throw sdkError;
+      });
+      closing.then(() => finish(), (error: unknown) => { completionError = error; finish(); });
     }
     return closing;
   };
@@ -103,28 +115,69 @@ export async function runStdio(
       (error: unknown) => { console.error(formatCliError(error)); process.exit(1); },
     );
   };
+  const input = streams?.stdin ?? process.stdin;
+  const output = streams?.stdout ?? process.stdout;
+  const onInputError = () => { void shutdown(); };
+  const onOutputError = () => { void shutdown(); };
+  input.on("error", onInputError);
+  output.on("error", onOutputError);
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
+  let primaryError: unknown;
   try {
-    handle = serve(() => createAdamMcpServer(configured), { transport });
+    handle = serve(() => {
+      const product = createServer?.() ?? createAdamMcpServer(configured);
+      const closeProduct = product.close.bind(product);
+      product.close = () => {
+        sdkClose = Promise.resolve().then(closeProduct);
+        return sdkClose;
+      };
+      return product;
+    }, { transport });
     // serveStdio installs its close callback synchronously before returning.
-    // Preserve SDK teardown and also release provider-owned resources on any
-    // transport close, including EOF and stream failures.
+    // Preserve SDK teardown, await its product close (which the SDK does not
+    // await for EOF), then release provider-owned resources.
     const sdkOnClose = transport.onclose;
     transport.onclose = () => {
       sdkOnClose?.();
-      void closeProviderOnce().then(() => finish(), (error: unknown) => finish(error));
+      void (async () => {
+        try {
+          await sdkClose;
+        } catch (error) {
+          completionError = error;
+        }
+        try {
+          await closeProviderOnce();
+        } catch (error) {
+          completionError = completionError === undefined ? error : new AggregateError([completionError, error], "MCP and provider shutdown failed.");
+        }
+        finish();
+      })();
     };
     const sdkOnError = transport.onerror;
     transport.onerror = (error) => {
       sdkOnError?.(error);
-      void shutdown();
+      // The SDK reports malformed JSON here but continues serving. Actual
+      // stream errors arrive on the streams themselves and close via onclose.
     };
     await closed;
+    if (completionError !== undefined) throw completionError;
+  } catch (error) {
+    primaryError = error;
+    throw error;
   } finally {
+    input.off("error", onInputError);
+    output.off("error", onOutputError);
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
-    if (!providerClose) await shutdown();
+    if (!providerClose) {
+      try {
+        await shutdown();
+      } catch (cleanupError) {
+        if (primaryError === undefined) throw cleanupError;
+        console.error(formatCliError(cleanupError));
+      }
+    }
   }
 }
 
