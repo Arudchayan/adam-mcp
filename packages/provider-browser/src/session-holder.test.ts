@@ -29,6 +29,27 @@ function keepAlive(): ReturnType<typeof spawn> {
   return spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
 }
 
+/** Only disposable children created by this test file; never stored profile PIDs. */
+async function terminateTestChild(child: ReturnType<typeof spawn>): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  child.ref();
+  await new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(timer);
+      child.removeListener("exit", finish);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      child.removeListener("exit", finish);
+      child.unref();
+      reject(new Error("Disposable holder test child did not exit after SIGKILL"));
+    }, 10_000);
+    // Subscribe before signalling: kill() requests termination, not completion.
+    child.once("exit", finish);
+    child.kill("SIGKILL");
+  });
+}
+
 function ignoreSigtermDetached(): ReturnType<typeof spawn> {
   return spawn(
     process.execPath,
@@ -80,7 +101,7 @@ describe("session holder records", () => {
         assert.equal(boundHolderPid(live), child.pid);
         assert.equal(isProcessAlive(child.pid!), true);
       } finally {
-        child.kill();
+        await terminateTestChild(child);
       }
       // A record whose PID is gone is stale and must be cleaned up.
       await writeFile(
@@ -117,7 +138,7 @@ describe("session holder records", () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
       assert.equal(isProcessAlive(child.pid!), false);
     } finally {
-      child.kill();
+      await terminateTestChild(child);
       await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
@@ -205,14 +226,11 @@ describe("session holder records", () => {
       assert.equal(isProcessAlive(oldChild.pid!), false);
       assert.equal(record.pid, newChild?.pid);
     } finally {
-      oldChild.kill();
-      if (newChild?.pid && isProcessAlive(newChild.pid)) {
-        try {
-          process.kill(-newChild.pid, "SIGKILL");
-        } catch {
-          newChild.kill("SIGKILL");
-        }
-      }
+      const terminations = await Promise.allSettled(
+        [oldChild, ...(newChild ? [newChild] : [])].map(terminateTestChild),
+      );
+      const failures = terminations.filter((result) => result.status === "rejected");
+      if (failures.length) throw new AggregateError(failures.map((result) => result.reason), "Holder test child cleanup failed");
       await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
@@ -233,13 +251,7 @@ describe("session holder records", () => {
       assert.equal(await readHolderRecord(profileDir), undefined);
       await assert.rejects(() => access(devToolsActivePortPath(profileDir)));
     } finally {
-      if (child.pid && isProcessAlive(child.pid)) {
-        try {
-          process.kill(-child.pid, "SIGKILL");
-        } catch {
-          child.kill("SIGKILL");
-        }
-      }
+      await terminateTestChild(child);
       await clearHolderFiles(profileDir);
       await rm(devToolsActivePortPath(profileDir), { force: true }).catch(() => undefined);
       await rm(profileDir, { recursive: true, force: true });
@@ -277,7 +289,7 @@ describe("session holder records", () => {
       // Identity still matches the live stranger — we must not have signaled it.
       assert.deepEqual(readProcessIdentity(stranger.pid!), identity);
     } finally {
-      stranger.kill();
+      await terminateTestChild(stranger);
       await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
@@ -335,7 +347,7 @@ describe("holderPid honesty", () => {
       assert.equal(status.holderPid, record.pid);
       await session.close();
     } finally {
-      child.kill();
+      await terminateTestChild(child);
       await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
@@ -403,7 +415,7 @@ describe("holderPid honesty", () => {
       assert.equal(isProcessAlive(stranger.pid!), true);
       await session.close();
     } finally {
-      stranger.kill();
+      await terminateTestChild(stranger);
       await clearHolderFiles(profileDir);
       await rm(profileDir, { recursive: true, force: true });
     }
