@@ -63,6 +63,7 @@ Usage:
 export async function runStdio(
   configuredOverride?: Awaited<ReturnType<typeof createConfiguredProvider>>,
   streams?: { stdin: Readable; stdout: Writable },
+  serve: typeof serveStdio = serveStdio,
 ): Promise<void> {
   const configured = configuredOverride ?? await createConfiguredProvider();
   const name = detectProviderName();
@@ -75,40 +76,55 @@ export async function runStdio(
     console.error("Live ADAM: run `adam-mcp login` once, then the session runs headless.");
   }
   const transport = new StdioServerTransport(streams?.stdin, streams?.stdout);
-  let finish!: () => void;
-  const closed = new Promise<void>((resolve) => { finish = resolve; });
+  let finish!: (error?: unknown) => void;
+  const closed = new Promise<void>((resolve, reject) => {
+    finish = (error) => error === undefined ? resolve() : reject(error);
+  });
+  let providerClose: Promise<void> | undefined;
+  const closeProviderOnce = () => providerClose ??= closeConfiguredProvider(configured);
   let closing: Promise<void> | undefined;
+  let handle: ReturnType<typeof serveStdio> | undefined;
   const shutdown = () => {
     if (!closing) {
       closing = (async () => {
-        await finishAndClose();
-        await closeConfiguredProvider(configured);
+        try {
+          await handle?.close();
+        } finally {
+          await closeProviderOnce();
+        }
       })();
-      closing.catch((error: unknown) => console.error(formatCliError(error)));
+      closing.then(() => finish(), (error: unknown) => finish(error));
     }
     return closing;
   };
-  const onEnd = () => { void shutdown(); };
-  const onSignal = () => { void shutdown().finally(() => process.exit(0)); };
-  const finishAndClose = async () => {
-    finish();
-    await closed;
-    await handle?.close();
+  const onSignal = () => {
+    void shutdown().then(
+      () => process.exit(0),
+      (error: unknown) => { console.error(formatCliError(error)); process.exit(1); },
+    );
   };
-  const input = streams?.stdin ?? process.stdin;
-  input.once("end", onEnd);
   process.on("SIGINT", onSignal);
   process.on("SIGTERM", onSignal);
-  let handle: ReturnType<typeof serveStdio> | undefined;
   try {
-    handle = serveStdio(() => createAdamMcpServer(configured), { transport });
+    handle = serve(() => createAdamMcpServer(configured), { transport });
+    // serveStdio installs its close callback synchronously before returning.
+    // Preserve SDK teardown and also release provider-owned resources on any
+    // transport close, including EOF and stream failures.
+    const sdkOnClose = transport.onclose;
+    transport.onclose = () => {
+      sdkOnClose?.();
+      void closeProviderOnce().then(() => finish(), (error: unknown) => finish(error));
+    };
+    const sdkOnError = transport.onerror;
+    transport.onerror = (error) => {
+      sdkOnError?.(error);
+      void shutdown();
+    };
     await closed;
-    await shutdown();
   } finally {
-    input.off("end", onEnd);
     process.off("SIGINT", onSignal);
     process.off("SIGTERM", onSignal);
-    if (!closing) await shutdown();
+    if (!providerClose) await shutdown();
   }
 }
 
