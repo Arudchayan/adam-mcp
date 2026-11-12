@@ -39,6 +39,7 @@ import {
   cursorSchema,
   exerciseOutputSchema,
   forumOutputSchema,
+  forumSummarySchema,
   extractFileInputSchema,
   getExerciseInputSchema,
   getForumInputSchema,
@@ -84,7 +85,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
   const server = new McpServer(
     {
       name: options.name ?? "adam-mcp",
-      version: options.version ?? "0.3.0",
+      version: options.version ?? "0.4.0",
     },
     {
       instructions:
@@ -153,27 +154,28 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
   };
 
   const mapResourceError = (error: unknown, uri: { href: string }): never => {
+    const unexpected = (): never => {
+      throw new AdamError("provider_unavailable", `provider_unavailable: Unexpected provider failure. (retryable=false) (runId=${createRunId()})`, false);
+    };
     if (!(isAdamError(error) || error instanceof AdamError)) {
-      throw error;
+      return unexpected();
     }
     switch (error.code) {
       case "not_found":
-        throw new ResourceNotFoundError(uri.href);
+        throw new ResourceNotFoundError(/^adam:\/\/(?:crs|fold|file|exc|frm)\/\d+$/.test(uri.href) || uri.href === "adam://me/courses" ? uri.href : "adam://resource");
       case "unauthorized":
       case "forbidden":
       case "stale_id":
-      case "provider_unavailable": {
+      case "provider_unavailable":
+      case "unsupported_type":
+      case "confirmation_required":
+      case "cancelled": {
         // Resources cannot return tool-style isError payloads; throw AdamError with the same fail() line + runId, preserving code/retryable.
         const runId = createRunId();
         throw new AdamError(error.code, formatAdamFailText(error, runId), error.retryable);
       }
-      case "unsupported_type":
-      case "confirmation_required":
-      case "cancelled":
-        throw error;
       default: {
-        const _exhaustive: never = error.code;
-        throw _exhaustive;
+        return unexpected();
       }
     }
   };
@@ -392,12 +394,14 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         }
       }
       return runReadTool(
-        async () =>
-          provider.getForum(id, {
+        async () => {
+          const forum = await provider.getForum(id, {
             type: objectType,
             threadId,
             signal: signalFromContext(ctx),
-          }),
+          });
+          return threadId === undefined ? forumSummarySchema.parse(forum) : forum;
+        },
         "adam_get_forum",
         forumOutputSchema,
       );
@@ -705,7 +709,12 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     async (uri, variables, ctx) => {
       const id = String(variables.refId ?? "");
       try {
-        const forum = await provider.getForum(id, { type: "frm", signal: signalFromContext(ctx) });
+        const rawForum = await provider.getForum(id, { type: "frm", signal: signalFromContext(ctx) });
+        const parsed = forumSummarySchema.safeParse(rawForum);
+        if (!parsed.success) {
+          throw new AdamError("provider_unavailable", "Provider returned invalid resource metadata.", false);
+        }
+        const forum = parsed.data;
         return {
           contents: [
             {

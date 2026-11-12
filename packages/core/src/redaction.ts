@@ -1,4 +1,6 @@
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+// Remove URL authority credentials before email redaction can partially mask them.
+const URL_USERINFO = /\b(https?:\/\/)[^\s/?#<>"]*@/gi;
 const TOKENISH_QUERY =
   /([?&#;](?:token|access_token|session|sid|phpsessid|iliassessid|jsessionid|jwt|php?sessid|otp|totp|recovery_code|eduid|aai)=)[^\s&#;"']+/gi;
 const COOKIE_HEADER = /((?:set-)?cookie\s*[:=]\s*)[^\r\n]*/gi;
@@ -18,6 +20,7 @@ const MATRICULATION = /\b(matrikel(?:nummer)?\s*[:=]?\s*\d{5,10})\b/gi;
 
 export function redactText(value: string): string {
   return value
+    .replace(URL_USERINFO, "$1")
     .replace(EMAIL, "[redacted-email]")
     .replace(AUTH_HEADER, "$1[redacted]")
     .replace(SENSITIVE_ASSIGNMENT, "$1[redacted]")
@@ -36,6 +39,8 @@ export function redactText(value: string): string {
 export function redactUrl(value: string): string {
   try {
     const url = new URL(value);
+    url.username = "";
+    url.password = "";
     for (const key of [...url.searchParams.keys()]) {
       if (
         /token|session|sid|jwt|cookie|phpsessid|iliassessid|saml|relaystate|shib|password|api[_-]?key|secret|otp|recovery[_-]?code|eduid|aai/i.test(

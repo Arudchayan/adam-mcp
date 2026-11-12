@@ -1,6 +1,6 @@
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { readFileSync, readlinkSync } from "node:fs";
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -583,20 +583,22 @@ async function startSessionHolderOwned(options: StartHolderOptions, profileDir: 
   await stopSessionHolderOwned(profileDir);
 
   const seedFile = holderSeedPath(profileDir, generation);
-  // Transient handoff: the holder reads and unlinks this before launching Chrome.
-  await writeFile(
-    seedFile,
-    JSON.stringify({ ...options.seed, generation } satisfies SessionSeed),
-    { encoding: "utf8", mode: 0o600, flag: "wx" },
-  );
-  const spawnHolder = options.spawnHolder ?? defaultHolderSpawn;
-  const child = spawnHolder(seedFile);
-  let spawnError: Error | undefined;
-  child?.once("error", (error) => { spawnError = error; });
-  child?.unref();
-  const childIdentity = child?.pid ? readProcessIdentity(child.pid) : undefined;
-  const deadline = Date.now() + (options.timeoutMs ?? 45_000);
+  let seedCreated = false;
+  let childIdentity: ProcessIdentity | undefined;
   try {
+    throwIfCancelled(options.signal);
+    // Exclusive creation establishes cleanup ownership even if writing fails.
+    const handoff = await open(seedFile, "wx", 0o600);
+    seedCreated = true;
+    try { await handoff.writeFile(JSON.stringify({ ...options.seed, generation } satisfies SessionSeed), "utf8"); }
+    finally { await handoff.close(); }
+    const spawnHolder = options.spawnHolder ?? defaultHolderSpawn;
+    const child = spawnHolder(seedFile);
+    let spawnError: Error | undefined;
+    child?.once("error", (error) => { spawnError = error; });
+    child?.unref();
+    childIdentity = child?.pid ? readProcessIdentity(child.pid) : undefined;
+    const deadline = Date.now() + (options.timeoutMs ?? 45_000);
     while (Date.now() < deadline) {
       throwIfCancelled(options.signal);
       if (spawnError) throw new AdamError("provider_unavailable", "Could not start the background ADAM session. Run adam-mcp login to retry.", false);
@@ -633,7 +635,7 @@ async function startSessionHolderOwned(options: StartHolderOptions, profileDir: 
     }
     throw error;
   } finally {
-    await withHolderMutation(profileDir, () => rm(seedFile, { force: true }));
+    if (seedCreated) await withHolderMutation(profileDir, () => rm(seedFile, { force: true }));
   }
 }
 

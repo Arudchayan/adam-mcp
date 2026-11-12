@@ -5,6 +5,9 @@ import { AdamError, type AdamObject, type Paginated } from "adam-core";
 import { createFixtureProvider } from "adam-provider-fixture";
 import { fail, formatAdamFailText, sanitizeListingItems, sanitizeListingObject, UntrustedContent } from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
+import { createBrowserProvider } from "../../provider-browser/src/browser-provider.ts";
+import { createMemorySession, snapshotFromHtml } from "../../provider-browser/src/memory-session.ts";
+import { resolveForumThreadUrl } from "../../provider-browser/src/forum-parse.ts";
 
 const RPC_TIMEOUT_MS = 5_000;
 
@@ -91,6 +94,81 @@ async function resourceJson(rpc: ProtocolHarness, uri: string): Promise<Record<s
   assert.ok(contents?.[0]?.text, `No text content for ${uri}`);
   return JSON.parse(contents[0].text) as Record<string, unknown>;
 }
+
+describe("resource error redaction", () => {
+  it("redacts all provider error paths while preserving recovery semantics", async () => {
+    const provider = createFixtureProvider();
+    let failure: unknown;
+    provider.getFile = async () => { throw failure; };
+    const rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+    try {
+      for (const code of ["unauthorized", "forbidden", "stale_id", "provider_unavailable", "unsupported_type", "confirmation_required", "cancelled"] as const) {
+        failure = new AdamError(code, "Synthetic password=RESOURCE_SENTINEL", true);
+        const response = await rpc.request("resources/read", { uri: "adam://file/100011" });
+        assert.ok(response.error);
+        assert.doesNotMatch(JSON.stringify(response), /RESOURCE_SENTINEL/);
+        assert.match(response.error.message, new RegExp(`${code}:`));
+        assert.match(response.error.message, /retryable=true/);
+      }
+      failure = new Error("Synthetic password=RESOURCE_SENTINEL");
+      const unknown = await rpc.request("resources/read", { uri: "adam://file/100011" });
+      assert.ok(unknown.error);
+      assert.doesNotMatch(JSON.stringify(unknown), /RESOURCE_SENTINEL/);
+      failure = new AdamError("not_found", "password=RESOURCE_SENTINEL");
+      const missing = await rpc.request("resources/read", { uri: "adam://file/100011" });
+      assert.equal(missing.error?.code, -32602);
+      assert.doesNotMatch(JSON.stringify(missing), /RESOURCE_SENTINEL/);
+    } finally {
+      await rpc.close();
+    }
+  });
+});
+
+describe("forum summary boundary", () => {
+  it("strips over-returned bodies on both summary routes but preserves approved posts", async () => {
+    const provider = createFixtureProvider();
+    const forum = await provider.getForum("100040", { threadId: "200001" });
+    assert.ok(forum.selectedThread?.posts[0]);
+    forum.selectedThread.posts[0].body = "SYNTHETIC_POST_BODY";
+    const overreturned = { ...forum, posts: [{ body: "SYNTHETIC_EXTRA_BODY" }], threads: forum.threads.map(t => ({ ...t, body: "SYNTHETIC_EXTRA_BODY" })) };
+    provider.getForum = async () => overreturned;
+    const rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+    try {
+      const summary = await rpc.request("tools/call", { name: "adam_get_forum", arguments: { refId: "100040" } });
+      assert.ok(toolResult(summary).threads);
+      assert.doesNotMatch(JSON.stringify(summary), /SYNTHETIC_(POST|EXTRA)_BODY/);
+      const resource = await resourceJson(rpc, "adam://frm/100040");
+      assert.ok(resource.threads);
+      assert.doesNotMatch(JSON.stringify(resource), /SYNTHETIC_(POST|EXTRA)_BODY/);
+      const denied = await rpc.request("tools/call", { name: "adam_get_forum", arguments: { refId: "100040", threadId: "200001" } });
+      assert.doesNotMatch(JSON.stringify(denied), /SYNTHETIC_POST_BODY/);
+      const approved = await rpc.request("tools/call", { name: "adam_get_forum", arguments: { refId: "100040", threadId: "200001", confirm: true } });
+      assert.match(JSON.stringify(toolResult(approved)), /SYNTHETIC_POST_BODY/);
+    } finally { await rpc.close(); }
+  });
+
+  it("browser provider does not return post bodies on summary routes even when landing on synthetic thread HTML", async () => {
+    const origin = "https://adam.unibas.ch";
+    const forumUrl = `${origin}/go/frm/100040`;
+    const threadUrl = resolveForumThreadUrl(origin, "100040", "200001");
+    const html = '<main><h1>Thread A</h1><div class="ilFrmPostContentContainer"><a id="300001"></a><div class="ilFrmPostTitle">Thread A</div><div class="ilFrmPostContent">BROWSER_SYNTHETIC_BODY</div></div><a href="/logout.php">Abmelden</a></main>';
+    const provider = createBrowserProvider({ session: createMemorySession({
+      [forumUrl]: snapshotFromHtml(threadUrl, "Thread A", html, "Thread A BROWSER_SYNTHETIC_BODY Abmelden"),
+    }) });
+    const direct = await provider.getForum("100040");
+    assert.doesNotMatch(JSON.stringify(direct), /BROWSER_SYNTHETIC_BODY/);
+    const rpc = new ProtocolHarness(createAdamMcpServer({ provider }));
+    await rpc.start();
+    try {
+      const summary = await rpc.request("tools/call", { name: "adam_get_forum", arguments: { refId: "100040" } });
+      assert.ok(toolResult(summary));
+      const resource = await resourceJson(rpc, "adam://frm/100040");
+      assert.doesNotMatch(JSON.stringify([summary, resource]), /BROWSER_SYNTHETIC_BODY/);
+    } finally { await rpc.close(); }
+  });
+});
 
 function withUnits(object: AdamObject): AdamObject {
   return {

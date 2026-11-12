@@ -8,7 +8,8 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-**0.3.0 is published**, including selected local downloads and discovery
+**0.4.0 is in preparation, not published.** It adds selected Web Link metadata,
+session ownership and boundary hardening. **0.3.0 is published**, including selected local downloads and discovery
 efficiency improvements. See the
 [release and public-package verification record](docs/audit/2026-10-21-v0.3.0-release-readiness.md).
 

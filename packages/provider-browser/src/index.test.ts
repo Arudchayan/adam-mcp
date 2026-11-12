@@ -43,6 +43,18 @@ const dashboardHtml = `
 </main>
 `;
 
+describe("credential-bearing links", () => {
+  it("does not extract them as catalog or breadcrumb evidence", () => {
+    const html = `<nav aria-label="Brotkrumen"><a href="https://user:prefix!part%40tail@adam.unibas.ch/go/crs/710001">Bad</a></nav>
+      <main><a href="https://user:prefix!part%40tail@adam.unibas.ch/go/crs/710001">Bad</a>
+      <a href="/go/crs/710002">Good</a></main>`;
+    const snapshot = snapshotFromHtml("https://adam.unibas.ch/dashboard", "Dashboard", html, "Dashboard");
+    const catalog = extractCatalog(snapshot, "2026-01-01T00:00:00Z");
+    assert.deepEqual(catalog.objects.map((object) => object.refId), ["710002"]);
+    assert.deepEqual(catalog.breadcrumbs, []);
+  });
+});
+
 const courseHtml = `
 <nav aria-label="Brotkrumen">
   <a href="/go/root/1">ADAM</a>

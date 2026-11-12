@@ -11,6 +11,17 @@ import {
   runProvider,
   UntrustedContent,
 } from "./results.ts";
+describe("URL userinfo redaction", () => {
+  it("removes synthetic credentials from structured and text results", () => {
+    const url = "https://synthetic-user:prefix!part%40tail@adam.unibas.ch/go/crs/710001?token=hidden&ref_id=42";
+    const result = ok({ provenance: { sourceUrl: url }, description: `See ${url}` });
+    for (const output of [JSON.stringify(result.structuredContent), JSON.stringify(result.content)]) {
+      assert.doesNotMatch(output, /synthetic-user|prefix|part%40tail|hidden/);
+      assert.match(output, /adam\.unibas\.ch\/go\/crs\/710001/);
+      assert.match(output, /ref_id=42/);
+    }
+  });
+});
 describe("R-01 JSESSIONID", () => {
   it(
     "R-01 bare JSESSIONID= is redacted",
