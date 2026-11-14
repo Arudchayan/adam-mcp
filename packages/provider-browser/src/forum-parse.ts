@@ -1,4 +1,5 @@
 import { AdamError, DEFAULT_ADAM_ORIGIN, type ForumPost, type ForumThreadSummary } from "adam-core";
+import { parseAdamTimestamp } from "./deadlines.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
 export type ParsedForum = {
@@ -99,11 +100,11 @@ function isThreadViewHref(href: string): boolean {
 /** ILIAS 10 showThreadsObject: panel listing of il-item / il-item-title links. */
 function threadsFromItemTitles(html: string): Array<ForumThreadSummary & { href?: string }> {
   const found: Array<ForumThreadSummary & { href?: string }> = [];
-  const titleBlocks = [
-    ...extractClassBlocks(html, "il-item-title"),
-    ...extractClassBlocks(html, "c-item__title"),
-  ];
-  for (const block of titleBlocks) {
+  const titles = [
+    ...extractClassBlocksAt(html, "il-item-title"),
+    ...extractClassBlocksAt(html, "c-item__title"),
+  ].sort((a, b) => a.index - b.index);
+  for (const [position, { block, index }] of titles.entries()) {
     const href = block.match(/<a\b[^>]*href=["']([^"']+)["']/i)?.[1];
     if (!href) {
       continue;
@@ -111,10 +112,37 @@ function threadsFromItemTitles(html: string): Array<ForumThreadSummary & { href?
     const title = cleanTitle(stripTags(block));
     const parsed = threadFromHref(href, title);
     if (parsed) {
-      found.push(parsed);
+      // An item's properties sit between its title and the next item's title.
+      const segment = html.slice(index, titles[position + 1]?.index ?? html.length);
+      found.push({ ...parsed, ...threadItemProperties(segment) });
     }
   }
   return found;
+}
+
+/** #125: ILIAS 10.12 thread item properties (author, posts/unread, latest post). */
+function threadItemProperties(segment: string): Partial<ForumThreadSummary> {
+  const names = extractClassBlocksAt(segment, "il-item-property-name");
+  const values = extractClassBlocksAt(segment, "il-item-property-value");
+  const result: Partial<ForumThreadSummary> = {};
+  for (const [index, name] of names.entries()) {
+    const label = cleanTitle(stripTags(name.block)).replace(/[:·]\s*$/, "").trim().toLowerCase();
+    const value = cleanTitle(stripTags(values[index]?.block ?? ""));
+    if (!value) continue;
+    if (/^(?:author|autor|autorin|created by|erstellt von)$/.test(label)) {
+      result.author ??= value;
+    } else if (/^(?:posts|beiträge|beitraege|replies|antworten)$/.test(label)) {
+      const counts = value.match(/^(\d+)(?:\s*\(\s*(\d+)(?:\s*(?:unread|ungelesen|neu|new))?\s*\))?/i);
+      if (counts) {
+        result.postCount = Number.parseInt(counts[1], 10);
+        if (counts[2] !== undefined) result.unreadCount = Number.parseInt(counts[2], 10);
+      }
+    } else if (/^(?:latest post|last post|letzter beitrag|neuester beitrag)$/.test(label)) {
+      const updatedAt = parseAdamTimestamp(value);
+      if (updatedAt) result.updatedAt = updatedAt;
+    }
+  }
+  return result;
 }
 
 function threadsFromLinks(links: SnapshotLink[]): Array<ForumThreadSummary & { href?: string }> {
@@ -284,12 +312,25 @@ function postFromBlock(block: string): ForumPost | undefined {
   const subject = cleanTitle(stripTags(extractClassBlocks(block, "ilFrmPostTitle")[0] ?? "")) || undefined;
   const header = extractClassBlocks(block, "ilFrmPostHeader")[0] ?? "";
   const author = authorFromHeader(header);
+  const createdAt = createdAtFromHeader(header);
   return {
     postId,
     body,
     ...(subject ? { subject } : {}),
     ...(author ? { author } : {}),
+    ...(createdAt ? { createdAt } : {}),
   };
+}
+
+/** #125: the posting time follows the author in the header ("Author | 12. Oct 2026, 17:17"). */
+function createdAtFromHeader(header: string): string | undefined {
+  const withoutTitle = header.replace(/<div\b[^>]*class=["'][^"']*\bilFrmPostTitle\b[\s\S]*?<\/div>/gi, "");
+  const parts = cleanTitle(stripTags(withoutTitle)).split("|").slice(1);
+  for (const part of parts) {
+    const stamp = parseAdamTimestamp(part);
+    if (stamp) return stamp;
+  }
+  return undefined;
 }
 
 function authorFromHeader(header: string): string | undefined {
@@ -301,7 +342,11 @@ function authorFromHeader(header: string): string | undefined {
 }
 
 function extractClassBlocks(html: string, className: string): string[] {
-  const blocks: string[] = [];
+  return extractClassBlocksAt(html, className).map((entry) => entry.block);
+}
+
+function extractClassBlocksAt(html: string, className: string): Array<{ block: string; index: number }> {
+  const blocks: Array<{ block: string; index: number }> = [];
   const open = new RegExp(
     `<(div|li|article|span|h2|h3|h4)\\b([^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*)>`,
     "gi",
@@ -311,7 +356,7 @@ function extractClassBlocks(html: string, className: string): string[] {
     const start = (match.index ?? 0) + match[0].length;
     const inner = sliceUntilClose(html, start, tag);
     if (inner !== undefined) {
-      blocks.push(inner);
+      blocks.push({ block: inner, index: match.index ?? 0 });
     }
   }
   return blocks;
@@ -360,6 +405,7 @@ function mergeThread(
         title: preferTitle(existing.title, summary.title),
         author: existing.author ?? summary.author,
         postCount: existing.postCount ?? summary.postCount,
+        unreadCount: existing.unreadCount ?? summary.unreadCount,
         createdAt: existing.createdAt ?? summary.createdAt,
         updatedAt: existing.updatedAt ?? summary.updatedAt,
       });

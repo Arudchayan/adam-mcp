@@ -133,6 +133,8 @@ export type ForumThreadSummary = {
   createdAt?: string;
   updatedAt?: string;
   postCount?: number;
+  /** Unread posts for this account, when the thread overview shows it. */
+  unreadCount?: number;
 };
 
 export type ForumObject = AdamObject & {

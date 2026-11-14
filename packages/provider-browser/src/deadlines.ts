@@ -116,6 +116,36 @@ export function exerciseDeadlineFromPage(text: string, _inferredDates?: Inferred
   return undefined;
 }
 
+/**
+ * #125: an ILIAS display timestamp such as "12. Oct 2026, 17:17",
+ * "1 Sep 2026" or "Today, 09:05" / "Gestern, 18:00" as an ISO instant
+ * (Europe/Zurich wall time). Date-only values stay UTC midnight. Relative
+ * days resolve against `now`. Unparseable values are omitted, never guessed.
+ */
+export function parseAdamTimestamp(raw: string, now: Date = new Date()): string | undefined {
+  const text = raw.replace(/\s+/g, " ").trim();
+  let day: string | undefined;
+  let tail = "";
+  const relative = text.match(/^(today|heute|yesterday|gestern)\b/i);
+  if (relative) {
+    const zurichToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Zurich", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+    const base = new Date(`${zurichToday}T00:00:00Z`);
+    if (/^(yesterday|gestern)$/i.test(relative[1])) base.setUTCDate(base.getUTCDate() - 1);
+    day = base.toISOString().slice(0, 10);
+    tail = text.slice(relative[0].length);
+  } else {
+    const date = inferDates(text).sort((a, b) => text.indexOf(a.raw) - text.indexOf(b.raw))[0];
+    if (!date?.iso) return undefined;
+    day = date.iso.slice(0, 10);
+    tail = text.slice(text.indexOf(date.raw) + date.raw.length);
+  }
+  const time = tail.match(/^(?:\s*(?:,|um|at))?\s*(\d{1,2}):(\d{2})\b/i);
+  if (!time) return relative ? undefined : `${day}T00:00:00.000Z`;
+  const hour = Number(time[1]), minute = Number(time[2]);
+  if (hour > 23 || minute > 59) return undefined;
+  return zurichLocalTime(day, hour, minute, 0);
+}
+
 function toIso(year: number, monthIndex: number, day: number): string | undefined {
   if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11 || day < 1 || day > 31) {
     return undefined;

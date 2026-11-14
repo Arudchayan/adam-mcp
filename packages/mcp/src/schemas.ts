@@ -383,8 +383,9 @@ export const forumSummarySchema = adamObjectOutputSchema.strip().extend({
     title: z.string(),
     author: z.string().optional(),
     createdAt: z.string().optional(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().optional().describe("Latest post time, when the thread overview shows it"),
     postCount: z.number().optional(),
+    unreadCount: z.number().optional().describe("Unread posts for this account, when shown"),
   })),
 });
 
