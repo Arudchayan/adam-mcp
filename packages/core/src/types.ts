@@ -111,6 +111,10 @@ export type ExerciseOwnStatus = "none" | "submitted" | "passed" | "failed" | "un
 export type ExerciseUnit = {
   title: string;
   deadline?: string;
+  /** As ADAM labels it, e.g. "Optional" / "Mandatory" (#120). */
+  requirement?: string;
+  /** As ADAM labels it, e.g. "Upload" (#120). */
+  submissionType?: string;
   instructionText?: string;
   ownStatus: ExerciseOwnStatus;
 };

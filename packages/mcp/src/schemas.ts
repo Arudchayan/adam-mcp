@@ -327,6 +327,8 @@ const exerciseUnitMetaSchema = z
   .object({
     title: z.string(),
     deadline: z.string().optional(),
+    requirement: z.string().optional().describe("As ADAM labels it, e.g. Optional / Mandatory"),
+    submissionType: z.string().optional().describe("As ADAM labels it, e.g. Upload"),
     ownStatus: z.enum(["none", "submitted", "passed", "failed", "unknown"]),
   })
   .passthrough();
