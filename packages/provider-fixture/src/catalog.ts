@@ -323,6 +323,42 @@ const course2Exercise: ExerciseObject = {
   ],
 };
 
+/** ADR 0049: labeled synthetic Survey and inline Poll (read-only; never submitted or voted). */
+const course2Survey = obj(
+  "svy",
+  "100130",
+  "[SYNTHETIC] Course evaluation survey",
+  [...course2Breadcrumb, crumb("crs", "100101", "00000-02 – Synthetic Algorithms Lab")],
+  { accessClass: "Authenticated Users", updatedAt: "2026-09-02T10:00:00.000Z" },
+);
+
+const course2SurveyPage: PageContent = {
+  ...course2Survey,
+  text: [
+    "Synthetic course evaluation survey (labeled fixture, not live).",
+    "You have already completed the survey.",
+  ].join("\n"),
+  inferredDates: [],
+};
+
+const course2Poll = obj(
+  "poll",
+  "100131",
+  "[SYNTHETIC] Which tutorial slot suits you?",
+  [...course2Breadcrumb, crumb("crs", "100101", "00000-02 – Synthetic Algorithms Lab")],
+  { accessClass: "Authenticated Users", updatedAt: "2026-09-02T10:30:00.000Z" },
+);
+
+const course2PollPage: PageContent = {
+  ...course2Poll,
+  text: [
+    "Which tutorial slot suits you? (labeled fixture, not live)",
+    "Monday 10:00 · Wednesday 14:00",
+    "This connector cannot vote.",
+  ].join("\n"),
+  inferredDates: [],
+};
+
 const course2Page: PageContent = {
   ...course2,
   text: [
@@ -455,10 +491,12 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "100030": { object: quiz, children: [], page: quizPage },
   "100101": {
     object: course2,
-    children: ["100121"],
+    children: ["100121", "100130", "100131"],
     page: course2Page,
   },
   "100121": { object: course2Exercise, children: [], page: undefined },
+  "100130": { object: course2Survey, children: [], page: course2SurveyPage },
+  "100131": { object: course2Poll, children: [], page: course2PollPage },
   "100201": {
     object: catalogOnlyCourse,
     children: [],

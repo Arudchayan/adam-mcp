@@ -1074,6 +1074,18 @@ export class BrowserAdamProvider implements AdamProvider {
           lastNotFound = error;
           return undefined;
         }
+        // ADR 0049: a guessed type (no caller type, hint or cached identity) that
+        // ADAM redirects elsewhere — usually the parent course — says nothing about
+        // a stale listing. Report that the object's type could not be identified.
+        if (error instanceof AdamError && error.code === "stale_id" && type !== preferred) {
+          throw new AdamError(
+            "unsupported_type",
+            `ADAM redirected ref_id ${refId} to another page when it was opened without a known type (tried ${type}). ` +
+              "adam-mcp could not identify this object's type, so it may be one adam-mcp does not read. " +
+              "Pass type from adam_list_children (for example svy or poll), or open the ADAM URL.",
+            false,
+          );
+        }
         throw error;
       }
     };

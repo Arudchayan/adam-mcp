@@ -25,7 +25,13 @@ const CMD_CLASS_TO_TYPE: Record<string, AdamObjectType> = {
   ilobjforumgui: "frm",
   ilobjlinkresourcegui: "webr",
   ilobjweblinkgui: "webr",
+  // ADR 0049: read-only Survey and inline Poll identity. Never a write path.
+  ilobjsurveygui: "svy",
+  ilobjpollgui: "poll",
 };
+
+/** baseClass values trusted to name the ref_id's own type (ADR 0049). */
+const BASE_CLASS_TYPES = new Set(["ilobjsurveygui", "ilobjpollgui"]);
 
 export function isAdamObjectType(value: string): value is AdamObjectType {
   return (ADAM_OBJECT_TYPES as readonly string[]).includes(value);
@@ -55,6 +61,10 @@ export function objectTypeLabel(type: AdamObjectType): string {
       return "Test";
     case "impr":
       return "Imprint";
+    case "svy":
+      return "Survey";
+    case "poll":
+      return "Poll";
     case "unknown":
       return "Unknown object";
     default: {
@@ -123,7 +133,11 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
         return { type: "unknown", refId: itemRef };
       }
       const classes = url.searchParams.getAll("cmdClass").map((value) => value.toLowerCase());
-      const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]);
+      // ADR 0049: ILIAS 10 Survey/Poll screens land on ilias.php?baseClass=ilObjSurveyGUI&ref_id=…
+      // with no cmdClass. baseClass names the ref_id's own GUI, so it is a fallback only.
+      const baseClasses = url.searchParams.getAll("baseClass").map((value) => value.toLowerCase());
+      const mapped = [...classes].reverse().find((value) => CMD_CLASS_TO_TYPE[value]) ??
+        baseClasses.find((value) => BASE_CLASS_TYPES.has(value));
       const directWebLink = url.origin === DEFAULT_ADAM_ORIGIN && !url.username && !url.password &&
         url.pathname === "/ilias.php" && classes.length === 0 && url.searchParams.getAll("ref_id").length === 1 &&
         url.searchParams.getAll("baseClass").length === 1 && url.searchParams.get("baseClass")?.toLowerCase() === "illinkresourcehandlergui" &&
