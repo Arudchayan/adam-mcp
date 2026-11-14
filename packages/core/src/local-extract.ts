@@ -97,39 +97,109 @@ export function assertExtractHasText(
   );
 }
 
+/** #121: the extract size cap is a property of this file, not a broken installation. */
+export function extractTooLargeError(): AdamError {
+  return new AdamError(
+    "unsupported_type",
+    `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit. Save it locally with \`adam-mcp download <refId>\` and open it there instead.`,
+    false,
+  );
+}
+
+export function normalizeStartPage(raw?: number): number {
+  return raw === undefined ? 1 : Math.max(1, Math.floor(raw));
+}
+
+export type LocalExtractOptions = {
+  /** 1-based first page to return (#121). */
+  startPage?: number;
+  /** The response named an uploaded `.html`/`.htm` file, not an ADAM page (#121). */
+  uploadedHtml?: boolean;
+};
+
+const hasExtension = (name: string | undefined, pattern: RegExp) => Boolean(name && pattern.test(name.trim()));
+
+/** Jupyter notebooks are JSON; return cell sources only (outputs can be large embedded media). */
+function notebookText(bytes: Uint8Array): string {
+  let notebook: unknown;
+  try { notebook = JSON.parse(Buffer.from(bytes).toString("utf8")); } catch {
+    throw new AdamError("unsupported_type", "This notebook is not valid JSON. Open it in ADAM instead.", false);
+  }
+  const cells = (notebook as { cells?: unknown }).cells;
+  if (!Array.isArray(cells)) {
+    throw new AdamError("unsupported_type", "This notebook has no cells. Open it in ADAM instead.", false);
+  }
+  return cells.map((cell: { cell_type?: unknown; source?: unknown }) => {
+    const source = Array.isArray(cell.source) ? cell.source.join("") : typeof cell.source === "string" ? cell.source : "";
+    return `[${typeof cell.cell_type === "string" ? cell.cell_type : "cell"}]\n${source}`;
+  }).join("\n\n");
+}
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+
+/** Visible text of an uploaded HTML file: no scripts, styles, markup or attributes. */
+export function htmlFileText(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|svg|noscript|template|head)\b[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<(?:br|\/p|\/div|\/h[1-6]|\/li|\/tr|\/pre|\/section|\/article)\b[^>]*>/gi, "\n")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, name: string) => {
+      if (name[0] === "#") {
+        const code = name[1]?.toLowerCase() === "x" ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
+        return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " ";
+      }
+      return ENTITIES[name.toLowerCase()] ?? entity;
+    })
+    .replace(/[ \t\f\v\r]+/g, " ")
+    .replace(/ *\n[ \n]*/g, "\n")
+    .trim();
+}
+
 export async function extractLocalFileText(
   file: FileObject,
   bytes: Uint8Array,
   mimeType?: string,
   maxPages = DEFAULT_EXTRACT_PAGES,
   signal?: AbortSignal,
+  options: LocalExtractOptions = {},
 ): Promise<FileExtract> {
   throwIfCancelled(signal);
   if (bytes.byteLength > MAX_EXTRACT_BYTES) {
-    throw new AdamError("provider_unavailable", `File is larger than the ${MAX_EXTRACT_BYTES} byte extract limit.`, false);
+    throw extractTooLargeError();
   }
   const pagesLimit = normalizeMaxPages(maxPages);
+  const startPage = normalizeStartPage(options.startPage);
   const digest = sha256Hex(bytes);
   const type = mimeType ?? file.mimeType ?? "";
   let pages: Array<{ page: number; text: string }> = [];
 
   let pdfPageCount: number | undefined;
   let pdfTruncated = false;
-  if (type.startsWith("text/") && !type.includes("html")) {
+  if (hasExtension(file.title, /\.ipynb$/i)) {
+    pages = [{ page: 1, text: notebookText(bytes) }];
+  } else if (options.uploadedHtml) {
+    pages = [{ page: 1, text: htmlFileText(Buffer.from(bytes).toString("utf8")) }];
+  } else if (type.startsWith("text/") && !type.includes("html")) {
     pages = [{ page: 1, text: Buffer.from(bytes).toString("utf8") }];
   } else if (type === "application/json") {
     pages = [{ page: 1, text: Buffer.from(bytes).toString("utf8") }];
   } else if (isPdf(bytes, type)) {
-    const extracted = await extractPdfText(bytes, pagesLimit, MAX_EXTRACT_CHARS, signal);
+    const extracted = await extractPdfText(bytes, pagesLimit, MAX_EXTRACT_CHARS, signal, startPage);
     pages = extracted.pages;
     pdfPageCount = extracted.pageCount;
     pdfTruncated = extracted.truncated;
   } else {
     throw new AdamError(
       "unsupported_type",
-      `Local extract supports PDF and plain text, not ${type || file.mimeType || "this type"}.`,
+      `Local extract supports PDF, plain text, Jupyter notebooks and uploaded HTML files, not ${type || file.mimeType || "this type"}.`,
     );
   }
+  const totalPages = pdfPageCount ?? pages.length;
+  if (startPage > Math.max(totalPages, 1)) {
+    throw new AdamError("unsupported_type", `startPage ${startPage} is beyond the last page (${totalPages}) of this file.`, false);
+  }
+  if (pdfPageCount === undefined) pages = pages.filter((page) => page.page >= startPage);
 
   let truncated = pdfTruncated || pages.length > pagesLimit;
   pages = pages.slice(0, pagesLimit);
@@ -160,14 +230,16 @@ export async function extractLocalFileText(
     assertExtractHasText({ pages: bounded, truncated }, pagesLimit);
   }
 
+  const lastPage = bounded.at(-1)?.page ?? startPage - 1;
   return {
     refId: file.refId,
     title: file.title,
     url: file.url,
     mimeType: file.mimeType ?? mimeType,
-    pageCount: pdfPageCount ?? bounded.length,
+    pageCount: pdfPageCount ?? totalPages,
     pages: bounded,
     truncated,
+    ...(lastPage < totalPages ? { nextStartPage: lastPage + 1 } : {}),
     sha256: digest,
     provenance: file.provenance,
   };

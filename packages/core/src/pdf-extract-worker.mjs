@@ -26,8 +26,11 @@ try {
   const document = await task.promise;
   const pages = [];
   let used = 0;
-  let truncated = document.numPages > workerData.pagesLimit;
-  for (let number = 1; number <= Math.min(document.numPages, workerData.pagesLimit); number++) {
+  // #121: a 1-based page window [startPage, startPage + pagesLimit - 1].
+  const start = Math.max(1, workerData.startPage ?? 1);
+  const end = Math.min(document.numPages, start + workerData.pagesLimit - 1);
+  let truncated = document.numPages > end;
+  for (let number = start; number <= end; number++) {
     if (used >= workerData.charsLimit) { truncated = true; break; }
     const page = await document.getPage(number);
     const reader = page.streamTextContent().getReader();

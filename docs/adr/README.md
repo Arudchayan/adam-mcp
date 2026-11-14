@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0047](0047-extract-page-windows-and-text-formats.md) | Extract page windows, notebooks, uploaded HTML and the size-limit hint |
 | [0046](0046-cli-status-lifecycle-diagnostics.md) | Structured status failures, probe-tolerant holder status and abandoned-lock diagnostics |
 | [0045](0045-keep-holder-tab-on-cancel.md) | Never close the headless holder's last tab on cancellation |
 | [0044](0044-stdio-eof-provider-cleanup.md) | Close the configured provider when stdio ends |
