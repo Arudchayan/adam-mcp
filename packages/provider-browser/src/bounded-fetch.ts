@@ -1,4 +1,4 @@
-import { AdamError, MAX_EXTRACT_BYTES, throwIfCancelled } from "adam-core";
+import { AdamError, MAX_EXTRACT_BYTES, extractTooLargeError, throwIfCancelled } from "adam-core";
 import { adamErrorFromAuthorizedHttpStatus } from "./upstream-errors.ts";
 import type { AuthorizedFetchResult, AuthorizedProbeResult, AuthorizedStreamOptions } from "./session-types.ts";
 
@@ -82,7 +82,7 @@ export async function boundedAuthorizedStream(url: string, host: FetchHost, opti
       if (host.method === "HEAD") {
         return metadata;
       }
-      const tooLarge = () => new AdamError("provider_unavailable", `File is larger than the ${options.maxBytes} byte ${options.maxBytes === MAX_EXTRACT_BYTES ? "extract" : "download"} limit.`, false);
+      const tooLarge = () => options.maxBytes === MAX_EXTRACT_BYTES ? extractTooLargeError() : new AdamError("provider_unavailable", `File is larger than the ${options.maxBytes} byte download limit.`, false);
       if (contentLength !== undefined && contentLength > options.maxBytes) throw tooLarge();
       controller.signal.throwIfAborted();
       await options.onHeaders(metadata, controller.signal);

@@ -176,7 +176,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async extractFileText(
     refId: RefId,
-    options?: { maxPages?: number; onProgress?: ProgressReporter; signal?: AbortSignal },
+    options?: { maxPages?: number; startPage?: number; onProgress?: ProgressReporter; signal?: AbortSignal },
   ): Promise<FileExtract> {
     throwIfCancelled(options?.signal);
     await LongWalkStub.emit("extract", options?.onProgress);
@@ -184,7 +184,7 @@ export class FixtureAdamProvider implements AdamProvider {
     if (file.refId !== "100011") {
       throw new AdamError("unsupported_type", `Fixture extract is only defined for 00_Overview.pdf, not ${refId}.`);
     }
-    return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages, options?.signal);
+    return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages, options?.signal, { startPage: options?.startPage });
   }
 
   async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {

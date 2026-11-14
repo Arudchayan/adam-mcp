@@ -30,6 +30,11 @@ import {
 import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
+
+/** #121: only a response that names an .html/.htm file is an uploaded HTML course file. */
+export function isUploadedHtmlFile(contentDisposition: string | undefined): boolean {
+  return /\.html?$/i.test(filenameFromContentDisposition(contentDisposition)?.trim() ?? "");
+}
 import { defaultOrigin } from "./config.ts";
 import {
   extractCatalog,
@@ -474,7 +479,7 @@ export class BrowserAdamProvider implements AdamProvider {
 
   async extractFileText(
     refId: RefId,
-    options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
+    options?: { maxPages?: number; startPage?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
@@ -487,11 +492,14 @@ export class BrowserAdamProvider implements AdamProvider {
       try {
         const fetched = await this.session().fetchAuthorized(url, { signal: options?.signal });
         const type = fetched.contentType ?? file.mimeType;
-        if (looksLikeHtml(fetched.bytes, type) && !type?.toLowerCase().startsWith("text/plain")) {
+        // #121: an uploaded .html course file arrives as a named file download,
+        // unlike ADAM login/error/info pages, which never carry a filename.
+        const uploadedHtml = isUploadedHtmlFile(fetched.contentDisposition);
+        if (!uploadedHtml && looksLikeHtml(fetched.bytes, type) && !type?.toLowerCase().startsWith("text/plain")) {
           sawHtml = true;
           continue;
         }
-        return extractLocalFileText(file, fetched.bytes, type, options?.maxPages, options?.signal);
+        return extractLocalFileText(file, fetched.bytes, type, options?.maxPages, options?.signal, { startPage: options?.startPage, uploadedHtml });
       } catch (error) {
         if (error instanceof AdamError && error.code === "cancelled") throw error;
         lastError = error;

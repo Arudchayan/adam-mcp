@@ -11,16 +11,16 @@ export type PdfText = {
 const queue = new WeightedQueue({ maxPending: 8, maxBytes: 32 * 1024 * 1024, waitMs: 30_000 });
 
 /** Isolate parser memory, elapsed time and diagnostics from the stdio server. */
-export function extractPdfText(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal?: AbortSignal): Promise<PdfText> {
+export function extractPdfText(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal?: AbortSignal, startPage = 1): Promise<PdfText> {
   throwIfCancelled(signal);
-  return queue.enqueue(bytes.byteLength, () => runPdfWorker(bytes, pagesLimit, charsLimit, signal), signal);
+  return queue.enqueue(bytes.byteLength, () => runPdfWorker(bytes, pagesLimit, charsLimit, signal, startPage), signal);
 }
 
-function runPdfWorker(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal?: AbortSignal): Promise<PdfText> {
+function runPdfWorker(bytes: Uint8Array, pagesLimit: number, charsLimit: number, signal: AbortSignal | undefined, startPage: number): Promise<PdfText> {
   throwIfCancelled(signal);
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./pdf-extract-worker.mjs", import.meta.url), {
-      workerData: { bytes: new Uint8Array(bytes), pagesLimit, charsLimit },
+      workerData: { bytes: new Uint8Array(bytes), pagesLimit, charsLimit, startPage },
       execArgv: [],
       resourceLimits: { maxOldGenerationSizeMb: 128 },
       stdout: true,

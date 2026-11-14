@@ -125,6 +125,7 @@ export const extractFileInputSchema = z
     type: objectTypeHintSchema,
     confirm: confirmExtractSchema.optional(),
     maxPages: z.number().int().min(1).max(20).optional().describe("Max PDF pages to extract, default 8, max 20"),
+    startPage: z.number().int().min(1).max(100_000).optional().describe("1-based first page to extract, default 1. Pass a previous result's nextStartPage to read pages beyond the first maxPages."),
   })
   .superRefine(refineObjectRef)
   .transform(resolveObjectRef);
@@ -316,6 +317,7 @@ export const untrustedExtractOutputSchema = z
         .passthrough(),
     ),
     truncated: z.boolean(),
+    nextStartPage: z.number().optional().describe("First page not yet returned; pass as startPage to continue"),
     sha256: z.string(),
     provenance: provenanceSchema,
   })

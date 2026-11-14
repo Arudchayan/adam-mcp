@@ -25,7 +25,7 @@ export type AdamProvider = {
   getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject>;
   extractFileText(
     refId: RefId,
-    options?: { maxPages?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
+    options?: { maxPages?: number; startPage?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract>;
   getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject>;
   getForum(

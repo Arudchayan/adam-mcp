@@ -91,8 +91,10 @@ describe("extractLocalFileText", () => {
       () => extractLocalFileText(file, new Uint8Array(MAX_EXTRACT_BYTES + 1), "application/pdf"),
       (error: unknown) => {
         assert.ok(error instanceof AdamError);
-        assert.equal(error.code, "provider_unavailable");
+        // #121: a size cap is a property of this file, not an installation fault.
+        assert.equal(error.code, "unsupported_type");
         assert.equal(error.retryable, false);
+        assert.match(error.message, /adam-mcp download/);
         return true;
       },
     );

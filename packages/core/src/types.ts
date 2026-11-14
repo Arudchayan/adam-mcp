@@ -100,6 +100,8 @@ export type FileExtract = {
   pageCount?: number;
   pages: Array<{ page: number; text: string }>;
   truncated: boolean;
+  /** First page not yet returned; pass as startPage to continue (#121). */
+  nextStartPage?: number;
   sha256: string;
   provenance: Provenance;
 };
