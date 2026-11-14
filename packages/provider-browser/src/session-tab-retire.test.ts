@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
@@ -71,6 +71,18 @@ describe("ADR 0045: cancelled navigation keeps a Chrome tab open", () => {
     assert.equal(context.pages().length, 1);
   });
 
+  it("stops in place when opening a replacement hangs", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const context = fakeContext();
+    context.newPage = () => new Promise<FakePage>(() => undefined);
+    const page = fakePage(context);
+    const retiring = retireNavigationTab(page);
+    await Promise.resolve();
+    t.mock.timers.tick(5_000);
+    await retiring;
+    assert.deepEqual(page.calls, ["goto about:blank"], "a wedged newPage must not hold the queue or close the last tab");
+  });
+
   it("does nothing for an already closed tab", async () => {
     const context = fakeContext();
     const page = fakePage(context);
@@ -94,20 +106,28 @@ it("real Chrome: session cookies survive a cancelled navigation on the holder's 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const profile = await mkdtemp(join(tmpdir(), "adam-tab-retire-"));
+  // Production topology: the holder owns a persistent context; the session attaches over CDP.
   const holder = await chromium.launchPersistentContext(profile, {
     channel: "chrome", headless: true, args: ["--remote-debugging-port=0", "--remote-debugging-address=127.0.0.1"],
   });
+  let attached: Awaited<ReturnType<typeof chromium.connectOverCDP>> | undefined;
   try {
     await holder.addCookies([{ name: "SESSION", value: "synthetic", domain: "127.0.0.1", path: "/", expires: -1, httpOnly: true, secure: false, sameSite: "Lax" }]);
-    const page = holder.pages()[0] ?? await holder.newPage();
+    if (holder.pages().length === 0) await holder.newPage();
+    const port = (await readFile(join(profile, "DevToolsActivePort"), "utf8")).split(/\r?\n/)[0];
+    attached = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+    const context = attached.contexts()[0]!;
+    const page = context.pages()[0]!;
+    assert.equal(context.pages().length, 1, "the holder's only tab");
     const navigation = page.goto(origin + "/slow").catch(() => undefined);
     await new Promise((resolve) => setTimeout(resolve, 300));
     await retireNavigationTab(page);
     await navigation;
-    const next = holder.pages().find((open) => !open.isClosed()) ?? await holder.newPage();
+    const next = context.pages().find((open) => !open.isClosed()) ?? await context.newPage();
     await next.goto(origin + "/");
     assert.equal(await next.innerText("p"), "SESSION=synthetic");
   } finally {
+    await attached?.close().catch(() => undefined);
     await holder.close();
     server.close();
     await rm(profile, { recursive: true, force: true });

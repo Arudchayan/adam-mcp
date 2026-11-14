@@ -162,7 +162,14 @@ export async function retireNavigationTab(page: RetirablePage): Promise<void> {
   const context = page.context();
   let hasOtherTab = context.pages().some((open) => open !== page && !open.isClosed());
   // ensurePage() attaches the download guard when it reuses the replacement.
-  if (!hasOtherTab) hasOtherTab = await context.newPage().then(() => true, () => false);
+  // Bounded: the serialized queue slot is held until retirement settles.
+  if (!hasOtherTab) {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 5_000); });
+    try {
+      hasOtherTab = await Promise.race([context.newPage().then(() => true, () => false), timedOut]);
+    } finally { clearTimeout(timer); }
+  }
   if (hasOtherTab) {
     await page.close({ runBeforeUnload: false }).catch(() => undefined);
     return;

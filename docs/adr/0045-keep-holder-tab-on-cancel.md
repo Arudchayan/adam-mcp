@@ -16,12 +16,14 @@ A cancelled navigation retires its tab with `retireNavigationTab`:
 
 1. If another open tab exists in the context, close the cancelled tab.
 2. Otherwise, open a blank replacement tab first, then close the cancelled tab.
-3. If no replacement can be opened, keep the tab and stop the navigation by going to `about:blank`. The last tab is never closed.
+3. If no replacement opens within 5 seconds, keep the tab and stop the navigation by going to `about:blank`. The last tab is never closed.
 
 The serialized queue still holds its slot until retirement finishes (ADR 0024), so the next read reuses the replacement tab and never runs alongside the cancelled one. Context, holder and Chrome lifetimes are unchanged. `about:blank` causes no network request and needs no origin allowance.
 
 ## Consequences
 
 Time-budget partial results and user cancellations no longer sign the student out. A synthetic unit test covers the three branches. An opt-in real-Chrome regression test (`ADAM_TEST_CHROME=1`) checks that a session cookie survives a cancelled navigation on the only tab, and it fails with the previous `page.close()`. Neither test accesses ADAM.
+
+The invariant is enforced by the attaching session, not the holder. Another client attached over CDP, such as an older build, can still close the last tab. A holder-owned keep-alive tab would need tab selection to skip it, so that is left for a follow-up.
 
 The live sign-out still needs to be re-checked on a source build against the original reports. This decision does not make walks faster and does not change the 120-second budget. Sessions that were already signed out need one `adam-mcp login`.
