@@ -82,12 +82,15 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     freshness: "live-browser-session",
   });
 
-  const breadcrumbs = snapshot.links
-    .filter((link) => link.inBreadcrumb)
-    .map((link) => linkToBreadcrumb(link))
-    .filter((crumb): crumb is Breadcrumb => crumb !== undefined);
-
   const currentRef = parseAdamRef(snapshot.url);
+  const breadcrumbs = orderBreadcrumbs(
+    snapshot.links
+      .filter((link) => link.inBreadcrumb)
+      .map((link) => linkToBreadcrumb(link))
+      .filter((crumb): crumb is Breadcrumb => crumb !== undefined),
+    currentRef?.refId,
+  );
+
   const current = currentRef
     ? toObject(
         currentRef.type,
@@ -388,6 +391,23 @@ function linkToBreadcrumb(link: SnapshotLink): Breadcrumb | undefined {
     title: cleanTitle(link.text) || parsed.refId,
     url: objectUrl(parsed.type, parsed.refId),
   };
+}
+
+/**
+ * Ancestors of the current page, root to parent. ILIAS 10.12 renders the
+ * breadcrumb nav leaf-first in the DOM (current object first, repository root
+ * last) and includes the current object itself (#122). Orient by those
+ * anchors, drop the current object and repeated refs.
+ */
+export function orderBreadcrumbs(crumbs: Breadcrumb[], currentRefId?: RefId): Breadcrumb[] {
+  const seen = new Set<RefId>();
+  const unique = crumbs.filter((crumb) => !seen.has(crumb.refId) && Boolean(seen.add(crumb.refId)));
+  const rootIndex = unique.findIndex((crumb) => crumb.type === "root");
+  const leafFirst = unique.length > 1 && (
+    (rootIndex >= 0 ? rootIndex === unique.length - 1 && rootIndex > 0 : unique[0].refId === currentRefId)
+  );
+  const ordered = leafFirst ? [...unique].reverse() : unique;
+  return ordered.filter((crumb) => crumb.refId !== currentRefId);
 }
 
 function toBreadcrumb(object: AdamObject): Breadcrumb {

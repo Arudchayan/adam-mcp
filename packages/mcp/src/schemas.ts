@@ -221,7 +221,7 @@ export const adamObjectOutputSchema = z
     title: z.string(),
     url: z.string(),
     resourceUri: z.string().optional().describe("MCP handle adam://{type}/{refId}; not a browser URL"),
-    breadcrumb: z.array(breadcrumbSchema),
+    breadcrumb: z.array(breadcrumbSchema).describe("Ancestors, repository root first, ending at the containing object; excludes the object itself. Empty when not observed."),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
     accessClass: z.string().optional(),
