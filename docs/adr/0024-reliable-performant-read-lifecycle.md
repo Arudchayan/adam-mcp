@@ -39,7 +39,8 @@ elapsed time or queued demand. Performance is a core product requirement.
    immediately. The active operation retains the serialization slot until its
    cleanup completes, so cancellation never causes two tabs to run concurrently.
    A cancelled navigation closes only its current tab, retaining the context and
-   authenticated holder; the next read recreates/reuses a tab. File HEAD probes
+   authenticated holder; the next read recreates/reuses a tab. It never closes
+   the holder's last tab, which would purge session cookies (ADR 0045). File HEAD probes
    use the same pinned-origin, cancellable native-fetch redirect checks as GET,
    without downloading bytes or applying the extraction size cap to metadata.
 6. Cache only the current process's OS-confirmed identity, and still check its

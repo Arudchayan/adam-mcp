@@ -179,7 +179,11 @@ it("cancellation during content-tab recovery closes only the active tab", async 
   let fail!: (error: Error) => void;
   const blocked = new Promise<null>((_resolve, reject) => { fail = reject; });
   let closed = 0, navigations = 0;
+  // Another tab is open, so ADR 0045 closes this tab without a replacement.
+  const sibling = { isClosed: () => false };
   const page = {
+    isClosed: () => closed > 0,
+    context: () => ({ pages: () => [page, sibling], newPage: async () => assert.fail("no replacement needed") }),
     async goto() { if (++navigations === 1) return null; entered(); return blocked; },
     async waitForFunction() {},
     async evaluate() { return [tab]; },

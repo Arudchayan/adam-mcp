@@ -147,6 +147,36 @@ export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
   }
 }
 
+type RetirablePage = Pick<Page, "close" | "goto" | "isClosed"> & {
+  context(): { pages(): Array<Pick<Page, "isClosed">>; newPage(): Promise<unknown> };
+};
+
+/**
+ * ADR 0045: stop a cancelled navigation without ending the Chrome session.
+ * Closing the last tab of the headless holder ends Chrome's browser session,
+ * which purges every session cookie (ADAM's sign-in cookies). Open a blank
+ * replacement first; if that fails, stop the navigation in place instead.
+ */
+export async function retireNavigationTab(page: RetirablePage): Promise<void> {
+  if (page.isClosed()) return;
+  const context = page.context();
+  let hasOtherTab = context.pages().some((open) => open !== page && !open.isClosed());
+  // ensurePage() attaches the download guard when it reuses the replacement.
+  // Bounded: the serialized queue slot is held until retirement settles.
+  if (!hasOtherTab) {
+    let timer: NodeJS.Timeout | undefined;
+    const timedOut = new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), 5_000); });
+    try {
+      hasOtherTab = await Promise.race([context.newPage().then(() => true, () => false), timedOut]);
+    } finally { clearTimeout(timer); }
+  }
+  if (hasOtherTab) {
+    await page.close({ runBeforeUnload: false }).catch(() => undefined);
+    return;
+  }
+  await page.goto("about:blank", { timeout: 5_000 }).catch(() => undefined);
+}
+
 /** Pick the max row count across frame probes; empty copy and blank content only count with no rows. */
 export function mergeListingProbes(
   probes: Array<{ itemRows: number; emptyCopy: boolean; contentBlank: boolean }>,
@@ -336,11 +366,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       assertUrlAllowed(target);
       const page = await this.ensurePage({ allowResume: true });
       throwIfAborted(signal);
-      // Stop only this navigation tab; retain the authenticated context/holder.
+      // Stop only this navigation tab; retain the authenticated context/holder
+      // and never close the holder's last tab (ADR 0045).
       let closing: Promise<void> | undefined;
       const abort = () => {
         if (this.page === page) this.page = undefined;
-        closing = page.close({ runBeforeUnload: false }).catch(() => undefined);
+        closing = retireNavigationTab(page).catch(() => undefined);
       };
       signal.addEventListener("abort", abort, { once: true });
       try {
