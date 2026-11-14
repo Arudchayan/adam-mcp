@@ -118,6 +118,15 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
       continue;
     }
     const existing = byRef.get(parsed.refId);
+    const title = parsed.type === "poll" && isPollActionLabel(link.text)
+      ? pollTitleNear(snapshot.html, link.href, parsed.refId)
+      : cleanTitle(link.text) || parsed.refId;
+    // ADR 0049: a card's "Open <title>" image link may precede its plain title link.
+    if (existing && existing.type === parsed.type &&
+      [`Open ${title}`, `Öffnen ${title}`, `${title} öffnen`].includes(existing.title)) {
+      existing.title = title;
+      continue;
+    }
     // Same ref can appear as ilias.php?ref_id (unknown) and again with a typed href.
     // Keep the typed object so the citation is /go/{type}/{id}.
     if (existing && (existing.type !== "unknown" || parsed.type === "unknown")) {
@@ -126,8 +135,17 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
     byRef.set(
       parsed.refId,
-      toObject(parsed.type, parsed.refId, cleanTitle(link.text) || parsed.refId, crumbTrail, provenanceBase(link.href)),
+      toObject(parsed.type, parsed.refId, title, crumbTrail, provenanceBase(link.href)),
     );
+  }
+  // ADR 0049: inline Poll blocks render a vote form, often without a title link.
+  // The form action names the poll ref; listing it never submits the form.
+  for (const poll of inlinePollForms(snapshot.html)) {
+    if ((current && poll.refId === current.refId) || byRef.get(poll.refId)?.type === "poll") {
+      continue;
+    }
+    const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
+    byRef.set(poll.refId, toObject("poll", poll.refId, poll.title, crumbTrail, provenanceBase(canonicalUrl("poll", poll.refId))));
   }
   const rowHints = parseFileRows(snapshot.html ?? "", fetchedAt ? new Date(fetchedAt) : new Date());
   const fileRowDates: ExtractedCatalog["fileRowDates"] = [];
@@ -178,7 +196,7 @@ export function collectLinksFromHtml(html: string): SnapshotLink[] {
   const pattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   for (const match of html.matchAll(pattern)) {
     const href = decodeAdamHref(match[1]);
-    const text = cleanTitle(stripTags(match[2]));
+    const text = cleanTitle(stripTags(match[2])) || ariaLinkLabel(match[0]);
     const index = match.index ?? 0;
     const chromeByPosition = mainStart >= 0 && !inMain(index);
     links.push({
@@ -189,6 +207,12 @@ export function collectLinksFromHtml(html: string): SnapshotLink[] {
     });
   }
   return links;
+}
+
+/** Image-only card links carry their name in aria-label (ADR 0049). */
+function ariaLinkLabel(anchorHtml: string): string {
+  const label = anchorHtml.match(/^<a\b[^>]*\baria-label=["']([^"']+)["']/i)?.[1];
+  return label ? cleanTitle(decodeAdamHref(label)) : "";
 }
 
 function matchRanges(html: string, pattern: RegExp): Array<[number, number]> {
@@ -364,6 +388,51 @@ function extractNewsArticles(
   }
 
   return items.slice(0, 20);
+}
+
+const POLL_ACTION_LABEL = /^(?:vote|abstimmen|stimme abgeben|submit vote|show results|results|ergebnisse(?: anzeigen)?|resultate|teilnehmen|participate)?$/i;
+
+function isPollActionLabel(text: string): boolean {
+  return POLL_ACTION_LABEL.test(cleanTitle(text));
+}
+
+/**
+ * Inline poll forms inside the page content (ADR 0049). Chrome before `<main>`
+ * and after `</main>` is ignored when a main element exists.
+ */
+export function inlinePollForms(html: string): Array<{ refId: RefId; title: string }> {
+  const mainStart = html.search(/<main\b/i);
+  const mainEnd = html.search(/<\/main>/i);
+  const found: Array<{ refId: RefId; title: string }> = [];
+  const seen = new Set<RefId>();
+  for (const match of html.matchAll(/<form\b[^>]*\baction=["']([^"']+)["'][^>]*>/gi)) {
+    const index = match.index ?? 0;
+    if (mainStart >= 0 && (index < mainStart || (mainEnd >= 0 && index > mainEnd))) continue;
+    const parsed = parseAdamRef(decodeAdamHref(match[1]));
+    if (parsed?.type !== "poll" || seen.has(parsed.refId)) continue;
+    seen.add(parsed.refId);
+    found.push({ refId: parsed.refId, title: pollTitleBefore(html, index, parsed.refId) });
+  }
+  return found;
+}
+
+function pollTitleNear(html: string, href: string, refId: RefId): string {
+  const raw = html.indexOf(href);
+  const index = raw >= 0 ? raw : html.indexOf(href.replace(/&/g, "&amp;"));
+  return index >= 0 ? pollTitleBefore(html, index, refId) : `Poll ${refId}`;
+}
+
+/** Nearest heading or list-item title before the poll control, else a neutral label. */
+function pollTitleBefore(html: string, index: number, refId: RefId): string {
+  const window = html.slice(Math.max(0, index - 3_000), index);
+  const titles = [
+    ...window.matchAll(/<(h[2-5])\b[^>]*>([\s\S]*?)<\/\1>/gi),
+    ...window.matchAll(/<(div|span|p)\b[^>]*class=["'][^"']*(?:il_ContainerItemTitle|il-item-title|ilBlockHeader|il-block-title)[^"']*["'][^>]*>([\s\S]*?)<\/\1>/gi),
+  ]
+    .map((match) => ({ at: match.index ?? 0, text: cleanTitle(stripTags(match[2] ?? "")) }))
+    .filter((entry) => entry.text && !isPollActionLabel(entry.text) && !shouldSkipTitle(entry.text))
+    .sort((a, b) => a.at - b.at);
+  return titles.at(-1)?.text ?? `Poll ${refId}`;
 }
 
 /** Undo href entities so `cmdClass` survives `&amp;` in captured HTML. */

@@ -15,6 +15,22 @@ import { LongWalkStub } from "./long-walk.ts";
 describe("FixtureAdamProvider", () => {
   const provider = createFixtureProvider();
 
+  it("lists repository-root categories and read-only svy/poll children (ADR 0049)", async () => {
+    const root = await provider.listChildren("1", { type: "root" });
+    assert.deepEqual(root.items.map((item) => `${item.type}/${item.refId}`), ["cat/900001"]);
+    const lab = await provider.listChildren("100101", { type: "crs" });
+    const types = new Map(lab.items.map((item) => [item.refId, item]));
+    assert.equal(types.get("100130")?.type, "svy");
+    assert.equal(types.get("100130")?.url, "https://adam.unibas.ch/go/svy/100130");
+    assert.equal(types.get("100131")?.type, "poll");
+    assert.equal(types.get("100131")?.url, "https://adam.unibas.ch/go/poll/100131");
+    const survey = await provider.readPage("100130", { type: "svy" });
+    assert.match(survey.text, /already completed/);
+    const poll = await provider.readPage("100131", { type: "poll" });
+    assert.equal(poll.type, "poll");
+    assert.match(poll.text, /cannot vote/);
+  });
+
   it("lists the synthetic enrolled course", async () => {
     const listed = await provider.listCourses();
     assert.equal(listed.items.length, 2);

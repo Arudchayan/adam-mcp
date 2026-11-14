@@ -15,6 +15,8 @@ export const ADAM_OBJECT_TYPES = [
   "exc",
   "tst",
   "impr",
+  "svy",
+  "poll",
   "unknown",
 ] as const;
 

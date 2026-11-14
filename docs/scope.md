@@ -10,7 +10,7 @@ Community connector for a student’s own MCP host against ADAM (ILIAS 10 at `ht
 
 **Prompts:** `prepare_my_week`, `what_changed`, `study_this`.
 
-Live search/calendar/news walk enrolled objects. They are not ADAM’s global search or calendar GUI (`robots.txt`).
+Live search/calendar/news walk enrolled objects. They are not ADAM’s global search or calendar GUI (`robots.txt`). Search opens courses and folders only, not exercise pages (ADR 0048).
 
 ### Confirm vs elicitation
 

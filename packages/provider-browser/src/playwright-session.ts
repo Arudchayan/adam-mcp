@@ -59,9 +59,14 @@ const SESSION_SETTLED_SCRIPT = `(() => {
   );
 })()`;
 
-/** Listing readiness/evidence probe, shared by the wait and the DOM signals. */
+/**
+ * Listing readiness/evidence probe, shared by the wait and the DOM signals.
+ * ADR 0049: ILIAS 10.12 renders repository-root categories as UI cards
+ * (`.il-card` inside `.il-deck`), so cards count as rows like list items.
+ */
 const LISTING_ITEM_SELECTOR =
-  ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/']";
+  ".ilContainerListItemOuter, a.il_ContainerItemTitle, .il-item, .il-item-title, .il-std-item-container, .il-card, #il_center_col a[href*='ref_id='], a[href*='cmdClass=ilobjfilegui'], a[href*='/go/file/'], a[href*='/go/exc/'], a[href*='/go/fold/'], a[href*='/go/svy/'], a[href*='/go/poll/'], form[action*='ilobjpollgui' i]";
+const LISTING_ROW_SELECTOR = ".ilContainerListItemOuter, .il-item, .il-std-item-container, .il-card, li, tr";
 
 const LISTING_PROBE_FUNCTION = `((document) => {
   const root =
@@ -72,7 +77,7 @@ const LISTING_PROBE_FUNCTION = `((document) => {
   const items = root ? root.querySelectorAll(${JSON.stringify(LISTING_ITEM_SELECTOR)}) : [];
   const rows = new Set();
   for (const item of items) {
-    rows.add(item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item);
+    rows.add(item.closest(${JSON.stringify(LISTING_ROW_SELECTOR)}) || item);
   }
   const text = root ? root.innerText || "" : "";
   // Match a standalone empty message, not the same words inside unrelated prose.
@@ -228,11 +233,14 @@ const COLLECT_LINKS_SCRIPT = `(() => {
   const root = document.querySelector("main #il_center_col") ?? document.querySelector("#il_center_col") ??
     document.querySelector("main") ?? document.body;
   const rows = root ? [...root.querySelectorAll(${JSON.stringify(LISTING_ITEM_SELECTOR)})].map((item) =>
-    item.closest(".ilContainerListItemOuter, .il-item, .il-std-item-container, li, tr") || item) : [];
+    item.closest(${JSON.stringify(LISTING_ROW_SELECTOR)}) || item) : [];
   return [...document.querySelectorAll("a[href]")].map((anchor) => {
+    // ADR 0049: image-only card links ("Open …") name the object in aria-label.
+    const text = (anchor.textContent || "").replace(/\\s+/g, " ").trim() ||
+      (anchor.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim();
     return {
       href: anchor.href,
-      text: (anchor.textContent || "").replace(/\\s+/g, " ").trim(),
+      text,
       inChrome: Boolean(
         (root && !root.contains(anchor)) ||
         (anchor.closest("aside, nav") && !anchor.closest("article")) ||
