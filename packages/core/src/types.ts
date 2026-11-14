@@ -87,6 +87,8 @@ export type PageContent = AdamObject & {
 
 export type FileObject = AdamObject & {
   type: "file";
+  /** Format suffix ILIAS shows in the listing row ("pdf", "ipynb"); titles often omit it (#122). */
+  extension?: string;
   mimeType?: string;
   sizeBytes?: number;
   pageCount?: number;

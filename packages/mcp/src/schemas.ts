@@ -256,6 +256,7 @@ export const paginatedObjectsOutputSchema = z
 
 export const fileObjectOutputSchema = adamObjectOutputSchema.extend({
   type: z.literal("file"),
+  extension: z.string().optional().describe("Format suffix shown in the ADAM listing row (e.g. pdf, ipynb); the title may omit it"),
   mimeType: z.string().optional(),
   sizeBytes: z.number().optional(),
   pageCount: z.number().optional(),
