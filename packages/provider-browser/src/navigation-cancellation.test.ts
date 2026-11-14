@@ -12,9 +12,17 @@ it("cancels active navigation by closing only its tab and recovers the queue", a
   const closeGate = new Promise<void>((done) => { finishClose = done; });
   const order: string[] = [];
   let ensures = 0;
+  let firstClosed = false;
+  // The holder's only tab: ADR 0045 opens a replacement before closing it.
+  const context = {
+    pages: () => (firstClosed ? [] : [first]),
+    async newPage() { order.push("replacement.open"); return {}; },
+  };
   const first = {
+    isClosed: () => firstClosed,
+    context: () => context,
     async goto() { order.push("first.goto"); entered(); return blocked; },
-    async close() { order.push("first.close"); rejectNavigation(new Error("Target closed")); await closeGate; },
+    async close() { order.push("first.close"); firstClosed = true; rejectNavigation(new Error("Target closed")); await closeGate; },
   };
   const second = {
     async goto() { order.push("second.goto"); return null; },
@@ -43,5 +51,5 @@ it("cancels active navigation by closing only its tab and recovers the queue", a
   finishClose();
   const recovered = await next;
   assert.equal(recovered.title, "Folder");
-  assert.deepEqual(order, ["first.goto", "first.close", "second.goto"]);
+  assert.deepEqual(order, ["first.goto", "replacement.open", "first.close", "second.goto"]);
 });
