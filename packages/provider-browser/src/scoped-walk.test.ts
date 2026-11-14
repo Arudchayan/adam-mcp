@@ -28,9 +28,10 @@ for (const initiating of [true, false]) {
       return memory.open(target);
     } } });
     const firstController = new AbortController(), secondController = new AbortController();
-    const first = provider.search("Alpha", { courseRefId: scope, signal: firstController.signal });
+    // ADR 0048: search joins an in-flight full walk of the same scope.
+    const first = provider.listCalendar({ courseRefId: scope, signal: firstController.signal });
     await entered.promise;
-    const second = provider.listCalendar({ courseRefId: scope, signal: secondController.signal });
+    const second = provider.search("Alpha", { courseRefId: scope, signal: secondController.signal });
     await new Promise<void>((done) => setImmediate(done));
     const cancelled = assert.rejects(initiating ? first : second, /cancelled/);
     (initiating ? firstController : secondController).abort(); await cancelled;
