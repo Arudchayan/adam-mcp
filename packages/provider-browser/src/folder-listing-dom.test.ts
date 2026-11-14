@@ -33,6 +33,8 @@ it("synthetic real DOM: wrapper blanks, scoped empty evidence, selectors and del
       ['<main><div id="il_center_col"><p>The words this folder is empty are an example, not a listing.</p></div></main>', { itemRows: 0, emptyCopy: false, contentBlank: false }],
       ['<header>This folder is empty</header><main><div id="il_center_col"><div></div></div></main>', { itemRows: 0, emptyCopy: false, contentBlank: true }],
       ['<main><div id="il_center_col"><div class="ilContainerListItemOuter"><a href="/go/file/100011">Sheet</a></div></div></main>', { itemRows: 1, emptyCopy: false, contentBlank: false }],
+      // ADR 0049: ILIAS 10.12 repository-root category cards are listing rows.
+      ['<main><div id="il_center_col"><div class="il-deck"><div class="il-card"><a href="/go/cat/900001" aria-label="Open A"><img alt="Category"></a><a href="/go/cat/900001">A</a></div><div class="il-card"><a href="/go/cat/900002">B</a></div></div></div></main>', { itemRows: 2, emptyCopy: false, contentBlank: false }],
     ] as const) {
       await page.setContent(html);
       assert.deepEqual(await page.evaluate(LISTING_PROBE_SCRIPT), expected);

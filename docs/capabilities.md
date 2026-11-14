@@ -69,7 +69,10 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | gated — needs live refId + capture per §4 principle, parked until sighted |
 | `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live threads from HTML when parse succeeds; missing HTML honest-empty / fail-closed posts; fixture `threadId` posts OK |
 | `wiki` / `blog` / Etherpad | Collab | no | gated — needs live refId + capture per §4 principle, parked until sighted |
-| `grp` / `svy` / ADAMtools | Groups, surveys | no | gated — needs live refId + capture per §4 principle, parked until sighted |
+| `svy` | Surveys | partial (list + `read_page` info screen; never submitted) | ADR 0049 — `/go/svy/{id}` citations, `baseClass=ilObjSurveyGUI` landings; synthetic `100130`; live re-verify pending (#124) |
+| `poll` | Inline course polls | partial (list from vote form + `read_page`; never voted) | ADR 0049 — `/go/poll/{id}` citations; synthetic `100131`; live markup re-verify pending (#124) |
+| `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049 — card tiles count as listing rows; live re-verify pending (#124) |
+| `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
 | calendar GUI | Agenda | partial→stronger (AT6 page walk) | widget seen; agenda empty; provenance honesty |
 | mail | Messaging | out | skip |
