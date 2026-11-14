@@ -29,6 +29,17 @@ export function extractClassBlocksAt(html: string, className: string): Array<{ b
   return blocks;
 }
 
+/** Inner HTML of every element whose id matches (nesting-aware, unlike a lazy regex). */
+export function extractIdBlocks(html: string, id: RegExp): string[] {
+  const blocks: string[] = [];
+  for (const match of html.matchAll(/<(div|section|aside)\b([^>]*\bid=["']([^"']+)["'][^>]*)>/gi)) {
+    if (!id.test(match[3] ?? "")) continue;
+    const inner = sliceUntilClose(html, (match.index ?? 0) + match[0].length, match[1]!);
+    if (inner !== undefined) blocks.push(inner);
+  }
+  return blocks;
+}
+
 /** Items in document order; each item's fields come only from its own segment. */
 export function parseUiItems(html: string): UiItem[] {
   const titles = [

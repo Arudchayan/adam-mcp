@@ -11,7 +11,8 @@ import {
   type Provenance,
   type RefId,
 } from "adam-core";
-import { inferDates } from "./deadlines.ts";
+import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
+import { extractIdBlocks, parseUiItems } from "./ui-items.ts";
 export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
@@ -240,17 +241,24 @@ function extractNewsArticles(
   const pageCourseRefId = pageTyped?.type === "crs" ? pageTyped.refId : breadcrumbCrs;
   const pageFolderRefId = pageTyped?.type === "fold" ? pageTyped.refId : undefined;
 
-  const pushItem = (title: string, _summaryText: string, chunkHtml: string, chunkHrefs: string[]) => {
+  const pushItem = (
+    title: string,
+    _summaryText: string,
+    chunkHtml: string,
+    chunkHrefs: string[],
+    known: { summary?: string; createdAt?: string; newsId?: string } = {},
+  ) => {
     const headline = cleanTitle(title);
     if (!headline || isNewsLabel(headline)) {
       return;
     }
     const hrefTyped =
       chunkHrefs.map((href) => typedAdamRef(href)).find((ref) => ref !== undefined) ?? pageTyped;
-    const datetime = chunkHtml.match(/datetime=["']([^"']+)["']/i)?.[1];
-    const bodyText = cleanTitle(stripTags(chunkHtml)) || headline;
+    const datetime = known.createdAt ?? chunkHtml.match(/datetime=["']([^"']+)["']/i)?.[1];
+    const bodyText = cleanTitle(known.summary ?? stripTags(chunkHtml)) || headline;
     const url = hrefTyped ? canonicalUrl(hrefTyped.type, hrefTyped.refId) : snapshot.url;
-    const key = `${url}\n${headline}`;
+    // Distinct ILIAS news can share a title (repeated "File: …" notices): key on news_id when known.
+    const key = known.newsId ? `news:${known.newsId}` : `${url}\n${headline}`;
     if (seen.has(key)) {
       return;
     }
@@ -268,6 +276,18 @@ function extractNewsArticles(
       provenance: { ...provenance, sourceUrl: url },
     });
   };
+
+  // #118: ILIAS 10.12 course News is a `block_news_{id}` panel of KS UI items
+  // (title, description, "Date" property), not <article>s.
+  for (const block of extractIdBlocks(snapshot.html, /^block_news_\d+$/)) {
+    for (const item of parseUiItems(block)) {
+      if (!item.title || isNewsLabel(item.title)) continue;
+      const date = item.properties.find((property) => /^(?:date|datum)$/i.test(property.name))?.value;
+      const createdAt = date ? parseAdamTimestamp(date, new Date(provenance.fetchedAt)) : undefined;
+      const newsId = item.href?.match(/[?&]news_id=(\d+)/)?.[1];
+      pushItem(item.title, "", "", [], { summary: item.description ?? item.title, createdAt, newsId });
+    }
+  }
 
   const articleBlocks = [...snapshot.html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/gi)].map(
     (match) => match[1] ?? "",
