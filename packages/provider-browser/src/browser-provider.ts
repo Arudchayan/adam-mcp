@@ -29,6 +29,7 @@ import {
 } from "adam-core";
 import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
+import { parseExerciseUnits } from "./exercise-parse.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
 
 /** #121: only a response that names an .html/.htm file is an uploaded HTML course file. */
@@ -542,6 +543,12 @@ export class BrowserAdamProvider implements AdamProvider {
     // AT5: type===exc fail-closed — never coerce unknown/other types into exercises.
     if (object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${object.type}, not an exercise.`);
+    }
+    // #120: per-assignment units from the ILIAS 10.12 overview; [] when ADAM
+    // says there are none. Unrecognised layouts keep the single page-text unit.
+    const parsed = parseExerciseUnits(snapshot.html ?? "", catalog.text);
+    if (parsed) {
+      return { ...object, type: "exc", units: parsed };
     }
     const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
     return {

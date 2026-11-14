@@ -1,5 +1,6 @@
 import { AdamError, DEFAULT_ADAM_ORIGIN, type ForumPost, type ForumThreadSummary } from "adam-core";
 import { parseAdamTimestamp } from "./deadlines.ts";
+import { extractClassBlocksAt, parseUiItems, type UiItem } from "./ui-items.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
 export type ParsedForum = {
@@ -100,34 +101,23 @@ function isThreadViewHref(href: string): boolean {
 /** ILIAS 10 showThreadsObject: panel listing of il-item / il-item-title links. */
 function threadsFromItemTitles(html: string): Array<ForumThreadSummary & { href?: string }> {
   const found: Array<ForumThreadSummary & { href?: string }> = [];
-  const titles = [
-    ...extractClassBlocksAt(html, "il-item-title"),
-    ...extractClassBlocksAt(html, "c-item__title"),
-  ].sort((a, b) => a.index - b.index);
-  for (const [position, { block, index }] of titles.entries()) {
-    const href = block.match(/<a\b[^>]*href=["']([^"']+)["']/i)?.[1];
-    if (!href) {
+  for (const item of parseUiItems(html)) {
+    if (!item.href) {
       continue;
     }
-    const title = cleanTitle(stripTags(block));
-    const parsed = threadFromHref(href, title);
+    const parsed = threadFromHref(item.href, item.title);
     if (parsed) {
-      // An item's properties sit between its title and the next item's title.
-      const segment = html.slice(index, titles[position + 1]?.index ?? html.length);
-      found.push({ ...parsed, ...threadItemProperties(segment) });
+      found.push({ ...parsed, ...threadItemProperties(item) });
     }
   }
   return found;
 }
 
 /** #125: ILIAS 10.12 thread item properties (author, posts/unread, latest post). */
-function threadItemProperties(segment: string): Partial<ForumThreadSummary> {
-  const names = extractClassBlocksAt(segment, "il-item-property-name");
-  const values = extractClassBlocksAt(segment, "il-item-property-value");
+function threadItemProperties(item: UiItem): Partial<ForumThreadSummary> {
   const result: Partial<ForumThreadSummary> = {};
-  for (const [index, name] of names.entries()) {
-    const label = cleanTitle(stripTags(name.block)).replace(/[:·]\s*$/, "").trim().toLowerCase();
-    const value = cleanTitle(stripTags(values[index]?.block ?? ""));
+  for (const { name, value } of item.properties) {
+    const label = name.toLowerCase();
     if (!value) continue;
     if (/^(?:author|autor|autorin|created by|erstellt von)$/.test(label)) {
       result.author ??= value;
@@ -343,50 +333,6 @@ function authorFromHeader(header: string): string | undefined {
 
 function extractClassBlocks(html: string, className: string): string[] {
   return extractClassBlocksAt(html, className).map((entry) => entry.block);
-}
-
-function extractClassBlocksAt(html: string, className: string): Array<{ block: string; index: number }> {
-  const blocks: Array<{ block: string; index: number }> = [];
-  const open = new RegExp(
-    `<(div|li|article|span|h2|h3|h4)\\b([^>]*class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*)>`,
-    "gi",
-  );
-  for (const match of html.matchAll(open)) {
-    const tag = match[1];
-    const start = (match.index ?? 0) + match[0].length;
-    const inner = sliceUntilClose(html, start, tag);
-    if (inner !== undefined) {
-      blocks.push({ block: inner, index: match.index ?? 0 });
-    }
-  }
-  return blocks;
-}
-
-function sliceUntilClose(html: string, start: number, tag: string): string | undefined {
-  const openRe = new RegExp(`<${tag}\\b`, "i");
-  const closeRe = new RegExp(`</${tag}>`, "i");
-  const closeLen = `</${tag}>`.length;
-  let depth = 1;
-  let cursor = start;
-  while (cursor < html.length && depth > 0) {
-    const rest = html.slice(cursor);
-    const nextOpen = rest.search(openRe);
-    const nextClose = rest.search(closeRe);
-    if (nextClose < 0) {
-      return undefined;
-    }
-    if (nextOpen >= 0 && nextOpen < nextClose) {
-      depth += 1;
-      cursor += nextOpen + 1;
-      continue;
-    }
-    depth -= 1;
-    if (depth === 0) {
-      return html.slice(start, cursor + nextClose);
-    }
-    cursor += nextClose + closeLen;
-  }
-  return undefined;
 }
 
 function mergeThread(
