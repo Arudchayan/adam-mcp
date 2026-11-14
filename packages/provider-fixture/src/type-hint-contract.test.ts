@@ -44,3 +44,16 @@ it("fixture resolves allowed hints while typed getters and golden identities sta
   assert.equal((await provider.getExercise("100021", { type: "unknown" })).units[0]?.deadline, "2026-09-22T21:59:00.000Z");
   await assert.rejects(() => provider.readPage("100030", { type: "unknown" }), unsupported);
 });
+
+it("#124: typed getters fail on a mismatched explicit type; page reads still resolve hints", async () => {
+  for (const provider of [createFixtureProvider(), browser()]) {
+    await assert.rejects(() => provider.getCourse("100001", { type: "fold" }), (error: unknown) => {
+      assert.ok(unsupported(error));
+      assert.match((error as AdamError).message, /ref_id 100001 is crs, not fold\. Retry with type "crs"/);
+      return true;
+    });
+    assert.equal((await provider.getCourse("100001", { type: "crs" })).type, "crs");
+    assert.equal((await provider.getCourse("100001")).type, "crs");
+    assert.equal((await provider.readPage("100001", { type: "fold" })).type, "crs");
+  }
+});

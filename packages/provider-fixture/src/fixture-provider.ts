@@ -49,6 +49,19 @@ function requireRecord(refId: RefId, type?: AdamObject["type"]) {
   return record;
 }
 
+/** #124: typed getters verify an explicit caller type; page/listing reads treat it as a hint. */
+function requireTypedRecord(refId: RefId, type?: AdamObject["type"]) {
+  const record = requireRecord(refId, type);
+  if (type && type !== "unknown" && record.object.type !== type) {
+    throw new AdamError(
+      "unsupported_type",
+      `ref_id ${refId} is ${record.object.type}, not ${type}. Retry with type "${record.object.type}", or run adam_search and pass the hit's type+refId.`,
+      false,
+    );
+  }
+  return record;
+}
+
 /** Listing rows are summaries: exercise units are getExercise-only. */
 function childSummary(object: AdamObject): AdamObject {
   const {
@@ -87,7 +100,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getCourse(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<AdamObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId, options?.type);
+    const record = requireTypedRecord(refId, options?.type);
     if (record.object.type !== "crs") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a course.`);
     }
@@ -154,7 +167,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getFile(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<FileObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId, options?.type);
+    const record = requireTypedRecord(refId, options?.type);
     if (!record.file) {
       throw new AdamError("unsupported_type", `ref_id ${refId} is not a file.`);
     }
@@ -176,7 +189,7 @@ export class FixtureAdamProvider implements AdamProvider {
 
   async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
-    const record = requireRecord(refId, options?.type);
+    const record = requireTypedRecord(refId, options?.type);
     if (record.object.type !== "exc") {
       throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not an exercise.`);
     }
