@@ -68,7 +68,7 @@ export const objectTypeHintSchema = z
   .enum(ADAM_OBJECT_TYPES)
   .optional()
   .describe(
-    "Optional object type from a prior listing/search hit (crs, fold, file, exc, …). Pass the hit's type; never invent types. Prefer this so the server opens /go/{type}/{refId}. If explicit type disagrees with refId, the call fails — run `adam_search` and pass the hit's `type+refId`.",
+    "Optional object type from a prior listing/search hit (crs, fold, file, exc, …). Pass the hit's type; never invent types. Prefer this so the server opens /go/{type}/{refId}. If explicit type disagrees with refId, the call fails on typed getters (adam_get_course, adam_get_file, adam_get_exercise, adam_get_forum) — run `adam_search` and pass the hit's `type+refId`. Page and listing reads treat type as a hint and return the resolved type.",
   );
 
 const REF_PARSE_FAIL = REF_ID_HELP;

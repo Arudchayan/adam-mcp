@@ -270,7 +270,7 @@ export class BrowserAdamProvider implements AdamProvider {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation, signal: options?.signal, expectedType: "crs" });
+    const snapshot = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: generation, signal: options?.signal, expectedType: "crs", callerType: options?.type });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const course = catalog.current?.type === "crs" ? catalog.current : catalog.objects.find((item) => item.refId === refId && item.type === "crs");
@@ -402,7 +402,7 @@ export class BrowserAdamProvider implements AdamProvider {
     try {
       // Capture listing cache before rememberTypes overwrites with the page parse.
       const priorListing = this.fileByRefId.get(refId);
-      const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation, signal: options?.signal, expectedType: "file" });
+      const snapshot = await this.openObject(refId, options?.type ?? "file", { cacheGeneration: generation, signal: options?.signal, expectedType: "file", callerType: options?.type });
       const catalog = this.catalog(snapshot);
       this.rememberTypes(catalog, generation);
       const file =
@@ -523,7 +523,7 @@ export class BrowserAdamProvider implements AdamProvider {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal, expectedType: "exc" });
+    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal, expectedType: "exc", callerType: options?.type });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
@@ -568,7 +568,7 @@ export class BrowserAdamProvider implements AdamProvider {
       );
     }
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation, signal: options?.signal, expectedType: "frm" });
+    const snapshot = await this.openObject(refId, options?.type ?? "frm", { cacheGeneration: generation, signal: options?.signal, expectedType: "frm", callerType: options?.type });
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
@@ -967,8 +967,10 @@ export class BrowserAdamProvider implements AdamProvider {
   private async openObject(
     refId: RefId,
     typeHint?: AdamObjectType,
-    opts?: { listingFastFail?: boolean; cacheGeneration?: number; signal?: AbortSignal; expectedType?: AdamObjectType },
+    opts?: { listingFastFail?: boolean; cacheGeneration?: number; signal?: AbortSignal; expectedType?: AdamObjectType; callerType?: AdamObjectType },
   ): Promise<PageSnapshot> {
+    // #124: a type the caller passed explicitly is a claim to verify, not a hint to retry.
+    const callerType = opts?.callerType && opts.callerType !== "unknown" ? opts.callerType : undefined;
     if (!/^\d+$/.test(refId)) {
       throw new AdamError("not_found", "ADAM ref_id must contain digits only.");
     }
@@ -992,6 +994,15 @@ export class BrowserAdamProvider implements AdamProvider {
       try {
         const snapshot = await this.openAuthorized(objectUrl(type, refId, this.origin), opts?.signal, opts?.expectedType);
         const landed = parseAdamRef(snapshot.url);
+        // ADAM's /go/{type}/{refId} resolves by ref_id, so a wrong explicit type
+        // lands on the real object. Fail as documented instead of answering for it.
+        if (callerType && landed && landed.refId === refId && landed.type !== "unknown" && landed.type !== callerType) {
+          throw new AdamError(
+            "unsupported_type",
+            `ref_id ${refId} is ${landed.type}, not ${callerType}. Retry with type "${landed.type}", or run adam_search and pass the hit's type+refId.`,
+            false,
+          );
+        }
         // General reads/lists may follow a verified folder identity, but typed getters
         // must retain the landing for their operation-specific unsupported_type check.
         if (!opts?.expectedType && type !== "fold" && landed?.type === "fold" && landed.refId === refId &&
