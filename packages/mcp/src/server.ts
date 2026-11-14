@@ -414,7 +414,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Search visible ADAM titles",
       description:
-        "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Ranks title matches before page-body matches; each hit includes match=title|body (body means text exists — opening the body still uses confirm-gated adam_read_page / adam_extract_file_text). Pass type from hits into later tools. Follow nextCursor. Honor partial/skipped when present. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links. Tests (tst) are omitted.",
+        "Walks enrolled course/folder trees only (capped) — not Magazin or ADAM's global search GUI. Exercise pages are not opened for search: exercise titles match from listings, but exercise body text only matches when a recent calendar/news walk is cached (use adam_get_exercise for instructions). Ranks title matches before page-body matches; each hit includes match=title|body (body means text exists — opening the body still uses confirm-gated adam_read_page / adam_extract_file_text). Pass type from hits into later tools. Follow nextCursor. Honor partial/skipped when present. Page text only matches the object on that page, not every sibling card. Honor robots.txt: the server does not crawl ilsearchcontrollergui. Returns breadcrumbs and canonical ADAM links. Tests (tst) are omitted.",
       inputSchema: z.object({
         query: z.string().trim().min(1).describe("Search string"),
         ...discoveryFields,

@@ -90,6 +90,12 @@ export function retainWalkPage(snapshot: PageSnapshot, catalog: ExtractedCatalog
   };
 }
 
+/**
+ * full: courses, folders and exercise pages (calendar/news need exercise bodies and deadlines).
+ * containers: courses and folders only — search's title index (ADR 0048).
+ */
+export type WalkMode = "full" | "containers";
+
 /** Result of an enrolled-tree walk; partial means skipped pages or the page cap. */
 export type WalkResult = {
   pages: LivePage[];
@@ -654,7 +660,9 @@ export class BrowserAdamProvider implements AdamProvider {
     const continuation = this.pagination.continue<AdamObject>(key, options);
     if (continuation) return continuation;
     const needle = query.trim().toLowerCase();
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
+    // #126 / ADR 0048: search needs listings, not exercise leaf pages. Reuse a warm full
+    // walk when one exists; otherwise walk containers only (robots.txt forbids ILIAS search).
+    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId, "containers");
     const titleMatches: AdamObject[] = [];
     const bodyMatches: AdamObject[] = [];
     for (const { catalog } of walk.pages) {
@@ -758,9 +766,26 @@ export class BrowserAdamProvider implements AdamProvider {
     return withWalkState(this.pagination.first(key, filtered, options, walkMetadata(walk)), walk);
   }
 
-  private async collectLivePages(onProgress?: ProgressReporter, signal?: AbortSignal, courseRefId?: RefId): Promise<WalkResult> {
+  private async collectLivePages(
+    onProgress?: ProgressReporter,
+    signal?: AbortSignal,
+    courseRefId?: RefId,
+    mode: WalkMode = "full",
+  ): Promise<WalkResult> {
     throwIfAborted(signal);
-    const scope = courseRefId ?? "all";
+    const fullScope = courseRefId ?? "all";
+    if (mode === "containers") {
+      // ADR 0048: a fresh or in-flight full walk of the same scope is a superset; never start
+      // a second browser traversal next to it.
+      const full = this.walks.get(fullScope);
+      if (full && this.clock() - full.fetchedAt < 60_000) {
+        throwIfCancelled(signal);
+        return full.result;
+      }
+      const running = this.walkInflight.get(fullScope);
+      if (running && !running.aborted) return running.join(signal, onProgress);
+    }
+    const scope = mode === "full" ? fullScope : `containers:${fullScope}`;
     // PERF-1 / ADR 0015: reuse enrolled walk across search / calendar / news.
     // Invalidation: login() + close(). Memo hit emits no progress.
     // Cancelled / unauthorized / forbidden / stale_id walks are never memoized (ADR 0011 / 0015 / 0016).
@@ -776,7 +801,7 @@ export class BrowserAdamProvider implements AdamProvider {
     }
     if (this.ownedWalks.size >= 32) throw new AdamError("provider_unavailable", "ADAM discovery queue is full. Retry after current discovery finishes.", true);
     const generation = this.walkGeneration;
-    const inflight = new SharedOperation((workSignal, report) => this.walkLivePages(report, workSignal, generation, courseRefId)
+    const inflight = new SharedOperation((workSignal, report) => this.walkLivePages(report, workSignal, generation, courseRefId, mode)
       .then((pages) => {
         if (generation === this.walkGeneration && !workSignal.aborted && !pages.partial) {
           this.walks.set(scope, { result: pages, fetchedAt: this.clock() });
@@ -800,6 +825,7 @@ export class BrowserAdamProvider implements AdamProvider {
     signal: AbortSignal | undefined,
     generation: number,
     courseRefId?: RefId,
+    mode: WalkMode = "full",
   ): Promise<WalkResult> {
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason);
@@ -811,7 +837,7 @@ export class BrowserAdamProvider implements AdamProvider {
       controller.abort(new AdamError("provider_unavailable", "ADAM's two-minute read budget was reached before a usable listing. Retry or narrow the request.", true));
     }, this.walkTimeoutMs);
     try {
-      return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired, courseRefId);
+      return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired, courseRefId, mode);
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", abort);
@@ -824,6 +850,7 @@ export class BrowserAdamProvider implements AdamProvider {
     generation: number,
     expired: () => boolean,
     courseRefId?: RefId,
+    mode: WalkMode = "full",
   ): Promise<WalkResult> {
     const report = async (progress: number) => {
       if (!onProgress) {
@@ -852,6 +879,8 @@ export class BrowserAdamProvider implements AdamProvider {
       if (type !== "crs" && type !== "fold" && type !== "exc") {
         return;
       }
+      // ADR 0048: exercise pages are leaves; their titles already come from the parent listing.
+      if (mode === "containers" && type === "exc") return;
       if (seen.has(refId)) {
         return;
       }

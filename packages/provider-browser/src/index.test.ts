@@ -1322,12 +1322,13 @@ describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
     );
     const provider = createBrowserProvider({ session, origin: "https://adam.unibas.ch" });
 
-    await provider.search("exam");
+    // ADR 0048: a cold search walks containers only; the full walk is calendar/news.
+    await provider.listCalendar();
     const afterSearch = opens.length;
     assert.ok(afterSearch >= 2, `expected enrolled walk opens; got ${afterSearch}`);
 
-    await provider.listCalendar();
-    assert.equal(opens.length, afterSearch, "calendar must reuse walk memo (no re-walk)");
+    await provider.search("exam");
+    assert.equal(opens.length, afterSearch, "search must reuse the full walk memo (no re-walk)");
 
     const progress: unknown[] = [];
     await provider.listNews({
@@ -1463,6 +1464,7 @@ describe("PERF-1 slim walk snapshots + shared memo + unknown fast-fail", () => {
       ),
     });
 
+    await provider.listCalendar();
     const found = await provider.search("Overview");
     assert.equal(found.items.some((item) => item.refId === "100011"), true);
     assert.equal(
@@ -1537,10 +1539,10 @@ describe("ADR 0015 walk memo lifecycle + getCourse honesty", () => {
       origin: "https://adam.unibas.ch",
       session: createMemorySession(walkPages, { onOpen: (url) => opens.push(url) }),
     });
-    await provider.search("exam");
+    await provider.listNews();
     const afterSearch = opens.length;
     assert.ok(afterSearch >= 2);
-    await provider.listNews();
+    await provider.search("exam");
     assert.equal(opens.length, afterSearch, "memo hit before login");
     await provider.login();
     await provider.search("exam");

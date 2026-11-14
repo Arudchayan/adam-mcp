@@ -53,13 +53,7 @@ const exerciseHtml = `
 </main>
 `;
 
-describe("enrolled walk open bound", () => {
-  it("opens each course, folder, and exercise once and never opens files", async () => {
-    const opens: string[] = [];
-    const provider = createBrowserProvider({
-      origin: "https://adam.unibas.ch",
-      session: createMemorySession(
-        {
+const pages = () => ({
           "https://adam.unibas.ch/": snapshotFromHtml(
             "https://adam.unibas.ch/",
             "Schreibtisch",
@@ -96,7 +90,15 @@ describe("enrolled walk open bound", () => {
             "<main><h1>00_Overview.pdf</h1></main>",
             "00_Overview.pdf",
           ),
-        },
+        });
+
+describe("enrolled walk open bound", () => {
+  it("opens each course, folder, and exercise once and never opens files", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(
+        pages(),
         { onOpen: (url) => opens.push(url) },
       ),
     });
@@ -118,5 +120,46 @@ describe("enrolled walk open bound", () => {
       found.items.some((item) => item.type === "file" && item.refId === "100011"),
       true,
     );
+  });
+
+  it("cold search walks containers only and later reads still open exercises (ADR 0048)", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages(), { onOpen: (url) => opens.push(url) }),
+    });
+
+    const found = await provider.search("Exercise 1");
+    assert.deepEqual(opens, [
+      "https://adam.unibas.ch",
+      "https://adam.unibas.ch/go/crs/100001",
+      "https://adam.unibas.ch/go/fold/100010",
+      "https://adam.unibas.ch/go/fold/100020",
+    ]);
+    assert.equal(found.partial, undefined, "skipping exercise leaves is not a partial walk");
+    assert.ok(found.items.some((item) => item.type === "exc" && item.refId === "100021"), "exercise title still found from the parent listing");
+    assert.equal((await provider.search("September")).items.length, 0, "exercise body text is not searched on a cold container walk");
+    assert.equal(opens.length, 4, "second search reuses the container memo");
+
+    const calendar = await provider.listCalendar();
+    assert.equal(calendar.items.some((item) => item.source === "exc"), true, "calendar still opens exercise pages");
+    assert.ok(opens.includes("https://adam.unibas.ch/go/exc/100021"));
+    const afterCalendar = opens.length;
+
+    const body = await provider.search("Deadline: 22 September");
+    assert.equal(opens.length, afterCalendar, "search reuses a warm full walk");
+    assert.ok(body.items.some((item) => item.refId === "100021"), "warm full walk adds exercise body matches");
+  });
+
+  it("search joins an in-flight full walk instead of starting a container walk", async () => {
+    const opens: string[] = [];
+    const provider = createBrowserProvider({
+      origin: "https://adam.unibas.ch",
+      session: createMemorySession(pages(), { onOpen: (url) => opens.push(url) }),
+    });
+    const [calendar, found] = await Promise.all([provider.listCalendar(), provider.search("Overview")]);
+    assert.equal(calendar.items.some((item) => item.source === "exc"), true);
+    assert.ok(found.items.some((item) => item.refId === "100011"));
+    assert.equal(opens.length, 5, "one shared walk");
   });
 });
