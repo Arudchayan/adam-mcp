@@ -63,6 +63,8 @@ crashed lock owner can deliberately block another startup. A dead holder with an
 unacknowledged browser launch is **not** proof that Chrome never started, even
 when CDP is absent. Do not repeatedly retry or remove locks while a client runs.
 
+A lock marked `recovery-required`, or one whose recorded owner process has exited, fails immediately with the lock's name instead of waiting (ADR 0046). That message says waiting will not help. It does not mean the lock is safe to remove while another client runs. `adam-mcp status --verbose` shows the dedicated `profileDir`.
+
 For manual recovery, first close every ADAM MCP host/CLI and the dedicated ADAM
 Chrome processes. Only after their exit is established may you remove the
 profile-local `.adam-holder-lifecycle` and `.adam-holder-mutation` directories

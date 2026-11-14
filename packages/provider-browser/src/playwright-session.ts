@@ -147,7 +147,25 @@ export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
   }
 }
 
-type RetirablePage = Pick<Page, "close" | "goto" | "isClosed"> & {
+type HolderObservation = Awaited<ReturnType<typeof holderStatus>>;
+
+/**
+ * #123: a slow native identity probe (powershell.exe on Windows, during Chrome
+ * start-up) can time out once and report a verified holder as not running.
+ * A verified record whose identity matches on a re-probe is a running holder,
+ * not one still signing in. Unverified or mismatched records are unchanged.
+ */
+export function reconcileHolderProbe(
+  holder: HolderObservation,
+  isAlive: (record: NonNullable<HolderObservation["record"]>) => boolean,
+): HolderObservation {
+  if (!holder.running && holder.record?.verifiedAt && isAlive(holder.record)) {
+    return { running: true, record: holder.record };
+  }
+  return holder;
+}
+
+type RetirablePage =Pick<Page, "close" | "goto" | "isClosed"> & {
   context(): { pages(): Array<Pick<Page, "isClosed">>; newPage(): Promise<unknown> };
 };
 
@@ -274,7 +292,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   async status(): Promise<SessionStatus> {
     return this.serialize(async () => {
-      const holder = await holderStatus(this.profileDir);
+      const holder = reconcileHolderProbe(await holderStatus(this.profileDir), isBoundHolderAlive);
       const holderPid = boundHolderPid(holder) ?? null;
       const inactiveState = await inactiveSessionStatus(this.profileDir);
       const loginRequired = (): SessionStatus => ({
@@ -317,7 +335,9 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       }
       if (shouldProbeOrigin(page.url(), this.origin)) {
         assertUrlAllowed(this.origin);
-        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 8_000 });
+        await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 8_000 }).catch((error: unknown) => {
+          throw adamErrorFromNavigationFailure(error) ?? error;
+        });
         await this.waitForSessionSettled(page);
       }
       let snapshot = await this.readSnapshot(page);

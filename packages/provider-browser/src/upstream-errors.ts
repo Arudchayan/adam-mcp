@@ -74,7 +74,8 @@ export function adamErrorFromNavigationFailure(error: unknown): AdamError | unde
       message,
     )
   ) {
-    const detail = message.replace(/\s+/g, " ").trim().slice(0, 200);
+    // First line only: Playwright appends a multi-line call log with URLs (#123).
+    const detail = (message.split(/\r?\n/)[0] ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
     return new AdamError(
       "provider_unavailable",
       `ADAM page navigation failed (${detail}). Retry; if it keeps failing, check the Chrome ADAM session.`,
