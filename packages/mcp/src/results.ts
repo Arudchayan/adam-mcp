@@ -33,6 +33,8 @@ export const READ_ONLY_TOOLS = [
   "adam_search",
   "adam_list_calendar",
   "adam_list_news",
+  "adam_list_mail",
+  "adam_read_mail",
 ] as const;
 
 export const SESSION_TOOLS = ["adam_login", "adam_session_status"] as const;

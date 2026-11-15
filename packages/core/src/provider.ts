@@ -6,6 +6,10 @@ import type {
   FileExtract,
   FileObject,
   ListOptions,
+  MailHeader,
+  MailListOptions,
+  MailMessage,
+  MailReadOptions,
   NewsItem,
   ObjectOpenOptions,
   PageContent,
@@ -35,4 +39,8 @@ export type AdamProvider = {
   search(query: string, options?: ListOptions): Promise<Paginated<AdamObject>>;
   listCalendar(options?: { from?: string; to?: string } & ListOptions): Promise<Paginated<CalendarEvent>>;
   listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>>;
+  /** ADR 0054: mailbox headers (confirm-gated at the MCP layer). */
+  listMail(options?: MailListOptions): Promise<Paginated<MailHeader>>;
+  /** ADR 0054: one message body. Opening it marks it read in ADAM, as a browser would. */
+  readMail(mailId: string, options?: MailReadOptions): Promise<MailMessage>;
 };

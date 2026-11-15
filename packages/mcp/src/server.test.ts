@@ -36,6 +36,8 @@ describe("read-only MCP facade", () => {
       "adam_search",
       "adam_list_calendar",
       "adam_list_news",
+      "adam_list_mail",
+      "adam_read_mail",
     ]);
     assert.equal(READ_ONLY_TOOLS.some((name) => name.includes("post") || name.includes("submit")), false);
     assert.deepEqual([...SESSION_TOOLS], ["adam_login", "adam_session_status"]);
