@@ -18,8 +18,18 @@ const NO_ASSIGNMENTS = /\b(?:no assignments available|keine aufgaben (?:vorhande
  * page shows no recognisable assignment structure (callers keep the page text).
  */
 export function parseExerciseUnits(html: string, text: string, now: Date = new Date()): ExerciseUnit[] | undefined {
+  return parseExerciseAssignments(html, text, now)?.map(({ unit }) => unit);
+}
+
+/** Units plus each assignment's raw title link (ADR 0053 detail reads; never returned to MCP). */
+export function parseExerciseAssignments(html: string, text: string, now: Date = new Date()): Array<{ unit: ExerciseUnit; href?: string; status?: string }> | undefined {
   const assignments = parseUiItems(html).filter((item) => item.title && isAssignment(item));
-  if (assignments.length > 0) return assignments.map((item) => toUnit(item, now));
+  if (assignments.length > 0) {
+    return assignments.map((item) => {
+      const status = item.properties.find((property) => STATUS.test(property.name))?.value || undefined;
+      return { unit: toUnit(item, now), ...(item.href ? { href: item.href } : {}), ...(status ? { status } : {}) };
+    });
+  }
   return NO_ASSIGNMENTS.test(text) ? [] : undefined;
 }
 
@@ -47,7 +57,7 @@ function toUnit(item: UiItem, now: Date): ExerciseUnit {
   };
 }
 
-function ownStatus(status: string | undefined, lastSubmission: string | undefined, now: Date): ExerciseOwnStatus {
+export function ownStatus(status: string | undefined, lastSubmission: string | undefined, now: Date): ExerciseOwnStatus {
   if (status && /\b(?:failed|nicht bestanden)\b/i.test(status)) return "failed";
   if (status && /\b(?:passed|bestanden)\b/i.test(status)) return "passed";
   if (lastSubmission) {
