@@ -104,7 +104,9 @@ async function main() {
   const idMap = new Map();
   const mapId = (digits) => {
     if (!idMap.has(digits)) {
-      idMap.set(digits, String(900000 + idMap.size + 1));
+      // "900" + n: 900001…900999 as before, then 9001000… — never a 901xxx
+      // value that could pass for a real ADAM id.
+      idMap.set(digits, `900${String(idMap.size + 1).padStart(3, "0")}`);
     }
     return idMap.get(digits);
   };
@@ -207,7 +209,8 @@ function scrubHref(href, mapIds) {
   try {
     const url = new URL(href, "https://adam.unibas.ch");
     if (url.hostname !== "adam.unibas.ch") {
-      return `${url.protocol}//external.invalid/redacted`;
+      // One placeholder for every external link: the original scheme is not kept.
+      return "https://external.invalid/redacted";
     }
     const kept = [];
     for (const key of ["ref_id", "item_ref_id", "cmdClass", "baseClass", "target"]) {
