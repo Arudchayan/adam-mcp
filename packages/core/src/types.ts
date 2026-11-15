@@ -208,6 +208,8 @@ export type ListingSignals = {
   emptyCopy: boolean;
   /** After stripping chrome/nav/footer/breadcrumb, no listing body. */
   chromeOnly: boolean;
+  /** ADR 0050: empty because ILIAS rendered a childless content root, not because of empty copy. */
+  structurallyEmpty?: boolean;
 };
 
 export type ProgressUpdate = {

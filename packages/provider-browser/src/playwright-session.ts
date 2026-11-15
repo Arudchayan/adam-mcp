@@ -87,7 +87,11 @@ const LISTING_PROBE_FUNCTION = `((document) => {
     document.querySelector("#il_center_col") ?? document.querySelector("#ilContentContainer");
   const contentBlank = Boolean(content) && rows.size === 0 && (content.innerText || "").trim().length === 0 &&
     !content.querySelector("img, video, audio, canvas, iframe, input, button");
-  return { itemRows: rows.size, emptyCopy, contentBlank };
+  // ADR 0050: ILIAS 10.12 renders a genuinely empty folder as a content root with
+  // no child elements at all, under rendered object tabs. Wrapper-only blanks differ.
+  const contentNoElements = contentBlank && content.children.length === 0;
+  const objectTabs = document.querySelectorAll("#ilTab li").length;
+  return { itemRows: rows.size, emptyCopy, contentBlank, contentNoElements, objectTabs };
 })`;
 
 export const LISTING_PROBE_SCRIPT = `${LISTING_PROBE_FUNCTION}(document)`;
@@ -202,7 +206,7 @@ export async function retireNavigationTab(page: RetirablePage): Promise<void> {
 
 /** Pick the max row count across frame probes; empty copy and blank content only count with no rows. */
 export function mergeListingProbes(
-  probes: Array<{ itemRows: number; emptyCopy: boolean; contentBlank: boolean }>,
+  probes: Array<{ itemRows: number; emptyCopy: boolean; contentBlank: boolean; contentNoElements?: boolean; objectTabs?: number }>,
 ): PageSnapshot["dom"] | undefined {
   if (probes.length === 0) {
     return undefined;
@@ -211,10 +215,15 @@ export function mergeListingProbes(
   if (itemRows > 0) {
     return { itemRows, emptyCopy: false };
   }
+  // ADR 0050: structural emptiness is a main-document fact. Any content frame is evidence
+  // that content may still load, so it disqualifies the signal.
+  const [main] = probes;
+  const structurallyEmpty = probes.length === 1 && main.contentNoElements === true && (main.objectTabs ?? 0) > 0;
   return {
     itemRows: 0,
     emptyCopy: probes.some((probe) => probe.emptyCopy),
     contentBlank: probes.some((probe) => probe.contentBlank),
+    ...(structurallyEmpty ? { structurallyEmpty: true } : {}),
   };
 }
 
@@ -440,7 +449,8 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
         let folderRecoveryAttempted = false;
         const recoverableFolder = () => folderRefId !== undefined && sameFolderLanding(snapshot, folderRefId) &&
           !isLoginSnapshot(snapshot) && !isAdamFailurePage(snapshot) && !isAdamPermissionPage(snapshot);
-        if (recoverableFolder() && folderRefId && folderListingState(snapshot).state === "unknown") {
+        // ADR 0050: a structurally empty folder still gets the one advertised Content tab first.
+        if (recoverableFolder() && folderRefId && (folderListingState(snapshot).state === "unknown" || snapshot.dom?.structurallyEmpty === true)) {
           throwIfAborted(signal);
           // One advertised, validated read-only tab only; no guessed endpoints or reload loop.
           const hrefs = await page.evaluate(FOLDER_CONTENT_TABS_SCRIPT) as string[];
@@ -935,7 +945,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
 
   /** Listing evidence from the main frame and same-origin content frames. */
   private async probeListing(page: Page): Promise<PageSnapshot["dom"] | undefined> {
-    type Probe = { itemRows: number; emptyCopy: boolean; contentBlank: boolean };
+    type Probe = { itemRows: number; emptyCopy: boolean; contentBlank: boolean; contentNoElements?: boolean; objectTabs?: number };
     const probes: Probe[] = [];
     const main = (await page.evaluate(LISTING_PROBE_SCRIPT).catch(() => undefined)) as Probe | undefined;
     if (main) {

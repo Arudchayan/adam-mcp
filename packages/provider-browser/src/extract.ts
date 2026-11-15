@@ -590,7 +590,7 @@ export function isAdamEmptyContainerPage(snapshot: Pick<PageSnapshot, "text">): 
 
 export type ListingClassification = {
   state: "ok" | "empty" | "unknown";
-  signals: { contentItemCount: number; emptyCopy: boolean; chromeOnly: boolean };
+  signals: { contentItemCount: number; emptyCopy: boolean; chromeOnly: boolean; structurallyEmpty?: boolean };
   notice?: string;
 };
 
@@ -600,6 +600,8 @@ export const LISTING_UNKNOWN_NOTICE =
   "Folder page opened but the object list did not load. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
 export const LISTING_ROWS_UNPARSED_NOTICE =
   "Object rows are visible on this page, but no parseable ADAM links were found. Do not treat this as empty. Retry with type from the parent listing, or open the ADAM URL.";
+export const LISTING_STRUCTURALLY_EMPTY_NOTICE =
+  "ADAM rendered this folder with an empty content area: no child objects are visible to this account. Not a failure. Not 'no deadlines'. Upload-only folders look the same.";
 export const LISTING_BLANK_CONTENT_NOTICE =
   "The folder view rendered a blank content area: no items and no empty message. It may be empty, or its contents may not be visible to this account. Do not claim it is empty or that nothing exists; open the ADAM URL to check.";
 
@@ -633,6 +635,15 @@ export function classifyListing(
       state: "empty",
       signals: { contentItemCount: 0, emptyCopy: true, chromeOnly: false },
       notice: LISTING_EMPTY_NOTICE,
+    };
+  }
+  // ADR 0050: folders only. A course with no content root children is still unknown.
+  if (snapshot.dom?.structurallyEmpty === true && parseAdamRef(snapshot.url)?.type === "fold" &&
+    !isLoginSnapshot(snapshot) && !isAdamFailurePage(snapshot) && !isAdamPermissionPage(snapshot)) {
+    return {
+      state: "empty",
+      signals: { contentItemCount: 0, emptyCopy: false, chromeOnly: false, structurallyEmpty: true },
+      notice: LISTING_STRUCTURALLY_EMPTY_NOTICE,
     };
   }
   if (snapshot.dom?.contentBlank === true) {
