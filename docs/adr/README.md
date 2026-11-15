@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0050](0050-structurally-empty-folders.md) | Structurally empty folders |
 | [0049](0049-survey-poll-and-root-cards.md) | Read-only Survey and Poll types, repository-root cards, guessed-type redirects |
 | [0048](0048-search-container-walk.md) | Search walks courses and folders only; no ILIAS search (robots.txt) |
 | [0047](0047-extract-page-windows-and-text-formats.md) | Extract page windows, notebooks, uploaded HTML and the size-limit hint |

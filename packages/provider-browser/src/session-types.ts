@@ -17,6 +17,11 @@ export type PageSnapshot = {
     emptyCopy: boolean;
     /** Content container rendered but has no items and no text at all. */
     contentBlank?: boolean;
+    /**
+     * ADR 0050: the main document's content root has no child elements under
+     * rendered object tabs, and no content frames — ILIAS 10.12's empty-folder render.
+     */
+    structurallyEmpty?: boolean;
   };
 };
 
