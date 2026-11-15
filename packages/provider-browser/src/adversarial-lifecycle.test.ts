@@ -118,7 +118,8 @@ test("shared abandonment cancels once; another subscriber survives a peer abort 
 
 test("login invalidation rejects a late memory read and never caches its stale completion", async () => {
   const url = "https://adam.unibas.ch";
-  const snapshot = snapshotFromHtml(url, "Dashboard", '<main><a href="/logout.php">Abmelden</a></main>', "Dashboard Abmelden");
+  // A Dashboard that lists a course, so read counts measure refresh, not the ADR 0059 overview fallback.
+  const snapshot = snapshotFromHtml(url, "Dashboard", '<main><a href="/go/crs/100001">Course</a><a href="/logout.php">Abmelden</a></main>', "Dashboard Course Abmelden");
   const memory = createMemorySession({ [url]: snapshot });
   const entered = deferred();
   const release = deferred();
