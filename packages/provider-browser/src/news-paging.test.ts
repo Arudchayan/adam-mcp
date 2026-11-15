@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createBrowserProvider } from "./browser-provider.ts";
+import { createBrowserProvider, MEMBERSHIP_OVERVIEW_PATH } from "./browser-provider.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 import { newsPageRoute } from "./news-paging.ts";
 import type { PageSnapshot } from "./session-types.ts";
@@ -234,6 +234,21 @@ describe("ADR 0055 amendment: listNews follows News block pages", () => {
     assert.equal(opened.some((url) => url.includes("block_type=news")), false);
     assert.equal(result.partial, true);
     assert.equal(result.partialReason, "time_budget");
+  });
+
+  it("ADR 0059: pages the Dashboard block when the course list comes from the membership overview", async () => {
+    const { provider, opened, pages } = setup({ dashboardPages: 3 });
+    // Live shape: the Dashboard centre shows only side blocks, no course list.
+    pages[origin] = snapshotFromHtml(dashboardUrl, "Dashboard",
+      `<main><div id="il_center_col"></div><div id="il_right_col">${dashboardBlock(0, 3)}</div><a href="/logout.php">Abmelden</a></main>`, "Dashboard Abmelden");
+    pages[`${origin}${MEMBERSHIP_OVERVIEW_PATH}`] = snapshotFromHtml(`${origin}${MEMBERSHIP_OVERVIEW_PATH}`, "My Courses and Groups",
+      `<main><div id="il_center_col"><div id="block_dash_mem_1"><div class="il-item"><h4 class="il-item-title"><a href="/go/crs/100001">Course</a></h4></div></div></div><a href="/logout.php">Abmelden</a></main>`,
+      "My Courses and Groups Course Abmelden");
+    const result = await provider.listNews({ limit: 100 });
+    assert.deepEqual(pagingOpens(opened), [dashboardRoute(1), dashboardRoute(2)]);
+    assert.equal(opened.includes(courseUrl), true, "the walk reaches the course through the overview");
+    assert.deepEqual(result.items.map((news) => news.newsId).sort(), ["1000", "1001", "5000", "5001", "5002"]);
+    assert.equal(result.partial, undefined);
   });
 
   it("course scope pages the course block only", async () => {
