@@ -731,6 +731,9 @@ export class BrowserAdamProvider implements AdamProvider {
         });
       }
 
+      // #132: ADAM's own Dashboard Tasks / Upcoming Events → source:calendar.
+      events.push(...(catalog.calendarEvents ?? []));
+
       // #119: per-assignment deadlines from the parsed overview (#120) → source:exc.
       const units = catalog.current?.type === "exc" ? catalog.exerciseUnits : undefined;
       if (catalog.current?.type === "exc" && units) {
