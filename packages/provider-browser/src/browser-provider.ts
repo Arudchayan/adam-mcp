@@ -720,7 +720,8 @@ export class BrowserAdamProvider implements AdamProvider {
       // AT6: unlabeled / page-inferred dates stay source:page — never promote all dates on exc pages to exc.
       for (const date of catalog.inferredDates) {
         events.push({
-          title: date.raw,
+          // #119: the surrounding words, so an exam date is distinguishable from other dates.
+          title: dateContext(catalog.text, date.raw),
           ...(date.iso ? { startsAt: date.iso } : {}),
           source: "page",
           confidence: date.confidence,
@@ -730,8 +731,23 @@ export class BrowserAdamProvider implements AdamProvider {
         });
       }
 
-      // Labeled exercise deadline only (AT5 labeling) → source:exc.
-      if (catalog.current?.type === "exc") {
+      // #119: per-assignment deadlines from the parsed overview (#120) → source:exc.
+      const units = catalog.current?.type === "exc" ? catalog.exerciseUnits : undefined;
+      if (catalog.current?.type === "exc" && units) {
+        for (const unit of units) {
+          if (!unit.deadline) continue;
+          events.push({
+            title: `${unit.title} (Deadline)`,
+            startsAt: unit.deadline,
+            source: "exc",
+            confidence: "explicit",
+            objectRefId: catalog.current.refId,
+            url: catalog.current.url,
+            provenance: catalog.current.provenance,
+          });
+        }
+      } else if (catalog.current?.type === "exc") {
+        // Labeled exercise deadline only (AT5 labeling) → source:exc.
         const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
         if (deadline) {
           events.push({
@@ -1227,6 +1243,23 @@ function uniqueUrls(urls: string[]): string[] {
   return [...new Set(urls)];
 }
 
+
+/** #119: the date with up to one clause of surrounding text from its own line, never a neighbour's. */
+export function dateContext(text: string, raw: string): string {
+  const at = text.indexOf(raw);
+  if (at < 0) return raw;
+  const lineStart = text.lastIndexOf("\n", at) + 1;
+  const lineEndRaw = text.indexOf("\n", at + raw.length);
+  const lineEnd = lineEndRaw < 0 ? text.length : lineEndRaw;
+  let before = text.slice(Math.max(lineStart, at - 80), at);
+  const boundary = Math.max(before.lastIndexOf(". "), before.lastIndexOf("! "), before.lastIndexOf("? "));
+  if (boundary >= 0) before = before.slice(boundary + 2);
+  let after = text.slice(at + raw.length, Math.min(lineEnd, at + raw.length + 60));
+  const stop = after.search(/[.!?](?:\s|$)/);
+  if (stop >= 0) after = after.slice(0, stop);
+  const context = `${before}${raw}${after}`.replace(/\s+/g, " ").trim();
+  return context.length > raw.length ? context : raw;
+}
 
 function uniqueNews(items: NewsItem[]): NewsItem[] {
   const seen = new Set<string>();
