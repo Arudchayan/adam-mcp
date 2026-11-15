@@ -135,6 +135,7 @@ export const getExerciseInputSchema = z
     refId: z.string().min(1).describe(REF_ID_HELP),
     type: objectTypeHintSchema,
     confirm: confirmExerciseSchema.optional(),
+    view: z.enum(["ongoing", "upcoming", "past", "all"]).optional().describe("Assignment bucket from the exercise overview: ongoing (default), upcoming, past or all. Use past/all for submitted or closed assignments."),
   })
   .superRefine(refineObjectRef)
   .transform(resolveObjectRef);
@@ -336,6 +337,7 @@ const exerciseUnitMetaSchema = z
 
 export const exerciseOutputSchema = adamObjectOutputSchema.extend({
   type: z.literal("exc"),
+  view: z.enum(["ongoing", "upcoming", "past", "all"]).optional(),
   units: z.array(
     exerciseUnitMetaSchema.extend({
       instructionText: z.string().optional(),

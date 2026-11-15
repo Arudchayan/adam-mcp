@@ -30,6 +30,7 @@ import {
 import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
 import { parseExerciseUnits } from "./exercise-parse.ts";
+import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
 
 /** #121: only a response that names an .html/.htm file is an uploaded HTML course file. */
@@ -537,11 +538,20 @@ export class BrowserAdamProvider implements AdamProvider {
     return saveLocalDownload(this.session(), file, destination, options?.signal);
   }
 
-  async getExercise(refId: RefId, options?: ObjectOpenOptions): Promise<ExerciseObject> {
+  async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
-    const snapshot = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal, expectedType: "exc", callerType: options?.type });
+    const overview = await this.openObject(refId, options?.type ?? "exc", { cacheGeneration: generation, signal: options?.signal, expectedType: "exc", callerType: options?.type });
+    // ADR 0052: another assignment bucket only through the overview's own advertised mode route.
+    let snapshot = overview;
+    if (options?.view && options.view !== "ongoing") {
+      const landed = parseAdamRef(overview.url);
+      if (landed?.type !== "exc" || landed.refId !== refId) throw new AdamError("unsupported_type", `ref_id ${refId} is not an exercise overview.`, false);
+      const viewUrl = exerciseViewUrl(overview.html ?? "", refId, options.view);
+      if (!viewUrl) throw unavailableExerciseView(refId, options.view);
+      snapshot = await this.openAuthorized(viewUrl, options?.signal, "exc");
+    }
     const catalog = this.catalog(snapshot);
     this.rememberTypes(catalog, generation);
     const object = catalog.current ?? catalog.objects.find((item) => item.refId === refId);
@@ -557,8 +567,9 @@ export class BrowserAdamProvider implements AdamProvider {
     // says there are none. Unrecognised layouts keep the single page-text unit.
     const parsed = parseExerciseUnits(snapshot.html ?? "", catalog.text);
     if (parsed) {
-      return { ...object, type: "exc", units: parsed };
+      return { ...object, type: "exc", units: parsed, ...(options?.view ? { view: options.view } : {}) };
     }
+    if (options?.view && options.view !== "ongoing") throw unavailableExerciseView(refId, options.view);
     const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
     return {
       ...object,
