@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Dashboard items). News block pagination: deferred until a capture shows the page key.
+Accepted. Amended 2026-11-15: bounded News block pagination (see Amendment). That replaces the "Pagination is not implemented" bullet below.
 
 ## Context
 
@@ -22,4 +22,40 @@ Issue #132 (news slice). `adam_list_news` read only page 1 of each course `block
 
 ## Consequences
 
-Unscoped news gains Dashboard items, including news from objects the walk doesn't open. `newsId` is a new optional output field; the news schema already passed through extra fields. Dashboard rows have no `/go/` citation, so they get no resource handle. Live verification is still needed for the Dashboard item count, `Date` parsing and `news_id` overlap with course blocks.
+Unscoped news gains Dashboard items, including news from objects the walk doesn't open. `newsId` is a new optional output field; the news schema already passed through extra fields. Dashboard rows have no `/go/` citation, so they get no resource handle. Live verified (PR #153): 32 dated news items, all with `newsId`, no duplicates.
+
+## Amendment: bounded block pagination (2026-11-15)
+
+A structure-only live probe recorded the full routes behind the pagination buttons. Both are full-page routes, not async fragments:
+
+- Course `block_news_{blockId}`: `/ilias.php?baseClass=ilrepositorygui&cmdNode=…&cmdClass=ilcolumngui&ref_id={course}&col_side=right&block_type=news&news_{blockId}_blnavpage={N}`
+- Dashboard `block_pdnews_{blockId}`: `/ilias.php?baseClass=ildashboardgui&cmdNode=…&cmdClass=ilcolumngui&view=0&show={hex}&col_side=right&block_type=pdnews&pdnews_{blockId}_blnavpage={N}`
+
+`N` is 0-based: button "1" is 0 and the chevron is the current page + 1.
+
+Decision:
+
+- `adam_list_news` follows a block's later pages **only** through routes taken verbatim from that block's own `.il-viewcontrol-pagination` `data-action` buttons, and only the route for the next page (current + 1).
+- A route must pass an exact allowlist:
+  - pinned origin and `/ilias.php`, no credentials or fragment
+  - `baseClass` that matches the block type (`ilrepositorygui` for `news`, `ildashboardgui` for `pdnews`)
+  - `cmdClass=ilcolumngui` and `block_type` equal to the block's type
+  - `cmdNode` matching `^[a-z0-9:]{1,40}$` and `col_side` of `left` or `right`
+  - for course blocks, `ref_id` equal to the page's course; for the Dashboard, `view` as digits and `show` matching `^[0-9a-f]{1,64}$`
+  - exactly one paging key, `{block_type}_{blockId}_blnavpage`, where blockId is the block's own id and the value is a 0–99 integer
+  - no other keys and no duplicates; there is no `cmd`, so Get Feed URL and Settings can never pass
+- Limits:
+  - at most 5 extra pages per block
+  - a block stops at its last advertised page, or after a page whose dated items are all older than `since` (pages are newest first)
+  - extra opens per call are capped at the walk page cap (48)
+  - walk and paging share one read budget (`walkTimeoutMs`, two minutes) measured from the start of the call
+  - an unreadable later page makes the result partial (`unreadable_page`) and keeps what was read
+- Order and reserve (revised after the live check of PR #158). Live, the enrolled walk used about 103 s of the 120 s budget. Paging every block in walk order added 2 items and made every unscoped result `partial: time_budget`. So:
+  - **The Dashboard `block_pdnews` is paged first.** It aggregates news from every enrolled course (12 pages live), so its extra pages are worth the most.
+  - **Course blocks are paged only when the Dashboard didn't cover them**: either the walk has no Dashboard block (course-scoped calls), or the Dashboard block stopped for some reason other than reaching its last page or `since` (its 5-page cap, the budget, an unreadable page). Dedupe by `newsId` still applies.
+  - **Reserve:** no new News page is opened once less than `min(10 s, budget / 10)` of the shared budget is left, so the call ends before the two-minute limit.
+  - **Partial only when it matters:** running out of time or page budget sets `time_budget` / `page_budget` only if it cut short the Dashboard block, or a course block in a walk with no Dashboard block. Course blocks left unpaged after the Dashboard was read don't make the result partial. Their page 1 is already in the result, and the Dashboard pages read so far carry the newest cross-course news.
+- Later pages read only the same block id. Their items keep page 1's citation and course, and dedupe by `newsId` with everything else. Pages are memoized per walk, so repeat calls on a cached walk don't reopen them.
+- A course-scoped call pages only that course's block, because the Dashboard isn't part of a scoped walk. Folder-page News blocks don't page: their routes would carry the folder's `ref_id`, and that shape wasn't captured.
+
+Needs live verification: each block reads at most 5 extra pages, routes match the captured shape (including the Dashboard `show` value), `since` stops early, and nothing opens `showFeedUrl` / `editSettings`.
