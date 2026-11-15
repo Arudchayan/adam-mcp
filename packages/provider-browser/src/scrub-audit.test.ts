@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,7 @@ import type { SnapshotLink } from "./session-types.ts";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(srcDir, "../fixtures/live");
+const evidenceDir = resolve(srcDir, "../fixtures/evidence");
 const captureScriptPath = resolve(srcDir, "../../../scripts/capture-fixtures.mjs");
 const debugCapturePath = join(srcDir, "debug-capture.ts");
 const origin = "https://adam.unibas.ch";
@@ -63,14 +64,15 @@ const digitBoundary = (id: string): RegExp => new RegExp(`(?<!\\d)${id}(?!\\d)`)
 /** Strip class tokens containing "toggle" (il-toggle-switch, dropdown-toggle, …). */
 const stripToggleTokens = (raw: string): string => raw.replace(/[A-Za-z-]*toggle[A-Za-z-]*/g, "");
 
-function loadFixtures(): Array<{ file: string; raw: string; doc: FixtureDoc }> {
-  return readdirSync(fixturesDir)
+/** Replay corpus plus on-demand `--target` evidence: both go through every privacy audit. */
+function loadFixtures(): Array<{ file: string; raw: string; doc: FixtureDoc; corpus: boolean }> {
+  return [fixturesDir, evidenceDir].filter((dir) => existsSync(dir)).flatMap((dir) => readdirSync(dir)
     .filter((file) => file.endsWith(".json"))
     .sort()
     .map((file) => {
-      const raw = readFileSync(join(fixturesDir, file), "utf8");
-      return { file, raw, doc: JSON.parse(raw) as FixtureDoc };
-    });
+      const raw = readFileSync(join(dir, file), "utf8");
+      return { file, raw, doc: JSON.parse(raw) as FixtureDoc, corpus: dir === fixturesDir };
+    }));
 }
 
 function textNodes(html: string): string[] {
@@ -448,7 +450,7 @@ describe("H3 capture targets and corpus parity", () => {
   it("pins the exact 5 capture targets against the pinned origin", () => {
     const script = readFileSync(captureScriptPath, "utf8");
     assert.ok(script.includes('const origin = "https://adam.unibas.ch"'), "origin drift");
-    const block = script.match(/const targets = \[([\s\S]*?)\];/)?.[1];
+    const block = script.match(/const defaultTargets = \[([\s\S]*?)\];/)?.[1];
     assert.ok(block, "targets block missing");
     const names = [...block.matchAll(/name:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
     assert.deepEqual(names, EXPECTED_TARGETS);
@@ -457,7 +459,7 @@ describe("H3 capture targets and corpus parity", () => {
 
   it("matches the committed corpus file-for-file with kind parity", () => {
     const script = readFileSync(captureScriptPath, "utf8");
-    const block = script.match(/const targets = \[([\s\S]*?)\];/)?.[1];
+    const block = script.match(/const defaultTargets = \[([\s\S]*?)\];/)?.[1];
     assert.ok(block, "targets block missing");
     const names = [...block.matchAll(/name:\s*"([^"]+)"/g)].map((match) => match[1] ?? "").sort();
     const files = readdirSync(fixturesDir)
@@ -465,7 +467,7 @@ describe("H3 capture targets and corpus parity", () => {
       .map((file) => file.replace(/\.json$/, ""))
       .sort();
     assert.deepEqual(files, names, "corpus drifted from capture targets");
-    for (const { file, doc } of loadFixtures()) {
+    for (const { file, doc } of loadFixtures().filter((fixture) => fixture.corpus)) {
       const stem = file.replace(/\.json$/, "");
       assert.equal(doc.name, stem, file);
       assert.equal(doc.kind, EXPECTED_KINDS[stem], `${file} kind drift`);

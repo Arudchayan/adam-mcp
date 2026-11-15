@@ -10,10 +10,17 @@
  *   - no cookies, no storage state, no names/titles
  *
  * Usage: node scripts/capture-fixtures.mjs [--profile <dir>] [--out <dir>]
+ *          [--target <name>:<kind>:<adam-url>]...
+ *
+ * Without --target the built-in replay corpus is recaptured. Each --target
+ * replaces that list and writes to fixtures/evidence/ by default; the name must
+ * be a lowercase slug and the URL must be on the pinned ADAM origin. Scrubbing
+ * is identical for every target, and the scrub audit covers both folders.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright-core";
 
 const args = process.argv.slice(2);
@@ -22,10 +29,31 @@ const flag = (name, fallback) => {
   return index >= 0 ? args[index + 1] : fallback;
 };
 const profileDir = resolve(flag("--profile", join(homedir(), ".adam-mcp", "chrome-profile")));
-const outDir = resolve(flag("--out", "packages/provider-browser/fixtures/live"));
+// --target captures are on-demand evidence, kept apart from the pinned replay corpus.
+const outDir = resolve(flag("--out", args.includes("--target") ? "packages/provider-browser/fixtures/evidence" : "packages/provider-browser/fixtures/live"));
 const origin = "https://adam.unibas.ch";
 
-const targets = [
+/** `name:kind:url` → target. Only the first two colons split, so URLs keep theirs. */
+export function parseTarget(spec) {
+  const first = spec.indexOf(":");
+  const second = first < 0 ? -1 : spec.indexOf(":", first + 1);
+  if (first < 0 || second < 0) throw new Error(`--target must be <name>:<kind>:<url>, got ${JSON.stringify(spec)}`);
+  const name = spec.slice(0, first);
+  const kind = spec.slice(first + 1, second);
+  const requestUrl = spec.slice(second + 1);
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(name)) throw new Error(`--target name must be a lowercase slug, got ${JSON.stringify(name)}`);
+  if (!/^[a-z][a-z0-9-]{0,31}$/.test(kind)) throw new Error(`--target kind must be a lowercase slug, got ${JSON.stringify(kind)}`);
+  let url;
+  try { url = new URL(requestUrl); } catch { throw new Error(`--target url is not absolute: ${JSON.stringify(requestUrl)}`); }
+  if (url.origin !== "https://adam.unibas.ch" || url.username || url.password) {
+    throw new Error("--target url must be on https://adam.unibas.ch without credentials");
+  }
+  return { name, kind, requestUrl: url.href };
+}
+
+const targetSpecs = args.flatMap((value, index) => (args[index - 1] === "--target" ? [value] : []));
+
+const defaultTargets = [
   {
     name: "dashboard",
     kind: "dashboard",
@@ -36,6 +64,7 @@ const targets = [
   { name: "folder-blank-notes", kind: "blank-fold", requestUrl: `${origin}/go/fold/2291290` },
   { name: "folder-blank-exercises", kind: "blank-fold", requestUrl: `${origin}/go/fold/2291292` },
 ];
+const targets = targetSpecs.length > 0 ? targetSpecs.map(parseTarget) : defaultTargets;
 
 const KEEP_TEXT = [
   /^this (folder|object) is empty/i,
@@ -194,7 +223,10 @@ function scrubHref(href, mapIds) {
   }
 }
 
-void main().catch((error) => {
-  console.error(String(error instanceof Error ? error.message : error));
-  process.exitCode = 1;
-});
+// Run only as a script, so tests can import parseTarget without touching CDP.
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  void main().catch((error) => {
+    console.error(String(error instanceof Error ? error.message : error));
+    process.exitCode = 1;
+  });
+}
