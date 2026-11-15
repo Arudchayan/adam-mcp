@@ -51,7 +51,7 @@ export function parseUiItems(html: string): UiItem[] {
     const names = extractClassBlocksAt(segment, "il-item-property-name");
     const values = extractClassBlocksAt(segment, "il-item-property-value");
     const description = textOf(extractClassBlocksAt(segment, "il-item-description")[0]?.block ?? "");
-    const href = block.match(/<a\b[^>]*href=["']([^"']+)["']/i)?.[1]?.replace(/&amp;/gi, "&");
+    const href = block.match(/<a\b[^>]*href=["']([^"']+)["']/i)?.[1]?.replace(/&amp;/gi, "&") ?? sameOriginDataAction(block);
     return {
       index,
       title: textOf(block),
@@ -63,6 +63,23 @@ export function parseUiItems(html: string): UiItem[] {
       })),
     };
   });
+}
+
+/**
+ * ADR 0056: KS button titles (e.g. the ILIAS 10.12 Tasks page) carry their
+ * route in `data-action` instead of `<a href>`. Only an ADAM-relative path or
+ * an `https://adam.unibas.ch` URL is accepted; anything else is ignored.
+ */
+function sameOriginDataAction(block: string): string | undefined {
+  const raw = block.match(/\bdata-action=["']([^"']+)["']/i)?.[1];
+  if (!raw) return undefined;
+  const action = raw.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#0*39;|&apos;/gi, "'").trim();
+  if (action.startsWith("/") && !action.startsWith("//")) return action;
+  try {
+    return new URL(action).origin === "https://adam.unibas.ch" ? action : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function textOf(html: string): string {

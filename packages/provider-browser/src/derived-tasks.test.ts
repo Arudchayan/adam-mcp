@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { preferCalendarEvents } from "adam-core";
 import { createBrowserProvider } from "./browser-provider.ts";
 import { DERIVED_TASKS_PATH, derivedTasksEvents } from "./extract.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
@@ -36,6 +37,25 @@ describe("ADR 0056 Derived Tasks page", () => {
       ['Submission of Assignment "Sheet 3"', "2026-11-20T11:00:00.000Z", "100021", "calendar", "https://adam.unibas.ch/go/exc/100021"],
       ['Submission of Assignment "Sheet 9"', "2027-01-15T22:59:00.000Z", "100121", "calendar", "https://adam.unibas.ch/go/exc/100121"],
     ]);
+  });
+
+  it("binds the exercise from a button title's data-action (live ILIAS 10.12 markup) and merges with exc", () => {
+    const button = (action: string) => `<main><div class="panel il-panel-listing-std-container"><ul>
+      <li class="il-std-item-container"><div class="il-item il-std-item">
+        <h4 class="il-item-title"><button class="btn btn-link" data-action="${action}" id="il_ui_fw_1">Submission of Assignment &quot;Sheet 3&quot;</button></h4>
+        <div class="row"><span class="il-item-property-name">End</span><span class="il-item-property-value">20. Nov 2026, 12:00</span></div>
+      </div></li></ul></div></main>`;
+    const events = derivedTasksEvents({ url: tasksUrl, html: button("/go/exc/100021/5001") }, provenance);
+    assert.equal(events?.[0]?.objectRefId, "100021");
+    assert.equal(events?.[0]?.url, "https://adam.unibas.ch/go/exc/100021");
+    const exc = { title: "Sheet 3 (Deadline)", startsAt: "2026-11-20T11:00:00.000Z", source: "exc" as const, confidence: "explicit" as const, objectRefId: "100021", provenance };
+    const merged = preferCalendarEvents([exc, ...(events ?? [])]);
+    assert.equal(merged.length, 1);
+    assert.deepEqual(merged[0]?.seenIn?.sort(), ["calendar", "exc"]);
+    // Off-origin or protocol-relative actions are never taken as a route.
+    for (const foreign of ["https://evil.example/go/exc/100021/5001", "//evil.example/go/exc/100021/5001", "javascript:alert(1)"]) {
+      assert.equal(derivedTasksEvents({ url: tasksUrl, html: button(foreign) }, provenance)?.[0]?.objectRefId, undefined);
+    }
   });
 
   it("treats an info message with no listing as a verified empty list", () => {
