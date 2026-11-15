@@ -54,7 +54,7 @@ import {
   extractNewsBlockPage,
   type ExtractedCatalog,
 } from "./extract.ts";
-import { MAX_NEWS_EXTRA_PAGES, type NewsBlockRef } from "./news-paging.ts";
+import { MAX_NEWS_EXTRA_PAGES, NEWS_PAGING_RESERVE_MS, type NewsBlockRef } from "./news-paging.ts";
 import { pageHeading, parseForumPage, resolveForumThreadUrl, threadIdFromHref } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
@@ -925,9 +925,12 @@ export class BrowserAdamProvider implements AdamProvider {
 
   /**
    * ADR 0055 amendment: read up to MAX_NEWS_EXTRA_PAGES later pages of each News block,
-   * only through the block's own validated next-page route. A block stops at its last
-   * advertised page, at a page whose dated items are all older than `since`, or when the
-   * read budget runs out (reported as partial). Pages are memoized per walk.
+   * only through the block's own validated next-page route. The Dashboard block goes
+   * first: it aggregates every enrolled course's news. Course blocks are paged only when
+   * the Dashboard did not cover them (no Dashboard block, or it stopped before its end
+   * and before `since`). Paging stops NEWS_PAGING_RESERVE_MS before the shared budget
+   * ends. A cut-short block makes the result partial only when it is the Dashboard block,
+   * or a course block with no Dashboard block in the walk. Pages are memoized per walk.
    */
   private async followNewsPages(
     walk: WalkResult,
@@ -940,38 +943,59 @@ export class BrowserAdamProvider implements AdamProvider {
       memo = new Map();
       this.newsPagesByWalk.set(walk, memo);
     }
+    const memoPages = memo;
     const items: NewsItem[] = [];
+    const stopAt = deadline - Math.min(NEWS_PAGING_RESERVE_MS, this.walkTimeoutMs / 10);
     let opened = 0;
     let timedOut = false;
     let pageCapped = false;
     let unreadable = 0;
     const olderThanSince = (block: NewsBlockRef) =>
-      block.itemCount === 0 || (block.dates.length > 0 && block.dates.every((date) => Date.parse(date) < since));
-    for (const page of walk.pages) {
-      for (const first of page.catalog.newsBlocks ?? []) {
-        let block = first;
-        for (let extra = 0; extra < MAX_NEWS_EXTRA_PAGES && block.nextUrl && !olderThanSince(block); extra += 1) {
-          const url = block.nextUrl;
-          let next = memo.get(url);
-          if (next === undefined) {
-            if (Date.now() >= deadline) { timedOut = true; break; }
-            if (opened >= MAX_LIVE_PAGES) { pageCapped = true; break; }
-            throwIfAborted(signal);
-            opened += 1;
-            try {
-              const snapshot = await this.openAuthorized(url, signal);
-              next = extractNewsBlockPage(snapshot, this.fetchedAt(snapshot), block) ?? null;
-            } catch (error) {
-              if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) throw error;
-              unreadable += 1;
-              break;
-            }
-            memo.set(url, next);
+      block.dates.length > 0 && block.dates.every((date) => Date.parse(date) < since);
+    type Outcome = "end" | "since" | "cap" | "gone" | "time_budget" | "page_budget" | "unreadable";
+    const pageBlock = async (first: NewsBlockRef): Promise<Outcome> => {
+      let block = first;
+      for (let extra = 0; ; extra += 1) {
+        if (!block.nextUrl || block.itemCount === 0) return "end";
+        if (olderThanSince(block)) return "since";
+        if (extra >= MAX_NEWS_EXTRA_PAGES) return "cap";
+        const url = block.nextUrl;
+        let next = memoPages.get(url);
+        if (next === undefined) {
+          if (Date.now() >= stopAt) return "time_budget";
+          if (opened >= MAX_LIVE_PAGES) return "page_budget";
+          throwIfAborted(signal);
+          opened += 1;
+          try {
+            const snapshot = await this.openAuthorized(url, signal);
+            next = extractNewsBlockPage(snapshot, this.fetchedAt(snapshot), block) ?? null;
+          } catch (error) {
+            if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) throw error;
+            return "unreadable";
           }
-          if (!next) break;
-          items.push(...next.items);
-          block = next.block;
+          memoPages.set(url, next);
         }
+        if (!next) return "gone";
+        items.push(...next.items);
+        block = next.block;
+      }
+    };
+    const record = (outcome: Outcome, reportsBudget: boolean) => {
+      if (outcome === "unreadable") unreadable += 1;
+      if (outcome === "time_budget" && reportsBudget) timedOut = true;
+      if (outcome === "page_budget" && reportsBudget) pageCapped = true;
+    };
+    const blocks = walk.pages.flatMap((page) => page.catalog.newsBlocks ?? []);
+    const dashboard = blocks.filter((block) => block.blockType === "pdnews");
+    let dashboardCovers = dashboard.length > 0;
+    for (const block of dashboard) {
+      const outcome = await pageBlock(block);
+      record(outcome, true);
+      if (outcome !== "end" && outcome !== "since") dashboardCovers = false;
+    }
+    if (!dashboardCovers) {
+      for (const block of blocks.filter((candidate) => candidate.blockType === "news")) {
+        record(await pageBlock(block), dashboard.length === 0);
       }
     }
     if (!timedOut && !pageCapped && unreadable === 0) return { walk, items };

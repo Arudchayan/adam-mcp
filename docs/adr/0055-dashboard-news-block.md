@@ -49,7 +49,12 @@ Decision:
   - a block stops at its last advertised page, or after a page whose dated items are all older than `since` (pages are newest first)
   - extra opens per call are capped at the walk page cap (48)
   - walk and paging share one read budget (`walkTimeoutMs`, two minutes) measured from the start of the call
-  - running out of budget, or an unreadable later page, makes the result partial (`time_budget` / `page_budget` / `unreadable_page`) and keeps what was read
+  - an unreadable later page makes the result partial (`unreadable_page`) and keeps what was read
+- Order and reserve (revised after the live check of PR #158). Live, the enrolled walk used about 103 s of the 120 s budget. Paging every block in walk order added 2 items and made every unscoped result `partial: time_budget`. So:
+  - **The Dashboard `block_pdnews` is paged first.** It aggregates news from every enrolled course (12 pages live), so its extra pages are worth the most.
+  - **Course blocks are paged only when the Dashboard didn't cover them**: either the walk has no Dashboard block (course-scoped calls), or the Dashboard block stopped for some reason other than reaching its last page or `since` (its 5-page cap, the budget, an unreadable page). Dedupe by `newsId` still applies.
+  - **Reserve:** no new News page is opened once less than `min(10 s, budget / 10)` of the shared budget is left, so the call ends before the two-minute limit.
+  - **Partial only when it matters:** running out of time or page budget sets `time_budget` / `page_budget` only if it cut short the Dashboard block, or a course block in a walk with no Dashboard block. Course blocks left unpaged after the Dashboard was read don't make the result partial. Their page 1 is already in the result, and the Dashboard pages read so far carry the newest cross-course news.
 - Later pages read only the same block id. Their items keep page 1's citation and course, and dedupe by `newsId` with everything else. Pages are memoized per walk, so repeat calls on a cached walk don't reopen them.
 - A course-scoped call pages only that course's block, because the Dashboard isn't part of a scoped walk. Folder-page News blocks don't page: their routes would carry the folder's `ref_id`, and that shape wasn't captured.
 

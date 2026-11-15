@@ -4,6 +4,9 @@ import { extractClassBlocksAt } from "./ui-items.ts";
 /** Extra pages read per News block after page 1 (ADR 0055 amendment). */
 export const MAX_NEWS_EXTRA_PAGES = 5;
 
+/** Stop opening News pages this long before the shared read budget ends (ADR 0055 amendment). */
+export const NEWS_PAGING_RESERVE_MS = 10_000;
+
 export type NewsBlockType = "news" | "pdnews";
 
 /**

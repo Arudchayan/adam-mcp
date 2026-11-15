@@ -61,13 +61,20 @@ const dashboardPage = (url: string, blockHtml: string) => snapshotFromHtml(url, 
 const courseNews = (page: number) => item("news", `${1000 + page * 2}`, `${String(13 - page).padStart(2, "0")}. Nov 2026, 10:00`) +
   item("news", `${1001 + page * 2}`, `${String(13 - page).padStart(2, "0")}. Nov 2026, 09:00`);
 
-const setup = (options: { coursePages?: number; dashboard?: string; courseBlock?: (page: number) => string; walkTimeoutMs?: number; slowPagingMs?: number } = {}) => {
+/** Page p of the Dashboard block, one item per page, one day older per page. */
+const dashboardBlock = (page: number, total: number) => block("pdnews", "77",
+  item("pdnews", `${5000 + page}`, `${String(13 - page).padStart(2, "0")}. Nov 2026, 08:00`), pagination(dashboardRoute, page, total), feedAndSettings);
+
+const setup = (options: { coursePages?: number; dashboard?: string; dashboardPages?: number; courseBlock?: (page: number) => string; walkTimeoutMs?: number; slowPagingMs?: number } = {}) => {
   const opened: string[] = [];
   const total = options.coursePages ?? 10;
   const pages: Record<string, PageSnapshot> = {
-    [origin]: dashboardPage(dashboardUrl, options.dashboard ?? ""),
+    [origin]: dashboardPage(dashboardUrl, options.dashboardPages ? dashboardBlock(0, options.dashboardPages) : options.dashboard ?? ""),
     [courseUrl]: coursePage(courseUrl, options.courseBlock?.(0) ?? block("news", "4242", courseNews(0), pagination(courseRoute, 0, total))),
   };
+  for (let page = 1; page < (options.dashboardPages ?? 0); page += 1) {
+    pages[dashboardRoute(page)] = dashboardPage(dashboardRoute(page), dashboardBlock(page, options.dashboardPages!));
+  }
   for (let page = 1; page < total; page += 1) {
     pages[courseRoute(page)] = coursePage(courseRoute(page), options.courseBlock?.(page) ?? block("news", "4242", courseNews(page), pagination(courseRoute, page, total)));
   }
@@ -177,11 +184,7 @@ describe("ADR 0055 amendment: listNews follows News block pages", () => {
   });
 
   it("follows Dashboard pages and never the feed or settings controls", async () => {
-    const dashboardBlock = (page: number) => block("pdnews", "77",
-      item("pdnews", `${5000 + page}`, `${String(13 - page).padStart(2, "0")}. Nov 2026, 08:00`), pagination(dashboardRoute, page, 3), feedAndSettings);
-    const { provider, opened, pages } = setup({ coursePages: 1, dashboard: dashboardBlock(0) });
-    pages[dashboardRoute(1)] = dashboardPage(dashboardRoute(1), dashboardBlock(1));
-    pages[dashboardRoute(2)] = dashboardPage(dashboardRoute(2), dashboardBlock(2));
+    const { provider, opened } = setup({ coursePages: 1, dashboardPages: 3 });
     const result = await provider.listNews({ limit: 100 });
     assert.deepEqual(pagingOpens(opened), [dashboardRoute(1), dashboardRoute(2)]);
     assert.equal(opened.some((url) => /showFeedUrl|editSettings/.test(url)), false);
@@ -189,6 +192,48 @@ describe("ADR 0055 amendment: listNews follows News block pages", () => {
     assert.deepEqual(dashboardItems.map((news) => [news.newsId, news.courseRefId, news.url]), [
       ["5000", undefined, dashboardUrl], ["5001", undefined, dashboardUrl], ["5002", undefined, dashboardUrl],
     ]);
+  });
+
+  it("pages the Dashboard first and skips course blocks it paged to the end", async () => {
+    const { provider, opened } = setup({ dashboardPages: 3 });
+    const result = await provider.listNews({ limit: 100 });
+    assert.deepEqual(pagingOpens(opened), [dashboardRoute(1), dashboardRoute(2)]);
+    assert.equal(result.partial, undefined);
+  });
+
+  it("skips course blocks when the Dashboard reached since", async () => {
+    // Dashboard page 2 (11 Nov) is entirely before the cutoff.
+    const { provider, opened } = setup({ dashboardPages: 12 });
+    await provider.listNews({ since: "2026-11-11T12:00:00.000Z" });
+    assert.deepEqual(pagingOpens(opened), [dashboardRoute(1), dashboardRoute(2)]);
+  });
+
+  it("pages course blocks after a Dashboard block cut at its 5-page cap", async () => {
+    const { provider, opened } = setup({ dashboardPages: 12, coursePages: 3 });
+    await provider.listNews({ limit: 100 });
+    assert.deepEqual(pagingOpens(opened), [
+      ...[1, 2, 3, 4, 5].map((page) => dashboardRoute(page)),
+      courseRoute(1), courseRoute(2),
+    ]);
+  });
+
+  it("does not report course blocks cut by the reserve when the Dashboard was read", async () => {
+    // Budget 2 s, reserve 200 ms: five 300 ms Dashboard pages, then course paging runs out.
+    const { provider, opened } = setup({ dashboardPages: 12, walkTimeoutMs: 2_000, slowPagingMs: 300 });
+    const result = await provider.listNews({ limit: 100 });
+    assert.equal(pagingOpens(opened).filter((url) => url.includes("pdnews")).length, 5);
+    assert.equal(pagingOpens(opened).filter((url) => url.includes("block_type=news")).length < 5, true);
+    assert.equal(result.partial, undefined);
+  });
+
+  it("reports time_budget when the reserve cuts the Dashboard block itself", async () => {
+    // Budget 2 s, reserve 200 ms: 600 ms pages open at ~0, 600 and 1200 ms; the 4th would start past 1800 ms.
+    const { provider, opened } = setup({ dashboardPages: 12, walkTimeoutMs: 2_000, slowPagingMs: 600 });
+    const result = await provider.listNews({ limit: 100 });
+    assert.equal(pagingOpens(opened).length, 3);
+    assert.equal(opened.some((url) => url.includes("block_type=news")), false);
+    assert.equal(result.partial, true);
+    assert.equal(result.partialReason, "time_budget");
   });
 
   it("course scope pages the course block only", async () => {
