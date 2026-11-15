@@ -64,6 +64,8 @@ const digitBoundary = (id: string): RegExp => new RegExp(`(?<!\\d)${id}(?!\\d)`)
 /** Strip class tokens containing "toggle" (il-toggle-switch, dropdown-toggle, …). */
 const stripToggleTokens = (raw: string): string => raw.replace(/[A-Za-z-]*toggle[A-Za-z-]*/g, "");
 
+const corpusFile = (file: string) => EXPECTED_FILES.includes(file);
+
 /** Replay corpus plus on-demand `--target` evidence: both go through every privacy audit. */
 function loadFixtures(): Array<{ file: string; raw: string; doc: FixtureDoc; corpus: boolean }> {
   return [fixturesDir, evidenceDir].filter((dir) => existsSync(dir)).flatMap((dir) => readdirSync(dir)
@@ -100,7 +102,7 @@ describe("R8 inventory: exact committed scrubbed corpus", () => {
 
   it("ships only non-empty JSON fixtures with the required keys", () => {
     const entries = loadFixtures();
-    assert.equal(entries.length, 5);
+    assert.equal(entries.filter((entry) => entry.corpus).length, 5, "replay corpus size");
     for (const { file, raw, doc } of entries) {
       assert.ok(raw.length > 1000, `${file} is unexpectedly small`);
       assert.deepEqual(Object.keys(doc).sort(), [
@@ -143,7 +145,8 @@ describe("R8 real-ID digit-boundary ban", () => {
       if (doc.kind === "dashboard") {
         assert.ok(doc.url.startsWith(`${origin}/ilias.php`), file);
       } else {
-        assert.match(doc.url, /^https:\/\/adam\.unibas\.ch\/go\/(crs|fold)\/900\d+$/, file);
+        // Corpus pages are courses/folders; evidence captures may be any remapped /go/ type.
+        assert.match(doc.url, corpusFile(file) ? /^https:\/\/adam\.unibas\.ch\/go\/(crs|fold)\/900\d+$/ : /^https:\/\/adam\.unibas\.ch\/go\/[a-z]+\/900\d+$/, file);
       }
     }
   });
@@ -179,6 +182,7 @@ describe("R8 html text-node and attribute allowlists", () => {
       "Communication",
       "ADAMtools",
       "Content",
+      "Inhalt",
       "Info",
     ]);
     for (const { file, doc } of loadFixtures()) {
@@ -287,7 +291,8 @@ describe("R8 capturedAt and dom probe", () => {
       if (doc.kind === "blank-fold" || doc.kind === "blank-course") {
         assert.equal(doc.dom.contentBlank, true, file);
         assert.equal(doc.dom.itemRows, 0, file);
-      } else {
+      } else if (corpusFile(file)) {
+        // Row expectations describe the replay corpus kinds only; evidence pages vary.
         assert.ok(doc.dom.itemRows >= 1, `${file} expected content rows`);
       }
     }
