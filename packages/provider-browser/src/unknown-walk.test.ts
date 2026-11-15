@@ -3,6 +3,11 @@ import { it } from "node:test";
 import { createBrowserProvider } from "./browser-provider.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 import { FolderListingError } from "./folder-listing.ts";
+import { DERIVED_TASKS_PATH } from "./extract.ts";
+
+// ADR 0056: an empty Tasks page, so these tests count only the walk's own gaps.
+const tasksUrl = `https://adam.unibas.ch${DERIVED_TASKS_PATH}`;
+const tasks = { [tasksUrl]: snapshotFromHtml(tasksUrl, "Tasks", '<main><div class="alert alert-info" role="status">No tasks</div></main>', "Tasks") };
 
 it("unknown child listings mark search, calendar and news as incomplete", async () => {
   const origin = "https://adam.unibas.ch";
@@ -11,7 +16,7 @@ it("unknown child listings mark search, calendar and news as incomplete", async 
     '<main><a href="/go/crs/100001">Synthetic course</a><a href="/logout.php">Abmelden</a></main>', "Dashboard Synthetic course Abmelden");
   const blank = { ...snapshotFromHtml(course, "Synthetic course", '<main><h1>Synthetic course</h1><div id="il_center_col"></div></main>', "Synthetic course"),
     dom: { itemRows: 0, emptyCopy: false, contentBlank: true } };
-  const provider = createBrowserProvider({ origin, session: createMemorySession({ [origin]: home, [course]: blank }) });
+  const provider = createBrowserProvider({ origin, session: createMemorySession({ [origin]: home, [course]: blank, ...tasks }) });
   for (const result of [await provider.search("missing"), await provider.listCalendar(), await provider.listNews()]) {
     assert.equal(result.partial, true);
     assert.equal(result.skipped, 1);
@@ -25,6 +30,7 @@ it("distinguishes unresolved folder errors from genuinely unreadable walk pages"
   const pages = {
     [origin]: snapshotFromHtml(`${origin}/ilias.php?baseClass=ilDashboardGUI`, "Dashboard", '<main><a href="/go/crs/100001">Synthetic course</a></main>', "Dashboard"),
     [course]: snapshotFromHtml(course, "Course", '<main><a href="/go/fold/100010">Notes</a><a href="/go/fold/100020">Unreadable</a></main>', "Notes Unreadable"),
+    ...tasks,
   };
   const provider = createBrowserProvider({ session: createMemorySession(pages, { openError: (url) => url === folder ? new FolderListingError("Synthetic unresolved folder") : undefined }) });
   for (const result of [await provider.search("missing"), await provider.listCalendar(), await provider.listNews()]) {
@@ -41,6 +47,7 @@ it("an unknown nested folder marks aggregation incomplete and is retried rather 
     [origin]: snapshotFromHtml(`${origin}/ilias.php?baseClass=ilDashboardGUI`, "Dashboard", '<main><a href="/go/crs/100001">Synthetic course</a></main>', "Dashboard Synthetic course Abmelden"),
     [course]: snapshotFromHtml(course, "Synthetic course", '<main><h1>Synthetic course</h1><a href="/go/fold/100010">Notes</a></main>', "Synthetic course Notes"),
     [folder]: { ...snapshotFromHtml(folder, "Notes", '<main><h1>Notes</h1></main>', "Notes"), dom: { itemRows: 0, emptyCopy: false, contentBlank: true } },
+    ...tasks,
   };
   const provider = createBrowserProvider({ origin, session: createMemorySession(pages, { onOpen: (url) => { if (url === folder) folderOpens++; } }) });
   for (const result of [await provider.listCalendar(), await provider.listNews(), await provider.search("missing")]) {

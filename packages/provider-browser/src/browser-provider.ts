@@ -42,6 +42,8 @@ import {
   extractCatalog,
   exerciseDeadlineFromPage,
   classifyListing,
+  DERIVED_TASKS_PATH,
+  derivedTasksEvents,
   listingItemsOrEmpty,
   isAdamFailurePage,
   isAdamPermissionPage,
@@ -153,6 +155,8 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly ownedPages = new Set<SharedOperation<PageSnapshot>>();
   /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
   private walkGeneration = 0;
+  /** ADR 0056: Tasks page memo; same 60s / generation lifetime as the walk memo. */
+  private derivedTasksMemo: { events: CalendarEvent[]; fetchedAt: number; generation: number } | undefined;
   /**
    * Typed same-ref page opens for this generation. get_course, list_children, and list_files
    * often ask for the same URL; reuse the snapshot instead of navigating again.
@@ -715,8 +719,15 @@ export class BrowserAdamProvider implements AdamProvider {
     const key = `calendar:${options?.from ?? ""}:${options?.to ?? ""}:course=${options?.courseRefId ?? ""}`;
     const continuation = this.pagination.continue<CalendarEvent>(key, options);
     if (continuation) return continuation;
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
+    const walked = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
     const events: CalendarEvent[] = [];
+    // ADR 0056: unscoped calendars also read the full Tasks page (one extra page).
+    let walk = walked;
+    if (!options?.courseRefId) {
+      const tasks = await this.derivedTasks(options?.signal);
+      if (tasks) events.push(...tasks);
+      else walk = withExtraPartial(walked, "unreadable_page");
+    }
     for (const page of walk.pages) {
       const { catalog } = page;
       const provenance = catalog.current?.provenance ?? {
@@ -797,6 +808,33 @@ export class BrowserAdamProvider implements AdamProvider {
       return Number.isFinite(stamp) ? stamp >= since : options?.since === undefined;
     });
     return withWalkState(this.pagination.first(key, filtered, options, walkMetadata(walk)), walk);
+  }
+
+  /**
+   * ADR 0056: ADAM's full Derived Tasks list. `undefined` when the page could not be
+   * read or recognised — the caller marks the calendar partial rather than "no tasks".
+   * Cancel / auth / permission / stale identity still surface (ADR 0015 / 0016).
+   */
+  private async derivedTasks(signal?: AbortSignal): Promise<CalendarEvent[] | undefined> {
+    const generation = this.walkGeneration;
+    const memo = this.derivedTasksMemo;
+    if (memo && memo.generation === generation && this.clock() - memo.fetchedAt < 60_000) return memo.events;
+    try {
+      const snapshot = await this.openAuthorized(`${this.origin.replace(/\/$/, "")}${DERIVED_TASKS_PATH}`, signal);
+      const fetchedAt = this.fetchedAt(snapshot);
+      const events = derivedTasksEvents(snapshot, {
+        sourceUrl: snapshot.url,
+        fetchedAt,
+        provider: "browser",
+        freshness: "live-browser-session",
+      });
+      if (events && this.cachesCurrent(generation)) this.derivedTasksMemo = { events, fetchedAt: this.clock(), generation };
+      return events;
+    } catch (error) {
+      if (error instanceof AdamError && ["cancelled", "unauthorized", "forbidden", "stale_id"].includes(error.code)) throw error;
+      throwIfAborted(signal);
+      return undefined;
+    }
   }
 
   private async collectLivePages(
@@ -1234,6 +1272,16 @@ export class BrowserAdamProvider implements AdamProvider {
 
 export function createBrowserProvider(options?: BrowserProviderOptions): BrowserAdamProvider {
   return new BrowserAdamProvider(options);
+}
+
+/** ADR 0056: one more unread page on top of the walk's own state. */
+function withExtraPartial(walk: WalkResult, reason: "unreadable_page" | "unknown_listing"): WalkResult {
+  return {
+    ...walk,
+    partial: true,
+    skipped: walk.skipped + 1,
+    partialReasons: [...new Set([...(walk.partialReasons ?? []), reason])],
+  };
 }
 
 function now(): string {

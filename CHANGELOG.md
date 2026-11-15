@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- An unscoped `adam_list_calendar` also reads ADAM’s full Tasks page, so every
+  listed task deadline appears, not just the Dashboard block’s first page. An
+  unreadable Tasks page marks the calendar partial (#132, ADR 0056).
 - `adam_get_exercise` returns one unit per assignment with deadline, requirement,
   submission type and own status, and an optional `view` (ongoing, upcoming,
   past, all) through the overview's advertised routes (#120, #129, ADR 0052).

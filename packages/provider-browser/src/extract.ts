@@ -14,7 +14,7 @@ import {
   type RefId,
 } from "adam-core";
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
-import { extractIdBlocks, parseUiItems } from "./ui-items.ts";
+import { extractClassBlocksAt, extractIdBlocks, parseUiItems } from "./ui-items.ts";
 import { parseFileRows } from "./file-rows.ts";
 import { parseExerciseUnits } from "./exercise-parse.ts";
 export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
@@ -472,6 +472,52 @@ export function dashboardCalendarEvents(html: string, provenance: Provenance): C
           provenance: { ...provenance, sourceUrl: kind === "task" ? url : provenance.sourceUrl },
         });
       }
+    }
+  }
+  return events;
+}
+
+/** ADR 0056: the main-bar Tasks route (ilDerivedTasksGUI). A plain GET view; it renders no forms. */
+export const DERIVED_TASKS_PATH = "/ilias.php?baseClass=ilderivedtasksgui";
+
+/** Deadline property labels on the Tasks page (ILIAS 10.12 en/de). */
+const TASK_END_LABELS = new Set(["end", "ende"]);
+
+/**
+ * ADR 0056: the full Derived Tasks page behind the Dashboard `block_pdtasks`
+ * block. One KS listing panel (`il-panel-listing-std-container`) of UI items
+ * with `Exercise` / `End` properties; `End` is the deadline and the item link
+ * `/go/exc/{ref}/{assignment}` binds the exercise. Returns `undefined` when the
+ * page is not recognisably the Tasks view (so the caller can mark the result
+ * partial instead of reporting "no tasks"); an explicit empty panel or an
+ * info message box with no items is a verified empty list.
+ */
+export function derivedTasksEvents(snapshot: Pick<PageSnapshot, "url" | "html">, provenance: Provenance): CalendarEvent[] | undefined {
+  const html = snapshot.html ?? "";
+  if (!/ilderivedtasksgui/i.test(decodeAdamHref(snapshot.url))) return undefined;
+  const panels = extractClassBlocksAt(html, "il-panel-listing-std-container");
+  if (panels.length === 0) {
+    return /\balert-info\b|\bc-message-box\b|\bil-message-box\b/i.test(html) ? [] : undefined;
+  }
+  const now = new Date(provenance.fetchedAt || Date.now());
+  const events: CalendarEvent[] = [];
+  for (const { block } of panels) {
+    for (const item of parseUiItems(block)) {
+      const end = item.properties.find((property) => TASK_END_LABELS.has(property.name.toLowerCase()))?.value;
+      const startsAt = end ? parseAdamTimestamp(end, now) : undefined;
+      if (!item.title || !startsAt) continue;
+      const target = item.href ? parseAdamRef(decodeAdamHref(new URL(item.href, "https://adam.unibas.ch").href)) : undefined;
+      const typed = target && target.type !== "unknown" ? target : undefined;
+      const url = typed ? canonicalUrl(typed.type, typed.refId) : provenance.sourceUrl;
+      events.push({
+        title: item.title,
+        startsAt,
+        source: "calendar",
+        confidence: "explicit",
+        ...(typed ? { objectRefId: typed.refId } : {}),
+        url,
+        provenance: { ...provenance, sourceUrl: url },
+      });
     }
   }
   return events;

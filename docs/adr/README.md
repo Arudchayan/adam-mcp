@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0056](0056-derived-tasks-and-private-notes.md) | Full Derived Tasks page in the calendar; Private Notes deferred |
 | [0052](0052-exercise-assignment-views.md) | Exercise assignment views (Ongoing / Upcoming / Past / All) |
 | [0051](0051-dashboard-tasks-and-calendar.md) | Dashboard Tasks and Calendar blocks as calendar sources |
 | [0050](0050-structurally-empty-folders.md) | Structurally empty folders |
