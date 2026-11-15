@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,7 @@ import type { SnapshotLink } from "./session-types.ts";
 
 const srcDir = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(srcDir, "../fixtures/live");
+const evidenceDir = resolve(srcDir, "../fixtures/evidence");
 const captureScriptPath = resolve(srcDir, "../../../scripts/capture-fixtures.mjs");
 const debugCapturePath = join(srcDir, "debug-capture.ts");
 const origin = "https://adam.unibas.ch";
@@ -63,14 +64,17 @@ const digitBoundary = (id: string): RegExp => new RegExp(`(?<!\\d)${id}(?!\\d)`)
 /** Strip class tokens containing "toggle" (il-toggle-switch, dropdown-toggle, …). */
 const stripToggleTokens = (raw: string): string => raw.replace(/[A-Za-z-]*toggle[A-Za-z-]*/g, "");
 
-function loadFixtures(): Array<{ file: string; raw: string; doc: FixtureDoc }> {
-  return readdirSync(fixturesDir)
+const corpusFile = (file: string) => EXPECTED_FILES.includes(file);
+
+/** Replay corpus plus on-demand `--target` evidence: both go through every privacy audit. */
+function loadFixtures(): Array<{ file: string; raw: string; doc: FixtureDoc; corpus: boolean }> {
+  return [fixturesDir, evidenceDir].filter((dir) => existsSync(dir)).flatMap((dir) => readdirSync(dir)
     .filter((file) => file.endsWith(".json"))
     .sort()
     .map((file) => {
-      const raw = readFileSync(join(fixturesDir, file), "utf8");
-      return { file, raw, doc: JSON.parse(raw) as FixtureDoc };
-    });
+      const raw = readFileSync(join(dir, file), "utf8");
+      return { file, raw, doc: JSON.parse(raw) as FixtureDoc, corpus: dir === fixturesDir };
+    }));
 }
 
 function textNodes(html: string): string[] {
@@ -98,7 +102,7 @@ describe("R8 inventory: exact committed scrubbed corpus", () => {
 
   it("ships only non-empty JSON fixtures with the required keys", () => {
     const entries = loadFixtures();
-    assert.equal(entries.length, 5);
+    assert.equal(entries.filter((entry) => entry.corpus).length, 5, "replay corpus size");
     for (const { file, raw, doc } of entries) {
       assert.ok(raw.length > 1000, `${file} is unexpectedly small`);
       assert.deepEqual(Object.keys(doc).sort(), [
@@ -141,7 +145,8 @@ describe("R8 real-ID digit-boundary ban", () => {
       if (doc.kind === "dashboard") {
         assert.ok(doc.url.startsWith(`${origin}/ilias.php`), file);
       } else {
-        assert.match(doc.url, /^https:\/\/adam\.unibas\.ch\/go\/(crs|fold)\/900\d+$/, file);
+        // Corpus pages are courses/folders; evidence captures may be any remapped /go/ type.
+        assert.match(doc.url, corpusFile(file) ? /^https:\/\/adam\.unibas\.ch\/go\/(crs|fold)\/900\d+$/ : /^https:\/\/adam\.unibas\.ch\/go\/[a-z]+\/900\d+$/, file);
       }
     }
   });
@@ -177,6 +182,7 @@ describe("R8 html text-node and attribute allowlists", () => {
       "Communication",
       "ADAMtools",
       "Content",
+      "Inhalt",
       "Info",
     ]);
     for (const { file, doc } of loadFixtures()) {
@@ -285,7 +291,8 @@ describe("R8 capturedAt and dom probe", () => {
       if (doc.kind === "blank-fold" || doc.kind === "blank-course") {
         assert.equal(doc.dom.contentBlank, true, file);
         assert.equal(doc.dom.itemRows, 0, file);
-      } else {
+      } else if (corpusFile(file)) {
+        // Row expectations describe the replay corpus kinds only; evidence pages vary.
         assert.ok(doc.dom.itemRows >= 1, `${file} expected content rows`);
       }
     }
@@ -448,7 +455,7 @@ describe("H3 capture targets and corpus parity", () => {
   it("pins the exact 5 capture targets against the pinned origin", () => {
     const script = readFileSync(captureScriptPath, "utf8");
     assert.ok(script.includes('const origin = "https://adam.unibas.ch"'), "origin drift");
-    const block = script.match(/const targets = \[([\s\S]*?)\];/)?.[1];
+    const block = script.match(/const defaultTargets = \[([\s\S]*?)\];/)?.[1];
     assert.ok(block, "targets block missing");
     const names = [...block.matchAll(/name:\s*"([^"]+)"/g)].map((match) => match[1] ?? "");
     assert.deepEqual(names, EXPECTED_TARGETS);
@@ -457,7 +464,7 @@ describe("H3 capture targets and corpus parity", () => {
 
   it("matches the committed corpus file-for-file with kind parity", () => {
     const script = readFileSync(captureScriptPath, "utf8");
-    const block = script.match(/const targets = \[([\s\S]*?)\];/)?.[1];
+    const block = script.match(/const defaultTargets = \[([\s\S]*?)\];/)?.[1];
     assert.ok(block, "targets block missing");
     const names = [...block.matchAll(/name:\s*"([^"]+)"/g)].map((match) => match[1] ?? "").sort();
     const files = readdirSync(fixturesDir)
@@ -465,7 +472,7 @@ describe("H3 capture targets and corpus parity", () => {
       .map((file) => file.replace(/\.json$/, ""))
       .sort();
     assert.deepEqual(files, names, "corpus drifted from capture targets");
-    for (const { file, doc } of loadFixtures()) {
+    for (const { file, doc } of loadFixtures().filter((fixture) => fixture.corpus)) {
       const stem = file.replace(/\.json$/, "");
       assert.equal(doc.name, stem, file);
       assert.equal(doc.kind, EXPECTED_KINDS[stem], `${file} kind drift`);
