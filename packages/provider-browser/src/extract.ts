@@ -5,6 +5,7 @@ import {
   type AdamObject,
   type AdamObjectType,
   type Breadcrumb,
+  type CalendarEvent,
   type FileObject,
   type ExerciseUnit,
   type InferredDate,
@@ -55,6 +56,8 @@ export type ExtractedCatalog = {
   inferredDates: InferredDate[];
   /** Parsed assignments when the current page is an exercise overview (#119/#120). */
   exerciseUnits?: ExerciseUnit[];
+  /** Dashboard Tasks / Calendar block items (#132), source:calendar. */
+  calendarEvents: CalendarEvent[];
   /** #119: listing-row timestamps that belong to a file (its last change), not calendar dates. */
   fileRowDates: Array<{ refId: RefId; raw: string; iso: string }>;
   iliasVersion?: string;
@@ -172,6 +175,7 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     objects,
     files,
     news: extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs),
+    calendarEvents: dashboardCalendarEvents(snapshot.html ?? "", provenanceBase(snapshot.url)),
     inferredDates: withoutFileRowDates(inferDates(text), text, fileRowDates),
     ...(current?.type === "exc" ? exerciseUnitsField(snapshot.html ?? "", text, fetchedAt) : {}),
     fileRowDates,
@@ -439,6 +443,38 @@ function pollTitleBefore(html: string, index: number, refId: RefId): string {
     .filter((entry) => entry.text && !isPollActionLabel(entry.text) && !shouldSkipTitle(entry.text))
     .sort((a, b) => a.at - b.at);
   return titles.at(-1)?.text ?? `Poll ${refId}`;
+}
+
+/**
+ * #119/#132: the Dashboard's own Tasks and Calendar ("Upcoming Events") blocks.
+ * Tasks items link `/go/exc/{ref}/{assignment}` with the deadline in the item
+ * description; calendar items carry their start in the description. Only items
+ * whose time parses are returned; nothing is inferred.
+ */
+export function dashboardCalendarEvents(html: string, provenance: Provenance): CalendarEvent[] {
+  const now = new Date(provenance.fetchedAt || Date.now());
+  const events: CalendarEvent[] = [];
+  for (const [pattern, kind] of [[/^block_pdtasks_\d+$/, "task"], [/^block_pdcal_\d+$/, "event"]] as const) {
+    for (const block of extractIdBlocks(html, pattern)) {
+      for (const item of parseUiItems(block)) {
+        const startsAt = item.description ? parseAdamTimestamp(item.description, now) : undefined;
+        if (!item.title || !startsAt) continue;
+        const target = item.href ? parseAdamRef(decodeAdamHref(new URL(item.href, "https://adam.unibas.ch").href)) : undefined;
+        const typed = target && target.type !== "unknown" ? target : undefined;
+        const url = typed ? canonicalUrl(typed.type, typed.refId) : provenance.sourceUrl;
+        events.push({
+          title: item.title,
+          startsAt,
+          source: "calendar",
+          confidence: "explicit",
+          ...(typed ? { objectRefId: typed.refId } : {}),
+          url,
+          provenance: { ...provenance, sourceUrl: kind === "task" ? url : provenance.sourceUrl },
+        });
+      }
+    }
+  }
+  return events;
 }
 
 function exerciseUnitsField(html: string, text: string, fetchedAt: string): { exerciseUnits?: ExerciseUnit[] } {

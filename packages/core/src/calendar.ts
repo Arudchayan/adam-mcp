@@ -25,8 +25,12 @@ export function calendarEventDay(startsAt: string | undefined): string | undefin
  */
 export function calendarEventDedupeKey(event: CalendarEvent): string {
   const day = calendarEventDay(event.startsAt);
+  // Without an object, the day alone would merge unrelated Dashboard events (#132).
+  if (day && event.objectRefId) {
+    return `${event.objectRefId}|${day}`;
+  }
   if (day) {
-    return `${event.objectRefId ?? ""}|${day}`;
+    return `|${day}|${event.title}`;
   }
   return `${event.objectRefId ?? ""}||${event.title}`;
 }
@@ -50,6 +54,21 @@ export function preferCalendarEvents(events: CalendarEvent[]): CalendarEvent[] {
       ...winner,
       seenIn: [...new Set([...(prev.seenIn ?? [prev.source]), ...(event.seenIn ?? [event.source]), event.source])],
     });
+  }
+  // #132: a Dashboard event without an object is the same event as an object
+  // event with the identical title on the same day ("Sheet 3 (Deadline)").
+  const byTitle = new Map<string, string>();
+  for (const [key, event] of best) {
+    const day = calendarEventDay(event.startsAt);
+    if (event.objectRefId && day) byTitle.set(`${day}|${event.title}`, key);
+  }
+  for (const [key, event] of [...best]) {
+    const day = calendarEventDay(event.startsAt);
+    const target = !event.objectRefId && day ? byTitle.get(`${day}|${event.title}`) : undefined;
+    const kept = target ? best.get(target) : undefined;
+    if (!target || !kept) continue;
+    best.set(target, { ...kept, seenIn: [...new Set([...(kept.seenIn ?? [kept.source]), ...(event.seenIn ?? [event.source])])] });
+    best.delete(key);
   }
   return [...best.values()];
 }
