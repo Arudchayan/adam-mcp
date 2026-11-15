@@ -21,6 +21,10 @@ import {
   type FileExtract,
   type FileObject,
   type ListOptions,
+  type MailHeader,
+  type MailListOptions,
+  type MailMessage,
+  type MailReadOptions,
   type NewsItem,
   type ObjectOpenOptions,
   type PageContent,
@@ -53,6 +57,7 @@ import {
   isLoginSnapshot,
   type ExtractedCatalog,
 } from "./extract.ts";
+import { isMailGuiUrl, landedMailIds, MAILBOX_URL, parseMailbox, parseMailMessage, showMailUrl } from "./mail-parse.ts";
 import { pageHeading, parseForumPage, resolveForumThreadUrl, threadIdFromHref } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
@@ -885,6 +890,79 @@ export class BrowserAdamProvider implements AdamProvider {
       return Number.isFinite(stamp) ? stamp >= since : options?.since === undefined;
     });
     return withWalkState(this.pagination.first(key, filtered, options, walkMetadata(walk)), walk);
+  }
+
+  /**
+   * ADR 0054: headers of the inbox ADAM opens (first page of its KS data table).
+   * Only the fixed mailbox landing route is requested; table actions are never followed.
+   */
+  async listMail(options?: MailListOptions): Promise<Paginated<MailHeader>> {
+    throwIfCancelled(options?.signal);
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    await this.assertSessionEnabled(options?.signal);
+    const key = "mail:inbox";
+    if (!options?.refresh) {
+      const continuation = this.pagination.continue<MailHeader>(key, options);
+      if (continuation) return continuation;
+    }
+    const snapshot = await this.openMailbox(options?.signal);
+    const fetchedAt = this.fetchedAt(snapshot);
+    const parsed = parseMailbox(snapshot.html ?? "");
+    const provenance = { sourceUrl: MAILBOX_URL, fetchedAt, provider: "browser" as const, freshness: "live-browser-session" };
+    // Only ids are kept from row links; the executeTableAction href and its rtoken are dropped.
+    const items: MailHeader[] = parsed.rows.map((row) => ({ ...row, provenance }));
+    const notices: string[] = [];
+    if (!parsed.tableFound) notices.push("ADAM's mailbox page showed no recognisable message table; this is not proof the inbox is empty.");
+    if (parsed.skippedRows > 0) notices.push(`${parsed.skippedRows} row(s) had no readable message link and were left out.`);
+    if (parsed.reportedTotal !== undefined && parsed.reportedTotal > parsed.rows.length) {
+      notices.push(`ADAM reports ${parsed.reportedTotal} messages; only the first page ADAM shows (${parsed.rows.length}) is listed.`);
+    }
+    const listingState = !parsed.tableFound || (items.length === 0 && parsed.skippedRows > 0) ? "unknown" : items.length === 0 ? "empty" : "ok";
+    return this.pagination.first(key, items, options, {
+      listingState,
+      ...(notices.length > 0 ? { notice: notices.join(" ") } : {}),
+    });
+  }
+
+  /**
+   * ADR 0054: open one message through the plain showMail route built from the
+   * two validated ids of a listed row (ADR 0026 precedent). ILIAS marks the
+   * message read when it is opened, exactly as a browser visit would; nothing
+   * tries to restore the unread flag (that would be a write).
+   */
+  async readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage> {
+    throwIfCancelled(options?.signal);
+    // Validate before any authenticated navigation.
+    const url = showMailUrl(this.origin, folderId, mailId);
+    await this.assertSessionEnabled(options?.signal);
+    const snapshot = await this.openAuthorized(url, options?.signal);
+    const landed = landedMailIds(snapshot.url);
+    if (!landed) {
+      throw new AdamError("not_found", `ADAM did not open mail ${mailId}; it may have been moved or deleted. Refresh adam_list_mail.`, false);
+    }
+    if (landed.mailId !== mailId || landed.folderId !== folderId) {
+      throw new AdamError("stale_id", `ADAM opened a different message than mail ${mailId}. Refresh adam_list_mail and retry.`, false);
+    }
+    const message = parseMailMessage(snapshot.html ?? "");
+    if (!message) {
+      throw new AdamError("not_found", `No recognisable message body for mail ${mailId}; refusing to invent one.`, false);
+    }
+    const { subject, ...rest } = message;
+    return {
+      mailId,
+      folderId,
+      subject: subject ?? "(no subject)",
+      ...rest,
+      provenance: { sourceUrl: MAILBOX_URL, fetchedAt: this.fetchedAt(snapshot), provider: "browser", freshness: "live-browser-session" },
+    };
+  }
+
+  private async openMailbox(signal?: AbortSignal): Promise<PageSnapshot> {
+    const snapshot = await this.openAuthorized(MAILBOX_URL, signal);
+    if (!isMailGuiUrl(snapshot.url)) {
+      throw new AdamError("provider_unavailable", "ADAM did not open the mailbox. Open Mail in ADAM once, then retry.", false);
+    }
+    return snapshot;
   }
 
   /**

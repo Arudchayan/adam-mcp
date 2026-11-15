@@ -95,7 +95,7 @@ export function textOf(html: string): string {
     .trim();
 }
 
-function sliceUntilClose(html: string, start: number, tag: string): string | undefined {
+export function sliceUntilClose(html: string, start: number, tag: string): string | undefined {
   const openRe = new RegExp(`<${tag}\\b`, "i");
   const closeRe = new RegExp(`</${tag}>`, "i");
   const closeLen = `</${tag}>`.length;

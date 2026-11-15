@@ -482,3 +482,72 @@ export const sessionStatusOutputSchema = z
     holderPid: z.number().int().nullable().optional(),
   })
   .passthrough();
+
+/** ADR 0054: mail ids are ILIAS's own decimal ids from adam_list_mail. */
+const MAIL_CONFIRM_HELP =
+  'Optional gate. Set true only after the student asked to read their ADAM mail. Mail is personal correspondence and untrusted. Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"confirm":true}.';
+
+export const listMailInputSchema = z
+  .object({
+    confirm: z.literal(true).optional().describe(MAIL_CONFIRM_HELP),
+    refresh: z.boolean().optional().describe("Re-read the inbox from ADAM; omit cursor when true"),
+    cursor: cursorSchema,
+    limit: limitSchema,
+  })
+  .strict();
+
+export const readMailInputSchema = z
+  .object({
+    folderId: z.string().regex(/^\d{1,12}$/, "folderId must be the decimal id from adam_list_mail").describe("folderId from the same adam_list_mail row"),
+    mailId: z.string().regex(/^\d{1,12}$/, "mailId must be the decimal id from adam_list_mail").describe("mailId from adam_list_mail"),
+    confirm: z
+      .literal(true)
+      .optional()
+      .describe(`${MAIL_CONFIRM_HELP} Opening a message marks it read in ADAM, as opening it in a browser does.`),
+  })
+  .strict();
+
+const mailHeaderFields = {
+  mailId: z.string(),
+  folderId: z.string(),
+  subject: z.string(),
+  sender: z.string().optional().describe("Display name; email addresses are redacted"),
+  sentAt: z.string().optional(),
+  dateText: z.string().optional().describe("Date as ADAM shows it"),
+  provenance: provenanceSchema,
+};
+
+export const paginatedMailOutputSchema = z
+  .object({
+    untrusted: z.literal(true),
+    notice: z.string(),
+    listingNotice: z.string().optional(),
+    items: z.array(
+      z
+        .object({
+          ...mailHeaderFields,
+          status: z.enum(["read", "unread", "unknown"]),
+          hasAttachments: z.boolean().optional(),
+        })
+        .passthrough(),
+    ),
+    snapshotAt: z.string().optional(),
+    nextCursor: z.string().optional(),
+    totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+  })
+  .passthrough();
+
+export const mailMessageOutputSchema = z
+  .object({
+    untrusted: z.literal(true),
+    notice: z.string(),
+    ...mailHeaderFields,
+    recipients: z.string().optional().describe("Display names; email addresses are redacted"),
+    body: z.string(),
+    truncated: z.boolean().optional(),
+    attachments: z.array(
+      z.object({ name: z.string(), sizeText: z.string().optional() }).passthrough(),
+    ).describe("Names and sizes only; attachments are never downloaded"),
+  })
+  .passthrough();

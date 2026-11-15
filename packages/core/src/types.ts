@@ -198,6 +198,46 @@ export type NewsItem = {
   provenance: Provenance;
 };
 
+/**
+ * ADR 0054: one row of the ADAM internal mailbox (ilMailFolderGUI). Header
+ * fields only — never the message body. Sender is a display name with any
+ * email address redacted. `mailId` / `folderId` are ILIAS's own numeric ids.
+ */
+export type MailHeader = {
+  mailId: string;
+  folderId: string;
+  subject: string;
+  sender?: string;
+  /** ISO timestamp when ADAM's date cell parses; raw text kept in dateText. */
+  sentAt?: string;
+  dateText?: string;
+  /** As the row's status icon says; "unknown" when the row does not say. */
+  status: "read" | "unread" | "unknown";
+  hasAttachments?: boolean;
+  provenance: Provenance;
+};
+
+export type MailAttachment = {
+  name: string;
+  /** As ADAM labels it ("12 KB"); never downloaded. */
+  sizeText?: string;
+};
+
+/** ADR 0054: one opened message. Body is untrusted text; attachments are names only. */
+export type MailMessage = Omit<MailHeader, "status" | "hasAttachments"> & {
+  body: string;
+  recipients?: string;
+  attachments: MailAttachment[];
+  truncated?: boolean;
+};
+
+/** ADR 0054: the inbox ADAM opens (first page of its table); no folder switching in this slice. */
+export type MailListOptions = Pick<ListOptions, "cursor" | "limit" | "refresh" | "signal">;
+
+export type MailReadOptions = {
+  signal?: AbortSignal;
+};
+
 export type CalendarEvent = {
   title: string;
   startsAt?: string;

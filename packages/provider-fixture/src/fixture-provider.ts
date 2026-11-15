@@ -18,6 +18,10 @@ import {
   type FileExtract,
   type FileObject,
   type ListOptions,
+  type MailHeader,
+  type MailListOptions,
+  type MailMessage,
+  type MailReadOptions,
   type NewsItem,
   type PageContent,
   type Paginated,
@@ -31,6 +35,7 @@ import {
   fixtureNews,
   newsEnabledCourseIds,
   fixtureForumPostsByThread,
+  fixtureMail,
 } from "./catalog.ts";
 // forum posts map imported below with catalog symbols
 import { LongWalkStub } from "./long-walk.ts";
@@ -86,6 +91,8 @@ function resolveChildren(refId: RefId, type?: AdamObject["type"]): AdamObject[] 
 
 export class FixtureAdamProvider implements AdamProvider {
   readonly id = "fixture" as const;
+  /** ADR 0054: messages opened through readMail (ADAM marks them read on open). */
+  private readonly openedMail = new Set<string>();
 
   async listCourses(options?: ListOptions): Promise<Paginated<AdamObject>> {
     throwIfCancelled(options?.signal);
@@ -314,6 +321,28 @@ export class FixtureAdamProvider implements AdamProvider {
       return Number.isFinite(stamp) ? stamp >= since : options?.since === undefined;
     });
     return paginate(items, options);
+  }
+
+  async listMail(options?: MailListOptions): Promise<Paginated<MailHeader>> {
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    throwIfCancelled(options?.signal);
+    const items = fixtureMail.map(({ header }) =>
+      this.openedMail.has(header.mailId) ? { ...header, status: "read" as const } : header,
+    );
+    return withListingState(paginate(items, options), items.length > 0 ? "ok" : "empty");
+  }
+
+  async readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage> {
+    throwIfCancelled(options?.signal);
+    if (!/^\d{1,12}$/.test(folderId) || !/^\d{1,12}$/.test(mailId)) {
+      throw new AdamError("stale_id", "folderId and mailId must be the decimal ids from adam_list_mail.", false);
+    }
+    const entry = fixtureMail.find(({ header }) => header.mailId === mailId && header.folderId === folderId);
+    if (!entry) {
+      throw new AdamError("not_found", `ADAM did not open mail ${mailId}; it may have been moved or deleted. Refresh adam_list_mail.`, false);
+    }
+    this.openedMail.add(mailId);
+    return entry.message;
   }
 }
 
