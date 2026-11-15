@@ -110,12 +110,14 @@ describe("enrolled walk open bound", () => {
       "https://adam.unibas.ch/go/fold/100010",
       "https://adam.unibas.ch/go/fold/100020",
       "https://adam.unibas.ch/go/exc/100021",
+      // ADR 0056: one extra page — the full Tasks list — for an unscoped calendar.
+      "https://adam.unibas.ch/ilias.php?baseClass=ilderivedtasksgui",
     ]);
     assert.equal(calendar.items.some((item) => item.source === "exc"), true);
 
     const found = await provider.search("Overview");
     await provider.listNews();
-    assert.equal(opens.length, 5, "search and news must reuse the walk memo");
+    assert.equal(opens.length, 6, "search and news must reuse the walk memo");
     assert.equal(
       found.items.some((item) => item.type === "file" && item.refId === "100011"),
       true,
@@ -160,6 +162,6 @@ describe("enrolled walk open bound", () => {
     const [calendar, found] = await Promise.all([provider.listCalendar(), provider.search("Overview")]);
     assert.equal(calendar.items.some((item) => item.source === "exc"), true);
     assert.ok(found.items.some((item) => item.refId === "100011"));
-    assert.equal(opens.length, 5, "one shared walk");
+    assert.equal(opens.filter((url) => url.includes("/go/")).length, 4, "one shared walk");
   });
 });

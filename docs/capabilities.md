@@ -76,7 +76,9 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049; **live-seen** 2026-11-15 (6 categories, `ok`) |
 | `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | news sideblock | What changed | yes | **live-seen** 2026-11-15 (`block_news_{id}` UI items, #141) |
-| calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); exc deadlines; file-row dates excluded; full `ilCalendarPresentationGUI` not read |
+| calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); full Tasks page on unscoped calendars (ADR 0056, live verification pending); exc deadlines; file-row dates excluded; calendar views and iCal feeds not read (write routes / tokens) |
+| Private Notes / Comments | Personal notes | deferred | ADR 0056 — main-bar route seen, 0 notes on the probed account, so item markup is unverified; would be confirm-gated; never `exportNotesHTML` / `setSortation` |
+| Learning Progress / Personal Workspace | Progress, own files | unavailable | ADR 0056 — not offered to students on ADAM |
 | mail | Messaging | out | skip |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
