@@ -1275,16 +1275,23 @@ export function dateContext(text: string, raw: string): string {
   return context.length > raw.length ? context : raw;
 }
 
-function uniqueNews(items: NewsItem[]): NewsItem[] {
-  const seen = new Set<string>();
+/**
+ * One row per news. ADR 0055: the Dashboard and a course block can show the same
+ * news_id; keep the row that names its course (the Dashboard copy names none), in
+ * the position the news was first seen.
+ */
+export function uniqueNews(items: NewsItem[]): NewsItem[] {
+  const seen = new Map<string, number>();
   const unique: NewsItem[] = [];
   for (const item of items) {
-    const key = `${item.url}\n${item.title}\n${item.updatedAt ?? item.createdAt ?? ""}`;
-    if (seen.has(key)) {
-      continue;
+    const key = item.newsId ? `news:${item.newsId}` : `${item.url}\n${item.title}\n${item.updatedAt ?? item.createdAt ?? ""}`;
+    const at = seen.get(key);
+    if (at === undefined) {
+      seen.set(key, unique.length);
+      unique.push(item);
+    } else if (!unique[at]!.courseRefId && item.courseRefId) {
+      unique[at] = item;
     }
-    seen.add(key);
-    unique.push(item);
   }
   return unique;
 }

@@ -1,5 +1,6 @@
 import {
   canonicalUrl,
+  DEFAULT_ADAM_ORIGIN,
   objectUrl,
   parseAdamRef,
   type AdamObject,
@@ -270,6 +271,9 @@ function isNewsLabel(text: string): boolean {
   );
 }
 
+/** Stable Dashboard citation for `block_pdnews` items (no session-specific query keys). */
+const DASHBOARD_NEWS_URL = `${DEFAULT_ADAM_ORIGIN}/ilias.php?baseClass=ilDashboardGUI&cmd=jumpToSelectedItems`;
+
 function extractNewsArticles(
   snapshot: PageSnapshot,
   provenance: Provenance,
@@ -288,7 +292,7 @@ function extractNewsArticles(
     _summaryText: string,
     chunkHtml: string,
     chunkHrefs: string[],
-    known: { summary?: string; createdAt?: string; newsId?: string } = {},
+    known: { summary?: string; createdAt?: string; newsId?: string; url?: string } = {},
   ) => {
     const headline = cleanTitle(title);
     if (!headline || isNewsLabel(headline)) {
@@ -298,7 +302,7 @@ function extractNewsArticles(
       chunkHrefs.map((href) => typedAdamRef(href)).find((ref) => ref !== undefined) ?? pageTyped;
     const datetime = known.createdAt ?? chunkHtml.match(/datetime=["']([^"']+)["']/i)?.[1];
     const bodyText = cleanTitle(known.summary ?? stripTags(chunkHtml)) || headline;
-    const url = hrefTyped ? canonicalUrl(hrefTyped.type, hrefTyped.refId) : snapshot.url;
+    const url = known.url ?? (hrefTyped ? canonicalUrl(hrefTyped.type, hrefTyped.refId) : snapshot.url);
     // Distinct ILIAS news can share a title (repeated "File: …" notices): key on news_id when known.
     const key = known.newsId ? `news:${known.newsId}` : `${url}\n${headline}`;
     if (seen.has(key)) {
@@ -315,19 +319,28 @@ function extractNewsArticles(
       updatedAt: datetime,
       accessClass: /authenticated users|registrierte nutzer/i.test(bodyText) ? "Authenticated Users" : undefined,
       author: authorFrom(bodyText),
+      ...(known.newsId ? { newsId: known.newsId } : {}),
       provenance: { ...provenance, sourceUrl: url },
     });
   };
 
   // #118: ILIAS 10.12 course News is a `block_news_{id}` panel of KS UI items
   // (title, description, "Date" property), not <article>s.
-  for (const block of extractIdBlocks(snapshot.html, /^block_news_\d+$/)) {
-    for (const item of parseUiItems(block)) {
+  // ADR 0055: the Dashboard's `block_pdnews_{id}` has the same item shape. Its items
+  // name no course on the page, so they cite the Dashboard and leave courseRefId unset;
+  // listNews prefers a course block's copy of the same news_id. Only page 1 is read:
+  // pagination, "Get Feed URL" and "Settings" controls are never followed.
+  const blocks = [
+    ...extractIdBlocks(snapshot.html, /^block_news_\d+$/).map((html) => ({ html, url: undefined })),
+    ...extractIdBlocks(snapshot.html, /^block_pdnews_\d+$/).map((html) => ({ html, url: DASHBOARD_NEWS_URL })),
+  ];
+  for (const block of blocks) {
+    for (const item of parseUiItems(block.html)) {
       if (!item.title || isNewsLabel(item.title)) continue;
       const date = item.properties.find((property) => /^(?:date|datum)$/i.test(property.name))?.value;
       const createdAt = date ? parseAdamTimestamp(date, new Date(provenance.fetchedAt)) : undefined;
       const newsId = item.href?.match(/[?&]news_id=(\d+)/)?.[1];
-      pushItem(item.title, "", "", [], { summary: item.description ?? item.title, createdAt, newsId });
+      pushItem(item.title, "", "", [], { summary: item.description ?? item.title, createdAt, newsId, url: block.url });
     }
   }
 
