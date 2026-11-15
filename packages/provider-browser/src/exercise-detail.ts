@@ -5,12 +5,15 @@ import { extractClassBlocksAt, textOf } from "./ui-items.ts";
 /** ADR 0053: at most this many assignment detail pages per call. */
 export const EXERCISE_DETAIL_CAP = 20;
 
-const ALLOWED_KEYS = new Set(["baseClass", "cmdNode", "cmdClass", "cmd", "ref_id", "ass_id", "from_overview"]);
+const ALLOWED_KEYS = new Set(["baseClass", "cmdNode", "cmdClass", "cmd", "ref_id", "ass_id", "from_overview", "mode"]);
+/** Overview modes (same values as exercise-views.ts); title links carry one under a non-default view. */
+const MODES = new Set(["ongoing", "future", "past", "all"]);
 
 /**
  * ADR 0053: an overview assignment's own title link to `ilAssignmentPresentationGUI`.
  * Pinned origin, `/ilias.php`, same exercise `ref_id`, a numeric `ass_id`, only
- * allowlisted non-duplicated keys and, when present, a `show…` command. The
+ * allowlisted non-duplicated keys, an overview `mode` when present (ongoing,
+ * future, past, all) and, when present, a `show…` command. The
  * overview's `ilExSubmissionFileGUI` submit screen (and anything else) is rejected.
  */
 export function exerciseAssignmentDetailUrl(href: string | undefined, refId: RefId): string | undefined {
@@ -27,6 +30,7 @@ export function exerciseAssignmentDetailUrl(href: string | undefined, refId: Ref
   if (url.searchParams.has("cmd") && !/^show[a-z]{0,40}$/i.test(param("cmd"))) return undefined;
   if (url.searchParams.has("cmdNode") && !/^[a-z0-9:]{1,40}$/i.test(param("cmdNode"))) return undefined;
   if (url.searchParams.has("from_overview") && !/^\d{1,3}$/.test(param("from_overview"))) return undefined;
+  if (url.searchParams.has("mode") && !MODES.has(param("mode"))) return undefined;
   return url.href;
 }
 

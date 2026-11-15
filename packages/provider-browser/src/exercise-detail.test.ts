@@ -33,6 +33,12 @@ const absolute = (route: string) => new URL(route.replace(/&amp;/g, "&"), origin
 describe("ADR 0053: exercise assignment detail", () => {
   it("accepts only the same-exercise ilAssignmentPresentationGUI route", () => {
     assert.match(exerciseAssignmentDetailUrl(detailRoute("7"), "100021") ?? "", /ass_id=7/);
+    // Live title-link shape: no cmd, two-part cmdNode, mode=all under a non-default view.
+    const live = "/ilias.php?baseClass=ilexercisehandlergui&amp;cmdNode=cs:n12:34&amp;cmdClass=ilAssignmentPresentationGUI&amp;ref_id=100021&amp;from_overview=1&amp;ass_id=7";
+    assert.match(exerciseAssignmentDetailUrl(live, "100021") ?? "", /ass_id=7/);
+    assert.match(exerciseAssignmentDetailUrl(`${live}&amp;mode=all`, "100021") ?? "", /mode=all/);
+    assert.equal(exerciseAssignmentDetailUrl(`${live}&amp;mode=evil`, "100021"), undefined, "unknown mode");
+    assert.equal(exerciseAssignmentDetailUrl(`${live}&amp;mode=all&amp;mode=past`, "100021"), undefined, "duplicate mode");
     for (const href of [
       undefined,
       submitRoute("7"),
