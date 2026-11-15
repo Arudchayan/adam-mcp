@@ -136,6 +136,7 @@ export const getExerciseInputSchema = z
     type: objectTypeHintSchema,
     confirm: confirmExerciseSchema.optional(),
     view: z.enum(["ongoing", "upcoming", "past", "all"]).optional().describe("Assignment bucket from the exercise overview: ongoing (default), upcoming, past or all. Use past/all for submitted or closed assignments."),
+    detail: z.boolean().optional().describe("Also open each listed assignment's own detail page (first 20) for work-instruction text, schedule (deadline, time remaining) and this user's submission state. Slower: one page per assignment. Default false."),
   })
   .superRefine(refineObjectRef)
   .transform(resolveObjectRef);
@@ -341,6 +342,27 @@ export const exerciseOutputSchema = adamObjectOutputSchema.extend({
   units: z.array(
     exerciseUnitMetaSchema.extend({
       instructionText: z.string().optional(),
+      schedule: z
+        .object({
+          deadline: z.string().optional(),
+          deadlineText: z.string().optional().describe("Deadline as ADAM printed it"),
+          timeRemaining: z.string().optional().describe("Raw remaining-time text, e.g. \"Time is up.\""),
+        })
+        .passthrough()
+        .optional()
+        .describe("detail:true only: the assignment page's Schedule card"),
+      submission: z
+        .object({
+          submittedFiles: z.string().optional().describe("ADAM's own text about this user's submitted files"),
+          lastSubmission: z.string().optional(),
+        })
+        .passthrough()
+        .optional()
+        .describe("detail:true only: this user's own submission panel"),
+      detailStatus: z
+        .enum(["read", "no_link", "unrecognized", "not_read"])
+        .optional()
+        .describe("detail:true only: read, no_link (no detail link on the overview), unrecognized (page layout not understood), not_read (over the 20-page cap)"),
     }),
   ),
 });

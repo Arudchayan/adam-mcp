@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0053](0053-exercise-assignment-detail.md) | Exercise assignment detail pages (`detail: true`) |
 | [0052](0052-exercise-assignment-views.md) | Exercise assignment views (Ongoing / Upcoming / Past / All) |
 | [0051](0051-dashboard-tasks-and-calendar.md) | Dashboard Tasks and Calendar blocks as calendar sources |
 | [0050](0050-structurally-empty-folders.md) | Structurally empty folders |

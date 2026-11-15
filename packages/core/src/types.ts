@@ -121,7 +121,29 @@ export type ExerciseUnit = {
   submissionType?: string;
   instructionText?: string;
   ownStatus: ExerciseOwnStatus;
+  /** Detail-page schedule card (ADR 0053, `detail: true`). */
+  schedule?: ExerciseSchedule;
+  /** Detail-page submission panel, this user's own (ADR 0053, `detail: true`). */
+  submission?: ExerciseSubmission;
+  /** Whether the assignment's detail page was read (ADR 0053, only with `detail: true`). */
+  detailStatus?: ExerciseDetailStatus;
 };
+
+export type ExerciseSchedule = {
+  deadline?: string;
+  /** Deadline as ADAM printed it, e.g. "20. Nov 2026, 12:00". */
+  deadlineText?: string;
+  /** Raw remaining-time text, e.g. "5 Days, 12 Minutes" or "Time is up.". */
+  timeRemaining?: string;
+};
+
+export type ExerciseSubmission = {
+  submittedFiles?: string;
+  lastSubmission?: string;
+};
+
+/** read: parsed; no_link: no allowlisted detail link; unrecognized: page had no known panels; not_read: over the per-call cap. */
+export type ExerciseDetailStatus = "read" | "no_link" | "unrecognized" | "not_read";
 
 export type ExerciseObject = AdamObject & {
   type: "exc";

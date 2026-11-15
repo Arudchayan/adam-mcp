@@ -187,7 +187,7 @@ export class FixtureAdamProvider implements AdamProvider {
     return extractLocalFileText(file, OVERVIEW_PDF_BYTES, file.mimeType, options?.maxPages, options?.signal, { startPage: options?.startPage });
   }
 
-  async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseObject> {
+  async getExercise(refId: RefId, options?: { type?: AdamObject["type"]; detail?: boolean; signal?: AbortSignal }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
     const record = requireTypedRecord(refId, options?.type);
     if (record.object.type !== "exc") {
@@ -195,7 +195,17 @@ export class FixtureAdamProvider implements AdamProvider {
     }
     const object = record.object as ExerciseObject;
     if (object.units) {
-      return object;
+      // ADR 0053 parity: synthetic detail fields derived from the unit itself.
+      if (!options?.detail) return object;
+      return {
+        ...object,
+        units: object.units.map((unit) => ({
+          ...unit,
+          ...(unit.deadline ? { schedule: { deadline: unit.deadline } } : {}),
+          ...(unit.ownStatus === "none" ? { submission: { submittedFiles: "You have not submitted any files.", lastSubmission: "No submission yet." } } : {}),
+          detailStatus: "read" as const,
+        })),
+      };
     }
     return {
       ...object,

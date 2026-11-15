@@ -27,7 +27,7 @@ export type AdamProvider = {
     refId: RefId,
     options?: { maxPages?: number; startPage?: number; onProgress?: ProgressReporter } & ObjectOpenOptions,
   ): Promise<FileExtract>;
-  getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: "ongoing" | "upcoming" | "past" | "all" }): Promise<ExerciseObject>;
+  getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: "ongoing" | "upcoming" | "past" | "all"; detail?: boolean }): Promise<ExerciseObject>;
   getForum(
     refId: RefId,
     options?: ObjectOpenOptions & { threadId?: string },
