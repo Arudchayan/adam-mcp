@@ -6,6 +6,7 @@ import {
   type AdamObjectType,
   type Breadcrumb,
   type FileObject,
+  type ExerciseUnit,
   type InferredDate,
   type NewsItem,
   type Provenance,
@@ -14,6 +15,7 @@ import {
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
 import { extractIdBlocks, parseUiItems } from "./ui-items.ts";
 import { parseFileRows } from "./file-rows.ts";
+import { parseExerciseUnits } from "./exercise-parse.ts";
 export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
@@ -49,7 +51,10 @@ export type ExtractedCatalog = {
   objects: AdamObject[];
   files: FileObject[];
   news: NewsItem[];
+  /** Page dates, minus those that are only a file row's last-change time (#119). */
   inferredDates: InferredDate[];
+  /** Parsed assignments when the current page is an exercise overview (#119/#120). */
+  exerciseUnits?: ExerciseUnit[];
   /** #119: listing-row timestamps that belong to a file (its last change), not calendar dates. */
   fileRowDates: Array<{ refId: RefId; raw: string; iso: string }>;
   iliasVersion?: string;
@@ -167,7 +172,8 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     objects,
     files,
     news: extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs),
-    inferredDates: inferDates(text),
+    inferredDates: withoutFileRowDates(inferDates(text), text, fileRowDates),
+    ...(current?.type === "exc" ? exerciseUnitsField(snapshot.html ?? "", text, fetchedAt) : {}),
     fileRowDates,
     iliasVersion: readIliasVersion(snapshot.text),
     text,
@@ -433,6 +439,34 @@ function pollTitleBefore(html: string, index: number, refId: RefId): string {
     .filter((entry) => entry.text && !isPollActionLabel(entry.text) && !shouldSkipTitle(entry.text))
     .sort((a, b) => a.at - b.at);
   return titles.at(-1)?.text ?? `Poll ${refId}`;
+}
+
+function exerciseUnitsField(html: string, text: string, fetchedAt: string): { exerciseUnits?: ExerciseUnit[] } {
+  const units = parseExerciseUnits(html, text, fetchedAt ? new Date(fetchedAt) : new Date());
+  return units ? { exerciseUnits: units } : {};
+}
+
+/**
+ * #119: a date that appears only as file rows' last-change times is not a
+ * calendar date. Drop it when every occurrence in the page text is accounted
+ * for by a file row; keep it when it also appears in other prose.
+ */
+export function withoutFileRowDates(
+  dates: InferredDate[],
+  text: string,
+  fileRowDates: Array<{ raw: string }>,
+): InferredDate[] {
+  return dates.filter((date) => {
+    const rows = fileRowDates.filter((row) => row.raw.includes(date.raw)).length;
+    if (rows === 0) return true;
+    return countOccurrences(text, date.raw) > rows;
+  });
+}
+
+function countOccurrences(text: string, needle: string): number {
+  let count = 0;
+  for (let at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length)) count += 1;
+  return count;
 }
 
 /** Undo href entities so `cmdClass` survives `&amp;` in captured HTML. */
