@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0055](0055-dashboard-news-block.md) | Dashboard News block in `adam_list_news` (pagination deferred) |
 | [0052](0052-exercise-assignment-views.md) | Exercise assignment views (Ongoing / Upcoming / Past / All) |
 | [0051](0051-dashboard-tasks-and-calendar.md) | Dashboard Tasks and Calendar blocks as calendar sources |
 | [0050](0050-structurally-empty-folders.md) | Structurally empty folders |
