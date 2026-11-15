@@ -38,7 +38,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today | Notes |
 | --- | --- | --- | --- |
-| Exercise awareness | Instructions, due date, own hand-in status | **Known** (`adam_get_exercise` per-assignment units + `view`); **live-seen** 2026-11-15 | ADR 0052 views via advertised routes; instruction/feedback files not read (#129); submit stays in ADAM |
+| Exercise awareness | Instructions, due date, own hand-in status | **Known** (`adam_get_exercise` per-assignment units + `view`); **live-seen** 2026-11-15 | ADR 0052 views via advertised routes; ADR 0053 `detail: true` reads each assignment page (schedule, own submission; **fixture-only**, live pending); instruction/feedback files not read (#129); submit stays in ADAM |
 | News / what changed | New files & activity when lecturers enable News | **Known**; **live-seen** 2026-11-15 (10 items, 7 courses) | course `block_news` UI items, dated, keyed by news_id; block pagination and Dashboard news not read |
 | Session / timetable blocks | Class dates in course (`sess`) | uncertain | **Wait-for-inventory** (empty enrolled re-verify; not hunting) |
 
@@ -76,7 +76,9 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049; **live-seen** 2026-11-15 (6 categories, `ok`) |
 | `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | news sideblock | What changed | yes | **live-seen** 2026-11-15 (`block_news_{id}` UI items, #141) |
-| calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); exc deadlines; file-row dates excluded; full `ilCalendarPresentationGUI` not read |
+| calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); full Tasks page on unscoped calendars (ADR 0056, live verification pending); exc deadlines; file-row dates excluded; calendar views and iCal feeds not read (write routes / tokens) |
+| Private Notes / Comments | Personal notes | deferred | ADR 0056 — main-bar route seen, 0 notes on the probed account, so item markup is unverified; would be confirm-gated; never `exportNotesHTML` / `setSortation` |
+| Learning Progress / Personal Workspace | Progress, own files | unavailable | ADR 0056 — not offered to students on ADAM |
 | mail | Messaging | partial (`adam_list_mail` inbox headers + `adam_read_mail` body, both confirm-gated; no send) | ADR 0054 — inbox KS table structure **live-seen** 2026-11-15; subject link + `showMail` route + message view probed live (ADR 0054) |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |

@@ -471,6 +471,16 @@ export const fixtureCalendar: CalendarEvent[] = [
     url: canonicalUrl("crs", "100001"),
     provenance: provenance({ type: "crs", refId: "100001" }),
   },
+  {
+    // ADR 0056: a Derived Tasks page item; merges into the exc 100021 deadline (seenIn calendar+exc).
+    title: 'Submission of Assignment "Retrieval summary"',
+    startsAt: "2026-09-22T21:59:00.000Z",
+    source: "calendar",
+    confidence: "explicit",
+    objectRefId: "100021",
+    url: canonicalUrl("exc", "100021"),
+    provenance: provenance({ type: "exc", refId: "100021" }),
+  },
 ];
 
 /** ADR 0054: synthetic inbox (folder 9000). Read state flips on readMail, as in ADAM. */

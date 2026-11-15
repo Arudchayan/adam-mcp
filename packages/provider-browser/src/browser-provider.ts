@@ -16,6 +16,7 @@ import {
   type AdamProvider,
   type CalendarEvent,
   type ExerciseObject,
+  type ExerciseUnit,
   type ForumObject,
   type FileExtract,
   type FileObject,
@@ -33,7 +34,8 @@ import {
 } from "adam-core";
 import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
-import { parseExerciseUnits } from "./exercise-parse.ts";
+import { ownStatus, parseExerciseAssignments } from "./exercise-parse.ts";
+import { EXERCISE_DETAIL_CAP, exerciseAssignmentDetailUrl, parseExerciseDetail } from "./exercise-detail.ts";
 import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
 
@@ -46,6 +48,8 @@ import {
   extractCatalog,
   exerciseDeadlineFromPage,
   classifyListing,
+  DERIVED_TASKS_PATH,
+  derivedTasksEvents,
   listingItemsOrEmpty,
   isAdamFailurePage,
   isAdamPermissionPage,
@@ -74,6 +78,8 @@ export type BrowserProviderOptions = {
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
 const MAX_LIVE_PAGES = 48;
 export const MAX_WALK_MS = 120_000;
+/** ADR 0059: the main bar's advertised "My Courses and Groups" overview. */
+export const MEMBERSHIP_OVERVIEW_PATH = "/ilias.php?baseClass=ilmembershipoverviewgui";
 /** Cap for getCourse embedded children; truncation is signaled when the listing is larger. */
 export const MAX_COURSE_CHILDREN = 100;
 const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "file", "exc", "cat"];
@@ -158,6 +164,8 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly ownedPages = new Set<SharedOperation<PageSnapshot>>();
   /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
   private walkGeneration = 0;
+  /** ADR 0056: Tasks page memo; same 60s / generation lifetime as the walk memo. */
+  private derivedTasksMemo: { events: CalendarEvent[]; fetchedAt: number; generation: number } | undefined;
   /**
    * Typed same-ref page opens for this generation. get_course, list_children, and list_files
    * often ask for the same URL; reuse the snapshot instead of navigating again.
@@ -276,12 +284,45 @@ export class BrowserAdamProvider implements AdamProvider {
     await this.assertSessionEnabled(options?.signal);
     const continuation = this.pagination.continue<AdamObject>("courses", options);
     if (continuation) return continuation;
-    const snapshot = await this.openAuthorized(this.origin, options?.signal);
-    const catalog = this.catalog(snapshot);
+    const home = await this.openAuthorized(this.origin, options?.signal);
+    const { catalog, listing: classified } = await this.enrolledListing(home, this.walkGeneration, options?.signal);
     const courses = uniqueByRef(catalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type)));
-    const classified = classifyListing(snapshot, courses.length);
     const page = this.pagination.first("courses", listingItemsOrEmpty(courses, classified), options, { listingState: classified.state, listingSignals: classified.signals, notice: classified.notice });
     return withListingState(page, classified.state, classified.signals, classified.notice);
+  }
+
+  /**
+   * ADR 0059: the enrolled-course listing. The Dashboard is used when it lists
+   * courses. When it shows none (its centre view can show only side blocks), the
+   * main bar's advertised "My Courses and Groups" overview is read instead. Only a
+   * verified `ok` overview listing replaces the Dashboard's result.
+   */
+  private async enrolledListing(
+    home: PageSnapshot,
+    generation: number,
+    signal?: AbortSignal,
+  ): Promise<{ catalog: ExtractedCatalog; listing: ReturnType<typeof classifyListing> }> {
+    const homeCatalog = this.catalog(home);
+    const homeCourses = homeCatalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type));
+    const homeChildren = homeCatalog.objects.filter((item) => item.refId !== homeCatalog.current?.refId && !isDeniedObjectType(item.type));
+    const homeListing = classifyListing(home, homeChildren.length);
+    // An explicit empty Dashboard is an honest answer; only an unverified one falls back.
+    const unverified = homeListing.state === "unknown" || (homeListing.state === "ok" && homeCourses.length === 0);
+    if (!unverified) return { catalog: homeCatalog, listing: homeListing };
+    let overview: PageSnapshot;
+    try {
+      overview = await this.openAuthorized(`${this.origin.replace(/\/$/, "")}${MEMBERSHIP_OVERVIEW_PATH}`, signal);
+    } catch (error) {
+      if (error instanceof AdamError && (error.code === "cancelled" || error.code === "unauthorized")) throw error;
+      return { catalog: homeCatalog, listing: homeListing };
+    }
+    const overviewCatalog = this.catalog(overview);
+    this.rememberTypes(overviewCatalog, generation);
+    const overviewCourses = overviewCatalog.objects.filter((item) => item.type === "crs" && !isDeniedObjectType(item.type));
+    const overviewListing = classifyListing(overview, overviewCourses.length);
+    if (overviewListing.state === "ok" && overviewCourses.length > 0) return { catalog: overviewCatalog, listing: overviewListing };
+    // Neither page verified a course list: keep the Dashboard's own (honest) state.
+    return { catalog: homeCatalog, listing: homeListing };
   }
 
   async getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject> {
@@ -543,7 +584,7 @@ export class BrowserAdamProvider implements AdamProvider {
     return saveLocalDownload(this.session(), file, destination, options?.signal);
   }
 
-  async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView }): Promise<ExerciseObject> {
+  async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView; detail?: boolean }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
@@ -570,9 +611,10 @@ export class BrowserAdamProvider implements AdamProvider {
     }
     // #120: per-assignment units from the ILIAS 10.12 overview; [] when ADAM
     // says there are none. Unrecognised layouts keep the single page-text unit.
-    const parsed = parseExerciseUnits(snapshot.html ?? "", catalog.text);
+    const parsed = parseExerciseAssignments(snapshot.html ?? "", catalog.text);
     if (parsed) {
-      return { ...object, type: "exc", units: parsed, ...(options?.view ? { view: options.view } : {}) };
+      const units = options?.detail ? await this.exerciseDetails(refId, parsed, options.signal) : parsed.map(({ unit }) => unit);
+      return { ...object, type: "exc", units, ...(options?.view ? { view: options.view } : {}) };
     }
     if (options?.view && options.view !== "ongoing") throw unavailableExerciseView(refId, options.view);
     const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
@@ -588,6 +630,45 @@ export class BrowserAdamProvider implements AdamProvider {
         },
       ],
     };
+  }
+
+  /** ADR 0053: follow each assignment's own allowlisted detail link, sequentially, capped. */
+  private async exerciseDetails(refId: RefId, assignments: Array<{ unit: ExerciseUnit; href?: string; status?: string }>, signal?: AbortSignal): Promise<ExerciseUnit[]> {
+    const units: ExerciseUnit[] = [];
+    let opened = 0;
+    for (const { unit, href, status } of assignments) {
+      throwIfCancelled(signal);
+      const url = exerciseAssignmentDetailUrl(href, refId);
+      if (!url) {
+        units.push({ ...unit, detailStatus: "no_link" });
+        continue;
+      }
+      if (opened >= EXERCISE_DETAIL_CAP) {
+        units.push({ ...unit, detailStatus: "not_read" });
+        continue;
+      }
+      opened += 1;
+      const page = await this.openAuthorized(url, signal, "exc");
+      const now = new Date(this.fetchedAt(page));
+      // Only a page still on the pinned origin and on this exercise's presentation route counts.
+      const detail = exerciseAssignmentDetailUrl(page.url, refId) ? parseExerciseDetail(page.html ?? "", now) : undefined;
+      if (!detail) {
+        units.push({ ...unit, detailStatus: "unrecognized" });
+        continue;
+      }
+      const deadline = unit.deadline ?? detail.schedule?.deadline;
+      const lastSubmission = detail.submission?.lastSubmission;
+      units.push({
+        ...unit,
+        ...(deadline ? { deadline } : {}),
+        ...(detail.instructionText ? { instructionText: detail.instructionText } : {}),
+        ...(detail.schedule ? { schedule: detail.schedule } : {}),
+        ...(detail.submission ? { submission: detail.submission } : {}),
+        ownStatus: lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus,
+        detailStatus: "read",
+      });
+    }
+    return units;
   }
 
   async getForum(
@@ -720,8 +801,15 @@ export class BrowserAdamProvider implements AdamProvider {
     const key = `calendar:${options?.from ?? ""}:${options?.to ?? ""}:course=${options?.courseRefId ?? ""}`;
     const continuation = this.pagination.continue<CalendarEvent>(key, options);
     if (continuation) return continuation;
-    const walk = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
+    const walked = await this.collectLivePages(options?.onProgress, options?.signal, options?.courseRefId);
     const events: CalendarEvent[] = [];
+    // ADR 0056: unscoped calendars also read the full Tasks page (one extra page).
+    let walk = walked;
+    if (!options?.courseRefId) {
+      const tasks = await this.derivedTasks(options?.signal);
+      if (tasks) events.push(...tasks);
+      else walk = withExtraPartial(walked, "unreadable_page");
+    }
     for (const page of walk.pages) {
       const { catalog } = page;
       const provenance = catalog.current?.provenance ?? {
@@ -877,6 +965,33 @@ export class BrowserAdamProvider implements AdamProvider {
     return snapshot;
   }
 
+  /**
+   * ADR 0056: ADAM's full Derived Tasks list. `undefined` when the page could not be
+   * read or recognised — the caller marks the calendar partial rather than "no tasks".
+   * Cancel / auth / permission / stale identity still surface (ADR 0015 / 0016).
+   */
+  private async derivedTasks(signal?: AbortSignal): Promise<CalendarEvent[] | undefined> {
+    const generation = this.walkGeneration;
+    const memo = this.derivedTasksMemo;
+    if (memo && memo.generation === generation && this.clock() - memo.fetchedAt < 60_000) return memo.events;
+    try {
+      const snapshot = await this.openAuthorized(`${this.origin.replace(/\/$/, "")}${DERIVED_TASKS_PATH}`, signal);
+      const fetchedAt = this.fetchedAt(snapshot);
+      const events = derivedTasksEvents(snapshot, {
+        sourceUrl: snapshot.url,
+        fetchedAt,
+        provider: "browser",
+        freshness: "live-browser-session",
+      });
+      if (events && this.cachesCurrent(generation)) this.derivedTasksMemo = { events, fetchedAt: this.clock(), generation };
+      return events;
+    } catch (error) {
+      if (error instanceof AdamError && ["cancelled", "unauthorized", "forbidden", "stale_id"].includes(error.code)) throw error;
+      throwIfAborted(signal);
+      return undefined;
+    }
+  }
+
   private async collectLivePages(
     onProgress?: ProgressReporter,
     signal?: AbortSignal,
@@ -999,17 +1114,17 @@ export class BrowserAdamProvider implements AdamProvider {
       queue.push({ type, refId });
     };
 
-    const homeChildren = homeCatalog.objects.filter(
-      (item) => item.refId !== homeCatalog.current?.refId && !isDeniedObjectType(item.type),
-    );
-    const homeListing = classifyListing(home, homeChildren.length);
+    // The Dashboard page stays in `pages` for its blocks; the course list may come
+    // from the membership overview when the Dashboard shows none (ADR 0059).
+    const enrolledSource = await this.enrolledListing(home, generation, signal);
+    const homeListing = enrolledSource.listing;
     if (courseRefId) {
       if (homeListing.state === "unknown") throw new AdamError("provider_unavailable", "Enrolled course scope could not be verified. Retry adam_list_courses.", true);
-      const enrolled = listingItemsOrEmpty(homeCatalog.objects, homeListing);
+      const enrolled = listingItemsOrEmpty(enrolledSource.catalog.objects, homeListing);
       if (!enrolled.some((item) => item.type === "crs" && item.refId === courseRefId)) throw new AdamError("forbidden", "Requested course is not in the verified enrolled course listing. Choose a course from adam_list_courses.", false);
     }
     if (homeListing.state === "ok") {
-      for (const item of homeCatalog.objects) {
+      for (const item of enrolledSource.catalog.objects) {
         if (item.type === "crs" && (!courseRefId || item.refId === courseRefId)) {
           enqueue(item.type, item.refId);
         }
@@ -1312,6 +1427,16 @@ export class BrowserAdamProvider implements AdamProvider {
 
 export function createBrowserProvider(options?: BrowserProviderOptions): BrowserAdamProvider {
   return new BrowserAdamProvider(options);
+}
+
+/** ADR 0056: one more unread page on top of the walk's own state. */
+function withExtraPartial(walk: WalkResult, reason: "unreadable_page" | "unknown_listing"): WalkResult {
+  return {
+    ...walk,
+    partial: true,
+    skipped: walk.skipped + 1,
+    partialReasons: [...new Set([...(walk.partialReasons ?? []), reason])],
+  };
 }
 
 function now(): string {

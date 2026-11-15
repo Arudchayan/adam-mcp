@@ -364,19 +364,19 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
     {
       title: "Read an ADAM exercise (no submit)",
       description:
-        'Needs student-ok (confirm:true OR elicitation) after the student asked to read this exercise (same class as adam_read_page) because instruction/page bodies are returned. Read-only exercise object: units, deadline, instruction text, and this user\'s status when visible. Resource adam://exc/{refId} is metadata only — use this tool for bodies. Does not submit, does not list other students\' files, and does not open tests (tst). Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}.',
+        'Needs student-ok (confirm:true OR elicitation) after the student asked to read this exercise (same class as adam_read_page) because instruction/page bodies are returned. Read-only exercise object: units, deadline, instruction text, and this user\'s status when visible; detail:true also opens each assignment page (max 20) for schedule and own submission state. Resource adam://exc/{refId} is metadata only — use this tool for bodies. Does not submit, does not list other students\' files, and does not open tests (tst). Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"refId":"...","confirm":true}.',
       inputSchema: getExerciseInputSchema,
       outputSchema: withToolErrors(exerciseOutputSchema),
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType, confirm, view }, ctx) => {
+    async ({ refId: id, type: objectType, confirm, view, detail }, ctx) => {
       const gated = confirmElicitationGate("adam_get_exercise", confirm, ctx, id);
       if (gated) {
         return gated;
       }
       throwIfCancelled(signalFromContext(ctx));
       return runReadTool(
-        async () => provider.getExercise(id, { type: objectType, view, signal: signalFromContext(ctx) }),
+        async () => provider.getExercise(id, { type: objectType, view, ...(detail ? { detail } : {}), signal: signalFromContext(ctx) }),
         "adam_get_exercise",
         exerciseOutputSchema,
       );

@@ -51,9 +51,14 @@ Explicit logout also prevents resume, even when the profile still has valid cook
 
 ### Why sign-in does not survive a shutdown or restart (#133)
 
-The background session lasts as long as its Chrome process runs. Normal tool use,
-time-budget aborts (ADR 0045) and hours of idle time keep it signed in. A shutdown
-or restart ends it, and resume cannot bring it back:
+The background session needs its Chrome process to keep running. Normal tool use and
+time-budget aborts (ADR 0045) keep it signed in. Two things end it:
+
+- **Idle expiry.** ADAM ends a session server-side after a few hours without requests.
+  Observed: one session expired after about 3–4 idle hours while its holder kept
+  running. The holder then sits on `login.php`. `adam-mcp status` re-checks the server
+  instead of trusting an old tab, and reports `login-required`.
+- **Shutdown or restart.** Resume cannot bring the session back afterwards:
 
 - Every ADAM and SWITCH edu-ID **authentication** cookie is a browser-session
   cookie: ADAM's `PHPSESSID` and `_shibsession_*`, and edu-ID's
