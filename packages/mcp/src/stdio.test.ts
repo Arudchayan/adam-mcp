@@ -9,7 +9,7 @@ import {
   GOLDEN_TST_REF_ID,
   NEWS_OFF_COURSE_ID,
 } from "adam-provider-fixture";
-import { READ_ONLY_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
+import { READ_ONLY_TOOLS, READ_STATE_TOOLS, SESSION_TOOLS, UNTRUSTED_PAGE_NOTICE } from "./results.ts";
 import { extractFileInputSchema, readPageInputSchema } from "./schemas.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -245,6 +245,11 @@ describe("MCP surface over stdio", () => {
         ),
         true,
       );
+      for (const name of READ_STATE_TOOLS) {
+        const declared = listedTools.find((tool) => tool.name === name) as { annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } } | undefined;
+        assert.equal(declared?.annotations?.readOnlyHint, false, `${name} changes ADAM state (marks read)`);
+        assert.equal(declared?.annotations?.destructiveHint, false, `${name} is never destructive`);
+      }
       for (const expected of READ_ONLY_TOOLS) {
         const declared = listedTools.find((tool) => tool.name === expected);
         assert.equal(declared?.outputSchema?.type, "object", `${expected} must advertise an object outputSchema`);

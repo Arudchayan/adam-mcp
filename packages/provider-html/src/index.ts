@@ -49,6 +49,12 @@ export class HtmlAdamProvider implements AdamProvider {
   async listNews() {
     return disabled();
   }
+  async listMail() {
+    return disabled();
+  }
+  async readMail(_folderId: string, _mailId: string) {
+    return disabled();
+  }
 }
 
 export function createHtmlProvider(): HtmlAdamProvider {

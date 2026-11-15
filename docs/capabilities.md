@@ -79,7 +79,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); full Tasks page on unscoped calendars (ADR 0056, live verification pending); exc deadlines; file-row dates excluded; calendar views and iCal feeds not read (write routes / tokens) |
 | Private Notes / Comments | Personal notes | deferred | ADR 0056 — main-bar route seen, 0 notes on the probed account, so item markup is unverified; would be confirm-gated; never `exportNotesHTML` / `setSortation` |
 | Learning Progress / Personal Workspace | Progress, own files | unavailable | ADR 0056 — not offered to students on ADAM |
-| mail | Messaging | out | skip |
+| mail | Messaging | partial (`adam_list_mail` inbox headers + `adam_read_mail` body, both confirm-gated; no send) | ADR 0054 — inbox KS table structure **live-seen** 2026-11-15; subject link + `showMail` route + message view probed live (ADR 0054) |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
 | members gallery | Roster | out (off by default) | skip |

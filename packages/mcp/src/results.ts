@@ -33,12 +33,27 @@ export const READ_ONLY_TOOLS = [
   "adam_search",
   "adam_list_calendar",
   "adam_list_news",
+  "adam_list_mail",
 ] as const;
+
+/**
+ * Reads that change ADAM state as a side effect, exactly as the browser does:
+ * opening a message marks it read (ADR 0054). Not read-only, never destructive.
+ */
+export const READ_STATE_TOOLS = ["adam_read_mail"] as const;
 
 export const SESSION_TOOLS = ["adam_login", "adam_session_status"] as const;
 
 export const READ_ONLY_ANNOTATIONS = {
   readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+} as const;
+
+/** MCP readOnlyHint means "does not modify its environment"; marking mail read does. */
+export const READ_STATE_ANNOTATIONS = {
+  readOnlyHint: false,
   destructiveHint: false,
   idempotentHint: true,
   openWorldHint: true,
