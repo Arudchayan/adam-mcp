@@ -49,6 +49,27 @@ Explicit logout also prevents resume, even when the profile still has valid cook
 5. Login page → **close Chrome** and fail closed with the existing
    `unauthorized` / `login-required` text. No holder record is written.
 
+### Why sign-in does not survive a shutdown or restart (#133)
+
+The background session lasts as long as its Chrome process runs. Normal tool use,
+time-budget aborts (ADR 0045) and hours of idle time keep it signed in. A shutdown
+or restart ends it, and resume cannot bring it back:
+
+- Every ADAM and SWITCH edu-ID **authentication** cookie is a browser-session
+  cookie: ADAM's `PHPSESSID` and `_shibsession_*`, and edu-ID's
+  `shib_idp_session`. Chrome discards them when the process ends.
+- The persistent cookies that survive only remember the institution choice and the
+  device. They do not authenticate, so a "silent" SSO after a restart lands on the
+  edu-ID password/MFA prompt.
+- Restoring session cookies through Chrome's "continue where you left off"
+  preference does not work for the headless persistent profile. A local synthetic
+  test lost the cookie either way.
+
+The project will not automate that prompt or store SWITCH credentials anywhere
+(AGENTS.md, SECURITY.md). After a restart, run `adam-mcp login` once. `adam-mcp
+status` reports this case as `login-required` with "The background session is
+inactive", not as an error.
+
 ## Cache freshness and recovery
 
 ### Ownership recovery after an interrupted startup
