@@ -126,6 +126,8 @@ export type ExerciseUnit = {
 export type ExerciseObject = AdamObject & {
   type: "exc";
   units: ExerciseUnit[];
+  /** Assignment bucket that was read, when one was requested (ADR 0052). */
+  view?: "ongoing" | "upcoming" | "past" | "all";
 };
 
 export type ForumPost = {

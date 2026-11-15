@@ -363,14 +363,14 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: withToolErrors(exerciseOutputSchema),
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType, confirm }, ctx) => {
+    async ({ refId: id, type: objectType, confirm, view }, ctx) => {
       const gated = confirmElicitationGate("adam_get_exercise", confirm, ctx, id);
       if (gated) {
         return gated;
       }
       throwIfCancelled(signalFromContext(ctx));
       return runReadTool(
-        async () => provider.getExercise(id, { type: objectType, signal: signalFromContext(ctx) }),
+        async () => provider.getExercise(id, { type: objectType, view, signal: signalFromContext(ctx) }),
         "adam_get_exercise",
         exerciseOutputSchema,
       );
