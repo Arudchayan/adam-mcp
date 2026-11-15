@@ -156,6 +156,17 @@ export function shouldProbeOrigin(currentUrl: string, origin: string): boolean {
   }
 }
 
+/** A loaded page older than this no longer proves the server session is alive. */
+export const STATUS_PAGE_FRESH_MS = 60_000;
+
+/**
+ * Also probe when this process has not loaded an ADAM page recently: ADAM ends idle
+ * sessions server-side, and an old Dashboard tab still renders logged-in markup.
+ */
+export function statusNeedsProbe(currentUrl: string, origin: string, lastLoadedAt: number, now: number = Date.now()): boolean {
+  return shouldProbeOrigin(currentUrl, origin) || now - lastLoadedAt > STATUS_PAGE_FRESH_MS;
+}
+
 type HolderObservation = Awaited<ReturnType<typeof holderStatus>>;
 
 /**
@@ -287,6 +298,8 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
   private loginInflight: SharedOperation<SessionStatus> | undefined;
   private loginUncancellable: Promise<SessionStatus> | undefined;
   private lifecycleGeneration: string | undefined;
+  /** When this process last loaded an ADAM page; 0 in a fresh process (always re-probe). */
+  private lastPageLoadAt = 0;
 
   private async withProfileLifecycle<T>(work: (generation: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (this.lifecycleGeneration) {
@@ -350,11 +363,12 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
       if (!page) {
         return loginRequired();
       }
-      if (shouldProbeOrigin(page.url(), this.origin)) {
+      if (statusNeedsProbe(page.url(), this.origin, this.lastPageLoadAt)) {
         assertUrlAllowed(this.origin);
         await page.goto(this.origin, { waitUntil: "domcontentloaded", timeout: 8_000 }).catch((error: unknown) => {
           throw adamErrorFromNavigationFailure(error) ?? error;
         });
+        this.lastPageLoadAt = Date.now();
         await this.waitForSessionSettled(page);
       }
       let snapshot = await this.readSnapshot(page);
@@ -418,6 +432,7 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           // Capture main response so 403/429/5xx documents use ADR 0016 taxonomy.
           // Null response (download abort / ERR_ABORTED — ADR 0013) is not forbidden.
           const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout: 45_000 });
+          this.lastPageLoadAt = Date.now();
           rejectIfGotoHttpFailed(response);
         } catch (error) {
           if (error instanceof AdamError) {
