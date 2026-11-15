@@ -15,7 +15,8 @@ import {
   type RefId,
 } from "adam-core";
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
-import { extractClassBlocksAt, extractIdBlocks, parseUiItems } from "./ui-items.ts";
+import { extractClassBlocksAt, extractIdBlocks, extractIdBlocksWithId, parseUiItems } from "./ui-items.ts";
+import { advertisedNewsPage, type NewsBlockRef, type NewsBlockType } from "./news-paging.ts";
 import { parseFileRows } from "./file-rows.ts";
 import { parseExerciseUnits } from "./exercise-parse.ts";
 export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
@@ -53,6 +54,8 @@ export type ExtractedCatalog = {
   objects: AdamObject[];
   files: FileObject[];
   news: NewsItem[];
+  /** News blocks on this page and their validated next-page routes (ADR 0055). */
+  newsBlocks: NewsBlockRef[];
   /** Page dates, minus those that are only a file row's last-change time (#119). */
   inferredDates: InferredDate[];
   /** Parsed assignments when the current page is an exercise overview (#119/#120). */
@@ -169,13 +172,15 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
   const files = objects.filter((item): item is FileObject => item.type === "file");
 
   const text = capText(snapshot.text, MAX_PAGE_TEXT);
+  const newsPage = extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs);
 
   return {
     current,
     breadcrumbs,
     objects,
     files,
-    news: extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs),
+    news: newsPage.items,
+    newsBlocks: newsPage.blocks,
     calendarEvents: dashboardCalendarEvents(snapshot.html ?? "", provenanceBase(snapshot.url)),
     inferredDates: withoutFileRowDates(inferDates(text), text, fileRowDates),
     ...(current?.type === "exc" ? exerciseUnitsField(snapshot.html ?? "", text, fetchedAt) : {}),
@@ -278,8 +283,9 @@ function extractNewsArticles(
   snapshot: PageSnapshot,
   provenance: Provenance,
   breadcrumbs: Breadcrumb[] = [],
-): NewsItem[] {
+): { items: NewsItem[]; blocks: NewsBlockRef[] } {
   const items: NewsItem[] = [];
+  const blocks: NewsBlockRef[] = [];
   const seen = new Set<string>();
   const pageTyped = typedAdamRef(snapshot.url);
   const breadcrumbCrs = breadcrumbs.find((crumb) => crumb.type === "crs")?.refId;
@@ -328,19 +334,28 @@ function extractNewsArticles(
   // (title, description, "Date" property), not <article>s.
   // ADR 0055: the Dashboard's `block_pdnews_{id}` has the same item shape. Its items
   // name no course on the page, so they cite the Dashboard and leave courseRefId unset;
-  // listNews prefers a course block's copy of the same news_id. Only page 1 is read:
-  // pagination, "Get Feed URL" and "Settings" controls are never followed.
-  const blocks = [
-    ...extractIdBlocks(snapshot.html, /^block_news_\d+$/).map((html) => ({ html, url: undefined })),
-    ...extractIdBlocks(snapshot.html, /^block_pdnews_\d+$/).map((html) => ({ html, url: DASHBOARD_NEWS_URL })),
-  ];
-  for (const block of blocks) {
-    for (const item of parseUiItems(block.html)) {
-      if (!item.title || isNewsLabel(item.title)) continue;
-      const date = item.properties.find((property) => /^(?:date|datum)$/i.test(property.name))?.value;
-      const createdAt = date ? parseAdamTimestamp(date, new Date(provenance.fetchedAt)) : undefined;
-      const newsId = item.href?.match(/[?&]news_id=(\d+)/)?.[1];
-      pushItem(item.title, "", "", [], { summary: item.description ?? item.title, createdAt, newsId, url: block.url });
+  // listNews prefers a course block's copy of the same news_id. The block's validated
+  // next-page route is recorded for listNews; "Get Feed URL" and "Settings" never are.
+  for (const [blockType, pattern] of NEWS_BLOCK_PATTERNS) {
+    for (const block of extractIdBlocksWithId(snapshot.html, pattern)) {
+      const ref: NewsBlockRef = {
+        blockType,
+        blockId: block.id.slice(`block_${blockType}_`.length),
+        url: blockType === "pdnews" ? DASHBOARD_NEWS_URL : pageTyped ? canonicalUrl(pageTyped.type, pageTyped.refId) : snapshot.url,
+        ...(blockType === "news" && pageCourseRefId ? { courseRefId: pageCourseRefId } : {}),
+        ...(blockType === "news" && pageFolderRefId ? { folderRefId: pageFolderRefId } : {}),
+        pageIndex: 0,
+        dates: [],
+        itemCount: 0,
+      };
+      const blockItems = newsBlockItems(block.html, ref, provenance);
+      for (const item of blockItems) {
+        const key = item.newsId ? `news:${item.newsId}` : `${item.url}\n${item.title}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push(item);
+      }
+      blocks.push(withNextPage(ref, block.html, blockItems));
     }
   }
 
@@ -410,7 +425,72 @@ function extractNewsArticles(
     }
   }
 
-  return items.slice(0, 20);
+  return { items: items.slice(0, 20), blocks };
+}
+
+const NEWS_BLOCK_PATTERNS: Array<[NewsBlockType, RegExp]> = [["news", /^block_news_\d+$/], ["pdnews", /^block_pdnews_\d+$/]];
+
+/** Items of one News block (KS items with a `Date` property), cited as the block's ref says. */
+function newsBlockItems(blockHtml: string, ref: NewsBlockRef, provenance: Provenance): NewsItem[] {
+  const items: NewsItem[] = [];
+  for (const item of parseUiItems(blockHtml)) {
+    const title = cleanTitle(item.title);
+    if (!title || isNewsLabel(title)) continue;
+    const date = item.properties.find((property) => /^(?:date|datum)$/i.test(property.name))?.value;
+    const createdAt = date ? parseAdamTimestamp(date, new Date(provenance.fetchedAt)) : undefined;
+    const newsId = item.href?.match(/[?&]news_id=(\d+)/)?.[1];
+    const summary = cleanTitle(item.description ?? item.title) || title;
+    items.push({
+      title,
+      summary: summary.slice(0, 280),
+      url: ref.url,
+      courseRefId: ref.courseRefId,
+      folderRefId: ref.folderRefId,
+      createdAt,
+      updatedAt: createdAt,
+      accessClass: /authenticated users|registrierte nutzer/i.test(summary) ? "Authenticated Users" : undefined,
+      author: authorFrom(summary),
+      ...(newsId ? { newsId } : {}),
+      provenance: { ...provenance, sourceUrl: ref.url },
+    });
+  }
+  return items;
+}
+
+function withNextPage(ref: NewsBlockRef, blockHtml: string, items: NewsItem[]): NewsBlockRef {
+  const nextUrl = advertisedNewsPage(blockHtml, ref, ref.pageIndex + 1);
+  return {
+    ...ref,
+    dates: items.flatMap((item) => (item.createdAt ? [item.createdAt] : [])),
+    itemCount: items.length,
+    ...(nextUrl ? { nextUrl } : {}),
+  };
+}
+
+/**
+ * ADR 0055 amendment: a later page of a News block, opened through its advertised
+ * route. Reads only the same block (same type and id); its items keep the citation
+ * and course of page 1. Undefined when the page no longer shows that block.
+ */
+export function extractNewsBlockPage(
+  snapshot: PageSnapshot,
+  fetchedAt: string,
+  previous: NewsBlockRef,
+): { items: NewsItem[]; block: NewsBlockRef } | undefined {
+  const id = `block_${previous.blockType}_${previous.blockId}`;
+  const html = extractIdBlocksWithId(snapshot.html ?? "", new RegExp(`^${id}$`))[0]?.html;
+  if (html === undefined) return undefined;
+  const provenance: Provenance = {
+    sourceUrl: previous.url,
+    fetchedAt,
+    provider: "browser",
+    iliasVersion: readIliasVersion(snapshot.text),
+    freshness: "live-browser-session",
+  };
+  const ref: NewsBlockRef = { ...previous, pageIndex: previous.pageIndex + 1, dates: [], itemCount: 0 };
+  delete ref.nextUrl;
+  const items = newsBlockItems(html, ref, provenance);
+  return { items, block: withNextPage(ref, html, items) };
 }
 
 const POLL_ACTION_LABEL = /^(?:vote|abstimmen|stimme abgeben|submit vote|show results|results|ergebnisse(?: anzeigen)?|resultate|teilnehmen|participate)?$/i;
