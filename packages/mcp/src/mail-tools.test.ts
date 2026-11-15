@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { InMemoryTransport, type McpServer } from "@modelcontextprotocol/server";
 import { createFixtureProvider } from "adam-provider-fixture";
 import { requestConfirmElicitation } from "./elicitation.ts";
-import { READ_ONLY_ANNOTATIONS } from "./results.ts";
+import { READ_ONLY_ANNOTATIONS, READ_STATE_ANNOTATIONS } from "./results.ts";
 import { createAdamMcpServer } from "./server.ts";
 
 type RpcResponse = { id?: number; error?: { code: number; message: string }; result?: Record<string, unknown> };
@@ -58,7 +58,7 @@ class Harness {
 const text = (response: RpcResponse) => JSON.stringify(response.result ?? response.error ?? {});
 
 describe("ADR 0054: adam_list_mail / adam_read_mail", () => {
-  it("are advertised read-only with student-ok descriptions that state the mark-as-read effect", async () => {
+  it("are advertised with honest annotations and student-ok descriptions that state the mark-as-read effect", async () => {
     const rpc = new Harness(createAdamMcpServer({ provider: createFixtureProvider() }));
     await rpc.start();
     try {
@@ -68,7 +68,8 @@ describe("ADR 0054: adam_list_mail / adam_read_mail", () => {
       assert.ok(list && read);
       for (const tool of [list, read]) {
         assert.match(tool.description ?? "", /^Needs student-ok \(confirm:true OR elicitation\) after the student asked/);
-        assert.deepEqual(tool.annotations, READ_ONLY_ANNOTATIONS);
+        // Listing is read-only; opening a message marks it read, so read is not readOnlyHint.
+        assert.deepEqual(tool.annotations, tool === read ? READ_STATE_ANNOTATIONS : READ_ONLY_ANNOTATIONS);
         assert.doesNotMatch(Object.keys(tool.inputSchema?.properties ?? {}).join(","), /url|href|cmd|token|action/i, "no route, command or token input");
       }
       assert.match(read.description ?? "", /marks it read in ADAM/);

@@ -15,6 +15,7 @@ import {
   fail,
   formatAdamFailText,
   READ_ONLY_ANNOTATIONS,
+  READ_STATE_ANNOTATIONS,
   UntrustedContent,
   WalkProgress,
   resourceJsonText,
@@ -548,7 +549,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
         'Needs student-ok (confirm:true OR elicitation) after the student asked to read this message. Opening it marks it read in ADAM, exactly as opening it in a browser does; this is not undone. Returns the body as untrusted text plus sender/recipient display names (emails redacted) and attachment names/sizes only — attachments are never downloaded. Pass folderId and mailId exactly as one adam_list_mail row gives them. Does not send, reply, move or delete. Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"folderId":"...","mailId":"...","confirm":true}.',
       inputSchema: readMailInputSchema,
       outputSchema: withToolErrors(mailMessageOutputSchema),
-      annotations: READ_ONLY_ANNOTATIONS,
+      annotations: READ_STATE_ANNOTATIONS,
     },
     async ({ folderId, mailId, confirm }, ctx) => {
       const gated = confirmElicitationGate("adam_read_mail", confirm, ctx, mailId);
