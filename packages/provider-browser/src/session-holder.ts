@@ -96,6 +96,20 @@ export function isProcessAlive(pid: number): boolean {
 
 let ownProcessIdentity: ProcessIdentity | undefined;
 
+export type NativeIdentityProbe = (pid: number) => ProcessIdentity | undefined;
+let nativeIdentityProbeOverride: NativeIdentityProbe | undefined;
+
+/**
+ * Test seam: replace only the native OS identity probe (/proc, `ps`, PowerShell)
+ * for live PIDs. Liveness (`process.kill(pid, 0)`) stays real, and an override
+ * never populates the own-process cache. Pass `undefined` to restore the real
+ * probe. Holder-logic tests use this so Windows PowerShell latency under load
+ * cannot flip a bound holder to "stale".
+ */
+export function setNativeIdentityProbeForTests(probe: NativeIdentityProbe | undefined): void {
+  nativeIdentityProbeOverride = probe;
+}
+
 /**
  * Cross-platform process identity for PID bind.
  * Prefer Linux /proc starttime+exe; on Unix use `ps`; on Windows skip `ps`
@@ -106,6 +120,7 @@ export function readProcessIdentity(pid: number): ProcessIdentity | undefined {
   if (!isProcessAlive(pid)) {
     return undefined;
   }
+  if (nativeIdentityProbeOverride) return nativeIdentityProbeOverride(pid);
   // This running process cannot have its own PID reused. Foreign PIDs are never cached.
   if (pid === process.pid && ownProcessIdentity) return { ...ownProcessIdentity };
   const identity = readLinuxProcIdentity(pid) ?? (process.platform === "win32"

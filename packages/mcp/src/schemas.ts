@@ -432,6 +432,7 @@ export const paginatedNewsOutputSchema = z
           updatedAt: z.string().optional(),
           accessClass: z.string().optional(),
           author: z.string().optional(),
+          newsId: z.string().optional().describe("ILIAS news_id, when the News block links one"),
           resourceUri: z.string().optional(),
           provenance: provenanceSchema,
         })

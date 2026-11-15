@@ -193,6 +193,8 @@ export type NewsItem = {
   updatedAt?: string;
   accessClass?: string;
   author?: string;
+  /** ILIAS news_id when the News block item links one (ADR 0055); identifies the same news across blocks. */
+  newsId?: string;
   provenance: Provenance;
 };
 
