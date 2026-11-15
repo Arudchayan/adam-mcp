@@ -468,8 +468,11 @@ export class BrowserAdamProvider implements AdamProvider {
       title,
       url: cached?.url || sourceUrl,
       breadcrumb: cached?.breadcrumb ?? [],
+      ...(cached?.extension ? { extension: cached.extension } : {}),
       mimeType: cached?.mimeType ?? probedMime,
       sizeBytes: cached?.sizeBytes ?? probedSize,
+      ...(cached?.pageCount !== undefined ? { pageCount: cached.pageCount } : {}),
+      ...(cached?.updatedAt ? { updatedAt: cached.updatedAt } : {}),
       provenance: {
         ...(cached?.provenance ?? {}),
         sourceUrl,
@@ -1268,17 +1271,19 @@ function betterFileTitle(refId: RefId, ...candidates: Array<string | undefined>)
   return refId;
 }
 
+/** Row metadata a file page/download may lack; keep what the listing row showed (#122). */
+const LISTING_FILE_FIELDS = ["extension", "mimeType", "sizeBytes", "pageCount", "updatedAt"] as const;
+
 function preferCachedFileTitle(file: FileObject, cached: FileObject | undefined): FileObject {
   const title = betterFileTitle(file.refId, cached?.title, file.title);
-  if (title === file.title && !cached?.mimeType && !cached?.sizeBytes) {
+  if (!cached || (title === file.title && LISTING_FILE_FIELDS.every((key) => cached[key] === undefined))) {
     return file;
   }
-  return {
-    ...file,
-    title,
-    mimeType: file.mimeType ?? cached?.mimeType,
-    sizeBytes: file.sizeBytes ?? cached?.sizeBytes,
-  };
+  const merged: FileObject = { ...file, title };
+  for (const key of LISTING_FILE_FIELDS) {
+    if (merged[key] === undefined && cached[key] !== undefined) (merged as Record<string, unknown>)[key] = cached[key];
+  }
+  return merged;
 }
 
 

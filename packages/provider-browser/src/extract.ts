@@ -13,6 +13,7 @@ import {
 } from "adam-core";
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
 import { extractIdBlocks, parseUiItems } from "./ui-items.ts";
+import { parseFileRows } from "./file-rows.ts";
 export { inferDates, exerciseDeadlineFromPage } from "./deadlines.ts";
 import type { PageSnapshot, SnapshotLink } from "./session-types.ts";
 
@@ -49,6 +50,8 @@ export type ExtractedCatalog = {
   files: FileObject[];
   news: NewsItem[];
   inferredDates: InferredDate[];
+  /** #119: listing-row timestamps that belong to a file (its last change), not calendar dates. */
+  fileRowDates: Array<{ refId: RefId; raw: string; iso: string }>;
   iliasVersion?: string;
   text: string;
 };
@@ -144,13 +147,17 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
     byRef.set(poll.refId, toObject("poll", poll.refId, poll.title, crumbTrail, provenanceBase(canonicalUrl("poll", poll.refId))));
   }
+  const rowHints = parseFileRows(snapshot.html ?? "", fetchedAt ? new Date(fetchedAt) : new Date());
+  const fileRowDates: ExtractedCatalog["fileRowDates"] = [];
+  for (const item of byRef.values()) {
+    if (item.type !== "file") continue;
+    const { updatedAtRaw, ...hints } = rowHints.get(item.refId) ?? {};
+    const file: FileObject = { ...item, type: "file", ...fileHints(item.title), ...hints };
+    if (hints.updatedAt && updatedAtRaw) fileRowDates.push({ refId: item.refId, raw: updatedAtRaw, iso: hints.updatedAt });
+    byRef.set(item.refId, file);
+  }
   const objects = [...byRef.values()];
-
-  const files = objects.filter((item): item is FileObject => item.type === "file").map((item) => ({
-    ...item,
-    type: "file" as const,
-    ...fileHints(item.title, snapshot.text),
-  }));
+  const files = objects.filter((item): item is FileObject => item.type === "file");
 
   const text = capText(snapshot.text, MAX_PAGE_TEXT);
 
@@ -161,6 +168,7 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     files,
     news: extractNewsArticles(snapshot, provenanceBase(snapshot.url), breadcrumbs),
     inferredDates: inferDates(text),
+    fileRowDates,
     iliasVersion: readIliasVersion(snapshot.text),
     text,
   };
@@ -525,23 +533,9 @@ function toObject(
   };
 }
 
-function fileHints(title: string, pageText: string): Pick<FileObject, "mimeType" | "sizeBytes" | "pageCount"> {
-  const hints: Pick<FileObject, "mimeType" | "sizeBytes" | "pageCount"> = {};
-  if (/\.pdf\b/i.test(title)) {
-    hints.mimeType = "application/pdf";
-  }
-  const size = pageText.match(new RegExp(`${escapeRegExp(title)}[^\\n]{0,80}?(\\d+(?:[.,]\\d+)?)\\s*(KB|MB|GB)`, "i"));
-  if (size) {
-    const amount = Number.parseFloat(size[1].replace(",", "."));
-    const unit = size[2].toUpperCase();
-    const multiplier = unit === "GB" ? 1024 * 1024 * 1024 : unit === "MB" ? 1024 * 1024 : 1024;
-    hints.sizeBytes = Math.round(amount * multiplier);
-  }
-  const pages = pageText.match(new RegExp(`${escapeRegExp(title)}[^\\n]{0,80}?(\\d+)\\s*(pages|seiten)`, "i"));
-  if (pages) {
-    hints.pageCount = Number.parseInt(pages[1], 10);
-  }
-  return hints;
+/** Title-only hint; size, pages, format and dates come from the file's own listing row (file-rows.ts). */
+function fileHints(title: string): Pick<FileObject, "mimeType"> {
+  return /\.pdf\b/i.test(title) ? { mimeType: "application/pdf" } : {};
 }
 
 function stripTags(value: string): string {
@@ -550,10 +544,6 @@ function stripTags(value: string): string {
 
 function cleanTitle(value: string): string {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** ILIAS 10 EN/DE empty-container copy, list and card markup. Absence of copy must not mean empty. */
