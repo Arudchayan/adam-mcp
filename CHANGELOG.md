@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `adam_get_exercise` returns one unit per assignment with deadline, requirement,
+  submission type and own status, and an optional `view` (ongoing, upcoming,
+  past, all) through the overview's advertised routes (#120, #129, ADR 0052).
+- `adam_extract_file_text` reads later PDF pages with `startPage` /
+  `nextStartPage`, Jupyter notebooks (cell sources) and uploaded HTML files
+  (#121, ADR 0047).
+- `adam_list_calendar` includes exercise deadlines and the Dashboard Tasks and
+  Calendar blocks as `source: "calendar"` (#119, #132, ADR 0051).
+- Course News blocks are read, dated and keyed by ADAM news id (#118).
+- Forum threads carry post and unread counts and latest-post time; posts carry
+  their time (#125).
+- File listings carry extension, size and change time per row (#122).
+- Read-only `svy` and `poll` types and repository-root category cards (#124,
+  ADR 0049).
+
+### Fixed
+
+- A time-budget abort no longer signs the background session out: cancelling
+  a navigation never closes the holder's last tab (#118, #126, ADR 0045).
+- Breadcrumbs run root to parent without duplicates (#122, #126).
+- `adam-mcp status` always prints JSON; no false `signing-in` right after
+  login; abandoned locks fail fast with recovery guidance (#123, ADR 0046).
+- Typed getters fail when an explicit type disagrees with the object (#124).
+- Search walks courses and folders only: 7–16 s per course instead of
+  30–120 s (#126, ADR 0048).
+- Calendar no longer reports file upload times as events (#119).
+- Genuinely empty folders list as empty instead of failing (#86, ADR 0050).
+- Files over the extract cap suggest `adam-mcp download` (#121).
+
+
 ## [0.4.0] - In preparation
 
 ### Added

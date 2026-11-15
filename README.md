@@ -118,10 +118,10 @@ The client starts ADAM MCP as a local process and communicates over stdio. ADAM 
 | `adam_get_course` / `adam_list_children` | Course snapshot and folder contents |
 | `adam_read_page` | Page text (`confirm: true` OR elicitation) |
 | `adam_list_files` / `adam_get_file` | File metadata and URLs, not bytes |
-| `adam_extract_file_text` | Local PDF/text extract (`confirm: true` OR elicitation) |
+| `adam_extract_file_text` | Local PDF, text, notebook (`.ipynb`) and uploaded HTML extract, paged with `startPage` (`confirm: true` OR elicitation) |
 | `adam_search` | Title matches in enrolled objects |
-| `adam_list_calendar` / `adam_list_news` | Dates and news from pages you can see |
-| `adam_get_exercise` | Exercise text and deadline (`confirm: true` OR elicitation); no submit |
+| `adam_list_calendar` / `adam_list_news` | Exercise deadlines, Dashboard tasks and events, dated course news |
+| `adam_get_exercise` | One entry per assignment with deadline and your status; `view` reads ongoing, upcoming, past or all (`confirm: true` OR elicitation); no submit |
 | `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true` OR elicitation; no post/reply |
 | `adam_login` / `adam_session_status` | Chrome session in the live runtime |
 
@@ -132,10 +132,11 @@ For page, file-text, exercise, and forum-post reads, request the specific object
 ## Limitations
 
 - No writes, mail, grades, or exam (`tst`) objects.
-- Search covers titles and available page text in your enrolled course tree. It does not use ADAM’s global search. Dates come from available course content, rather than the ILIAS calendar interface.
+- Search covers titles and available page text in your enrolled course tree. It does not use ADAM’s global search, and search does not open exercise pages. Calendar dates come from exercise deadlines, the Dashboard Tasks and Calendar blocks, and dated course text. File upload times are not reported as events, and the full ILIAS calendar interface is not read.
 - Scanned PDFs are not OCR’d.
 - Supported PDFs are parsed page by page, with an 8 MiB transfer cap, 40,000
-  text characters, and at most 20 pages (default eight). Empty/malformed files
+  text characters, and at most 20 pages per call (default eight). Pass `startPage`
+  (or the returned `nextStartPage`) to read later pages. Empty/malformed files
   fail closed. Formula interpretation and exact visual layout are not guaranteed.
 - Course pages and complete cross-course walks refresh after one minute. Restart
   the MCP server for an immediate refresh. Existing pagination retains its

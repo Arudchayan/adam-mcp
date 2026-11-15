@@ -48,6 +48,29 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Calendar vs page-inferred dates (AT6) | Known (partial) | Done (PR #14 / `16f08c8`) — unlabeled→page; dedup exc>calendar>page |
 | Soft backlog A2-news-browser (`listNews` onProgress) | Known | Done (PR #16 / `5593840`) — browser live-walk progress parity with fixture |
 
+## 0.4.x QA wave (November 2026) — live-verified on ILIAS 10.12
+
+Black-box QA on 0.4.0 filed #118–#133. All bugs are fixed, live-verified and closed. Each change is one PR with tests; ADRs 0045–0052.
+
+| Item | Issue | Status |
+| --- | --- | --- |
+| Session lost after `time_budget` aborts (last holder tab closed) | #118, #126 | Done (PR #134, ADR 0045) |
+| Breadcrumbs root→parent, no duplicates | #122, #126 | Done (PR #135) |
+| CLI `status` JSON, post-login race, abandoned locks | #123 | Done (PR #136, ADR 0046) |
+| Typed-getter type checks; `svy`/`poll`/root cards | #124 | Done (PR #137, #144, ADR 0049) |
+| Forum counts, latest post, post times | #125 | Done (PR #138) |
+| Extract `startPage`, `.ipynb`, uploaded HTML, size hint | #121 | Done (PR #139, ADR 0047) |
+| Per-assignment exercise units; Past/All views | #120, #129 | Done (PR #140, #149, ADR 0052) |
+| Course News blocks | #118 | Done (PR #141) |
+| File-row extension/size/date | #122 | Done (PR #142) |
+| Search walks containers only | #126 | Done (PR #143, ADR 0048) |
+| Calendar: exc deadlines, no file-row dates; Dashboard Tasks/Calendar | #119, #132 | Done (PR #145, #147, ADR 0051) |
+| Structurally empty folders | #86 | Done (PR #146, ADR 0050) |
+| Web Link destinations | #84 | Live-verified (PR #113, ADR 0042) |
+| Sign-in across shutdown | #133 | Not planned: auth cookies are session-scoped (docs/session-recovery.md) |
+
+Open epics #127–#132 are trackers. Each remaining type or service still needs a live sighting and scrubbed capture first (stop rule above).
+
 ## Phase B — valuable unread surfaces (reads only)
 
 After **live sighting** of each type. Labeled synthetic mirrors allowed for an already-unlocked type only (e.g., AT5 `100021`, B-frm `100040`). Prefer resources for read-by-id; keep tool count tight.

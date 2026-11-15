@@ -18,6 +18,8 @@ Status legend: **yes** | **partial** | **no** | **out** (must not ship) | **live
 
 **Live pass (2026-09-14, tip 5099529, deep enrolled walk):** 8 courses; `list_children`/`list_files` sighted live `file`×37 and `frm`×1; `get_file` ok; extract confirm (one over 8MiB, one truncated empty — now fail-closed, ADR 0014); `search(pdf|PDF|.pdf)` → crs/fold only (0 typed file hits); news×5 no refs; calendar×8; course-root rescan `exc`/`sess`/`webr`/`htlm`=0; some folds still unknown+blank (not empty); prior narrow 0-file probe superseded (incomplete, not parse-miss). Recording under `scratch/recordings/` gitignored. 2026-10-02 news sideblock replay (ADR 0018): label-only `News` blocks skipped, headline over first-`<a>`, course from typed href/page-URL/breadcrumb only (scrubbed capture `scratch/`, gitignored).
 
+**Live pass (2026-11-14/15, ILIAS 10.12 `8.2.35`, 0.4.0 QA wave):** 8 enrolled courses, student session, counts and shapes only. Child types seen: `fold`×12 (23 including nested), `file`×37, `webr`×8, `exc`×2, `frm`×1, `svy`×1. Results: session survives forced `time_budget` aborts (ADR 0045); breadcrumbs root→parent; course News 0→10 dated items across 7 courses (block_news UI items); exercises give per-assignment units, and `view: all` reaches 8 and 3 assignments (ADR 0052); forum threads carry post/unread counts and latest post; PDF page windows via `startPage` (ADR 0047); 37/37 file rows give extension, size and change time (pages not shown in rows); repository root lists 6 category cards; 8/8 `webr` return destination metadata (ADR 0042); 23 folders give 20 `ok` and 3 structurally `empty`, owner-confirmed empty (ADR 0050); a course-scoped search takes 7–16 s (ADR 0048); the calendar has exc deadlines corroborated by Dashboard Tasks/Calendar and no file-upload noise (ADR 0051). Not seen: `sess`, `grp`, `itgr`, `lso`, `book`, `lm`, `htlm`, `copa`, `wiki`, `glo`, `mcst`, `poll`.
+
 ## 1. Purpose
 
 Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. No writes until Security + academic-integrity review.
@@ -36,8 +38,8 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today | Notes |
 | --- | --- | --- | --- |
-| Exercise awareness | Instructions, due date, own hand-in status | tool partial (`adam_get_exercise`); **live-unverified** | Phase B blocked until a course with real `exc`; deep-link browser for submit |
-| News / what changed | New files & activity when lecturers enable News | partial→stronger (AT4); **live-seen** on one course | Student QSG: News only if enabled; honest empty when off |
+| Exercise awareness | Instructions, due date, own hand-in status | **Known** (`adam_get_exercise` per-assignment units + `view`); **live-seen** 2026-11-15 | ADR 0052 views via advertised routes; instruction/feedback files not read (#129); submit stays in ADAM |
+| News / what changed | New files & activity when lecturers enable News | **Known**; **live-seen** 2026-11-15 (10 items, 7 courses) | course `block_news` UI items, dated, keyed by news_id; block pagination and Dashboard news not read |
 | Session / timetable blocks | Class dates in course (`sess`) | uncertain | **Wait-for-inventory** (empty enrolled re-verify; not hunting) |
 
 ### P2 — later reads
@@ -63,18 +65,18 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `fold` Postbox / Member Work Area | Hand-in / peer files | list? / write no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **re-confirmed** live metadata 2026-09-14 tip 5099529 (file×37); extract confirm exercised |
-| `exc` | Instructions, deadline, status | tool bodies via `adam_get_exercise` + confirm; resource `adam://exc/{refId}` is metadata only (no instructionText) | labeled synthetic `100021` (AT5); live still unverified |
+| `exc` | Instructions, deadline, status | tool bodies via `adam_get_exercise` + confirm; resource `adam://exc/{refId}` is metadata only (no instructionText) | **live-seen** 2026-11-15: per-assignment units, `view` ongoing/upcoming/past/all (ADR 0052); labeled synthetic `100021` (AT5) |
 | `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
 | `webr` | External links | partial (read_page) | **live-seen** 2026-10-02 `2291288`/`2291289` via `https://adam.unibas.ch/go/webr/{id}` (`read_page` page-text, ~2.2KB; no generic fetch; no fixture invented) |
 | `htlm` / `lm` / SCORM | Learning modules | no/uncertain | gated — needs live refId + capture per §4 principle, parked until sighted |
 | `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live threads from HTML when parse succeeds; missing HTML honest-empty / fail-closed posts; fixture `threadId` posts OK |
 | `wiki` / `blog` / Etherpad | Collab | no | gated — needs live refId + capture per §4 principle, parked until sighted |
-| `svy` | Surveys | partial (list + `read_page` info screen; never submitted) | ADR 0049 — `/go/svy/{id}` citations, `baseClass=ilObjSurveyGUI` landings; synthetic `100130`; live re-verify pending (#124) |
+| `svy` | Surveys | partial (list + `read_page` info screen; never submitted) | ADR 0049 — `/go/svy/{id}` citations, `baseClass=ilObjSurveyGUI` landings; synthetic `100130`; **live-seen** as `svy` in listings 2026-11-15 |
 | `poll` | Inline course polls | partial (list from vote form + `read_page`; never voted) | ADR 0049 — `/go/poll/{id}` citations; synthetic `100131`; live markup re-verify pending (#124) |
-| `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049 — card tiles count as listing rows; live re-verify pending (#124) |
+| `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049; **live-seen** 2026-11-15 (6 categories, `ok`) |
 | `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
-| news sideblock | What changed | partial | **done** (one course, 2026-09-06) |
-| calendar GUI | Agenda | partial→stronger (AT6 page walk) | widget seen; agenda empty; provenance honesty |
+| news sideblock | What changed | yes | **live-seen** 2026-11-15 (`block_news_{id}` UI items, #141) |
+| calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); exc deadlines; file-row dates excluded; full `ilCalendarPresentationGUI` not read |
 | mail | Messaging | out | skip |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
