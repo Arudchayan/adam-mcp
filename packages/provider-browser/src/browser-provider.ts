@@ -16,6 +16,7 @@ import {
   type AdamProvider,
   type CalendarEvent,
   type ExerciseObject,
+  type ExerciseUnit,
   type ForumObject,
   type FileExtract,
   type FileObject,
@@ -29,7 +30,8 @@ import {
 } from "adam-core";
 import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./local-download.ts";
 import { filenameFromContentDisposition } from "./download-metadata.ts";
-import { parseExerciseUnits } from "./exercise-parse.ts";
+import { ownStatus, parseExerciseAssignments } from "./exercise-parse.ts";
+import { EXERCISE_DETAIL_CAP, exerciseAssignmentDetailUrl, parseExerciseDetail } from "./exercise-detail.ts";
 import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
 
@@ -542,7 +544,7 @@ export class BrowserAdamProvider implements AdamProvider {
     return saveLocalDownload(this.session(), file, destination, options?.signal);
   }
 
-  async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView }): Promise<ExerciseObject> {
+  async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView; detail?: boolean }): Promise<ExerciseObject> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
@@ -569,9 +571,10 @@ export class BrowserAdamProvider implements AdamProvider {
     }
     // #120: per-assignment units from the ILIAS 10.12 overview; [] when ADAM
     // says there are none. Unrecognised layouts keep the single page-text unit.
-    const parsed = parseExerciseUnits(snapshot.html ?? "", catalog.text);
+    const parsed = parseExerciseAssignments(snapshot.html ?? "", catalog.text);
     if (parsed) {
-      return { ...object, type: "exc", units: parsed, ...(options?.view ? { view: options.view } : {}) };
+      const units = options?.detail ? await this.exerciseDetails(refId, parsed, options.signal) : parsed.map(({ unit }) => unit);
+      return { ...object, type: "exc", units, ...(options?.view ? { view: options.view } : {}) };
     }
     if (options?.view && options.view !== "ongoing") throw unavailableExerciseView(refId, options.view);
     const deadline = exerciseDeadlineFromPage(catalog.text, catalog.inferredDates);
@@ -587,6 +590,45 @@ export class BrowserAdamProvider implements AdamProvider {
         },
       ],
     };
+  }
+
+  /** ADR 0053: follow each assignment's own allowlisted detail link, sequentially, capped. */
+  private async exerciseDetails(refId: RefId, assignments: Array<{ unit: ExerciseUnit; href?: string; status?: string }>, signal?: AbortSignal): Promise<ExerciseUnit[]> {
+    const units: ExerciseUnit[] = [];
+    let opened = 0;
+    for (const { unit, href, status } of assignments) {
+      throwIfCancelled(signal);
+      const url = exerciseAssignmentDetailUrl(href, refId);
+      if (!url) {
+        units.push({ ...unit, detailStatus: "no_link" });
+        continue;
+      }
+      if (opened >= EXERCISE_DETAIL_CAP) {
+        units.push({ ...unit, detailStatus: "not_read" });
+        continue;
+      }
+      opened += 1;
+      const page = await this.openAuthorized(url, signal, "exc");
+      const now = new Date(this.fetchedAt(page));
+      // Only a page still on the pinned origin and on this exercise's presentation route counts.
+      const detail = exerciseAssignmentDetailUrl(page.url, refId) ? parseExerciseDetail(page.html ?? "", now) : undefined;
+      if (!detail) {
+        units.push({ ...unit, detailStatus: "unrecognized" });
+        continue;
+      }
+      const deadline = unit.deadline ?? detail.schedule?.deadline;
+      const lastSubmission = detail.submission?.lastSubmission;
+      units.push({
+        ...unit,
+        ...(deadline ? { deadline } : {}),
+        ...(detail.instructionText ? { instructionText: detail.instructionText } : {}),
+        ...(detail.schedule ? { schedule: detail.schedule } : {}),
+        ...(detail.submission ? { submission: detail.submission } : {}),
+        ownStatus: lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus,
+        detailStatus: "read",
+      });
+    }
+    return units;
   }
 
   async getForum(

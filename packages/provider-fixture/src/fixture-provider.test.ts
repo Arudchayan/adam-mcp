@@ -69,6 +69,11 @@ describe("FixtureAdamProvider", () => {
     assert.equal(exercise.units[0]?.ownStatus, "none");
     assert.match(exercise.units[0]?.instructionText ?? "", /cannot submit/);
     assert.equal("submit" in exercise, false);
+    assert.equal(exercise.units[0]?.detailStatus, undefined);
+    const detailed = await provider.getExercise("100021", { detail: true });
+    assert.equal(detailed.units[0]?.detailStatus, "read");
+    assert.equal(detailed.units[0]?.schedule?.deadline, exercise.units[0]?.deadline);
+    assert.equal(detailed.units[0]?.submission?.lastSubmission, "No submission yet.");
     await assert.rejects(() => provider.getExercise("100001"), (error: unknown) => {
       assert.ok(error instanceof AdamError);
       assert.equal(error.code, "unsupported_type");
