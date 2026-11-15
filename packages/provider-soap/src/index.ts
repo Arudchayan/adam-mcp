@@ -63,7 +63,7 @@ export class SoapAdamProvider implements AdamProvider {
   async listMail() {
     return disabled();
   }
-  async readMail(_mailId: string) {
+  async readMail(_folderId: string, _mailId: string) {
     return disabled();
   }
 }

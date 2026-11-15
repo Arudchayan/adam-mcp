@@ -41,6 +41,6 @@ export type AdamProvider = {
   listNews(options?: { since?: string } & ListOptions): Promise<Paginated<NewsItem>>;
   /** ADR 0054: mailbox headers (confirm-gated at the MCP layer). */
   listMail(options?: MailListOptions): Promise<Paginated<MailHeader>>;
-  /** ADR 0054: one message body. Opening it marks it read in ADAM, as a browser would. */
-  readMail(mailId: string, options?: MailReadOptions): Promise<MailMessage>;
+  /** ADR 0054: one message body by its listed folderId + mailId. Opening it marks it read in ADAM, as a browser would. */
+  readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage>;
 };

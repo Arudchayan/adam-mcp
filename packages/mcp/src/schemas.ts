@@ -476,6 +476,7 @@ export const listMailInputSchema = z
 
 export const readMailInputSchema = z
   .object({
+    folderId: z.string().regex(/^\d{1,12}$/, "folderId must be the decimal id from adam_list_mail").describe("folderId from the same adam_list_mail row"),
     mailId: z.string().regex(/^\d{1,12}$/, "mailId must be the decimal id from adam_list_mail").describe("mailId from adam_list_mail"),
     confirm: z
       .literal(true)

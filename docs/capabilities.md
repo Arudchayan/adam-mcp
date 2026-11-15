@@ -77,7 +77,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
 | news sideblock | What changed | yes | **live-seen** 2026-11-15 (`block_news_{id}` UI items, #141) |
 | calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); exc deadlines; file-row dates excluded; full `ilCalendarPresentationGUI` not read |
-| mail | Messaging | partial (`adam_list_mail` inbox headers + `adam_read_mail` body, both confirm-gated; no send) | ADR 0054 — inbox KS table structure **live-seen** 2026-11-15; `showMail` message view needs live verification |
+| mail | Messaging | partial (`adam_list_mail` inbox headers + `adam_read_mail` body, both confirm-gated; no send) | ADR 0054 — inbox KS table structure **live-seen** 2026-11-15; subject link + `showMail` route + message view probed live (ADR 0054) |
 | grades / LP staff views | Scores | out | skip |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
 | members gallery | Roster | out (off by default) | skip |

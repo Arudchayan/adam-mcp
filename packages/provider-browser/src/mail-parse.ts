@@ -6,9 +6,12 @@ import { extractClassBlocksAt, sliceUntilClose, textOf } from "./ui-items.ts";
  * ADR 0054: read-only ADAM internal mail (ILIAS 10.12 `ilMailFolderGUI`).
  *
  * The mailbox page also carries table actions (mark read/unread, move, delete),
- * compose, contacts, attachments and options routes. This module never builds
- * or returns any of them: the only route it accepts is a `showMail` link the
- * inbox table itself advertises, validated key by key.
+ * compose, contacts, attachments and options routes. Live, even the inbox
+ * subject link is a `cmd=executeTableAction` (`ilMailFolderGUI_action=show`)
+ * carrying a CSRF `rtoken` — the same command as mark/move/delete. This module
+ * never requests, keeps or returns those links: it reads only the two numeric
+ * identities from them and builds the plain `showMail` route itself (as ADR
+ * 0026 does for forum threads).
  */
 
 /** Fixed landing route; ILIAS redirects it to the inbox folder view. */
@@ -17,15 +20,9 @@ export const MAILBOX_URL = `${DEFAULT_ADAM_ORIGIN}/ilias.php?baseClass=ilMailGUI
 const SHOW_MAIL_KEYS = new Set(["baseClass", "cmdNode", "cmdClass", "cmd", "mobj_id", "mail_id"]);
 const NUMERIC_ID = /^\d{1,12}$/;
 
-export type MailRoute = { url: string; folderId: string; mailId: string };
+export type MailIds = { folderId: string; mailId: string };
 
-/**
- * Accept only `ilias.php?baseClass=ilmailgui&cmdClass=ilMailFolderGUI&cmd=showMail`
- * on the pinned origin with numeric `mobj_id` / `mail_id`, allowlisted keys and
- * no duplicates. Everything else (executeTableAction, post, compose, delivery
- * of attachments, …) returns undefined.
- */
-export function showMailRoute(raw: string, base: string = DEFAULT_ADAM_ORIGIN): MailRoute | undefined {
+function parseIliasUrl(raw: string, base: string): URL | undefined {
   let url: URL;
   try {
     url = new URL(raw.replace(/&amp;/gi, "&"), base);
@@ -34,15 +31,76 @@ export function showMailRoute(raw: string, base: string = DEFAULT_ADAM_ORIGIN): 
   }
   if (url.origin !== DEFAULT_ADAM_ORIGIN || url.pathname !== "/ilias.php" || url.username || url.password || url.hash) return undefined;
   const keys = [...url.searchParams.keys()];
-  if (keys.some((key) => !SHOW_MAIL_KEYS.has(key)) || new Set(keys).size !== keys.length) return undefined;
-  const param = (key: string) => url.searchParams.get(key) ?? "";
-  if (param("baseClass").toLowerCase() !== "ilmailgui") return undefined;
-  if (param("cmdClass").toLowerCase() !== "ilmailfoldergui" || param("cmd") !== "showMail") return undefined;
-  if (url.searchParams.has("cmdNode") && !/^[a-z0-9:]{1,40}$/i.test(param("cmdNode"))) return undefined;
-  const folderId = param("mobj_id");
-  const mailId = param("mail_id");
+  if (new Set(keys).size !== keys.length) return undefined;
+  if (url.searchParams.get("baseClass")?.toLowerCase() !== "ilmailgui") return undefined;
+  if (url.searchParams.get("cmdClass")?.toLowerCase() !== "ilmailfoldergui") return undefined;
+  return url;
+}
+
+/**
+ * Identities of a `showMail` page (a landing URL or a Dashboard mail link):
+ * pinned origin, `/ilias.php`, `baseClass=ilmailgui`, `cmdClass=ilMailFolderGUI`,
+ * `cmd=showMail`, numeric `mobj_id` / `mail_id`, allowlisted keys, no duplicates.
+ */
+export function showMailIds(raw: string, base: string = DEFAULT_ADAM_ORIGIN): MailIds | undefined {
+  const url = parseIliasUrl(raw, base);
+  if (!url) return undefined;
+  if ([...url.searchParams.keys()].some((key) => !SHOW_MAIL_KEYS.has(key))) return undefined;
+  if (url.searchParams.get("cmd") !== "showMail") return undefined;
+  if (url.searchParams.has("cmdNode") && !/^[a-z0-9:]{1,40}$/i.test(url.searchParams.get("cmdNode") ?? "")) return undefined;
+  const folderId = url.searchParams.get("mobj_id") ?? "";
+  const mailId = url.searchParams.get("mail_id") ?? "";
   if (!NUMERIC_ID.test(folderId) || !NUMERIC_ID.test(mailId)) return undefined;
-  return { url: url.href, folderId, mailId };
+  return { folderId, mailId };
+}
+
+/**
+ * Identities from an inbox subject link. Live 10.12 renders it as
+ * `cmd=executeTableAction&ilMailFolderGUI_action=show&ilMailFolderGUI_mail_id=…&mobj_id=…&rtoken=…`.
+ * Only the `show` action of the mail folder GUI is read, and only its two
+ * numeric ids are kept — the link (and its rtoken) is never requested or kept.
+ * A plain `showMail` link is accepted too.
+ */
+export function rowMailIds(raw: string, base: string = DEFAULT_ADAM_ORIGIN): MailIds | undefined {
+  const plain = showMailIds(raw, base);
+  if (plain) return plain;
+  const url = parseIliasUrl(raw, base);
+  if (!url) return undefined;
+  if (url.searchParams.get("cmd") !== "executeTableAction" || url.searchParams.get("ilMailFolderGUI_action") !== "show") return undefined;
+  const folderId = url.searchParams.get("mobj_id") ?? "";
+  const mailId = url.searchParams.get("ilMailFolderGUI_mail_id") ?? "";
+  if (!NUMERIC_ID.test(folderId) || !NUMERIC_ID.test(mailId)) return undefined;
+  return { folderId, mailId };
+}
+
+/**
+ * Identity of the page ADAM actually landed on after a showMail request. Only
+ * read, never navigated to, so extra keys ILIAS adds (cmdNode, …) are tolerated;
+ * origin, path, `baseClass=ilmailgui`, `cmd=showMail` and numeric ids are not.
+ */
+export function landedMailIds(raw: string): MailIds | undefined {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return undefined;
+  }
+  if (url.origin !== DEFAULT_ADAM_ORIGIN || url.pathname !== "/ilias.php") return undefined;
+  if (url.searchParams.get("baseClass")?.toLowerCase() !== "ilmailgui" || url.searchParams.get("cmd") !== "showMail") return undefined;
+  const folderIds = url.searchParams.getAll("mobj_id");
+  const mailIds = url.searchParams.getAll("mail_id");
+  if (folderIds.length !== 1 || mailIds.length !== 1 || !NUMERIC_ID.test(folderIds[0]!) || !NUMERIC_ID.test(mailIds[0]!)) return undefined;
+  return { folderId: folderIds[0]!, mailId: mailIds[0]! };
+}
+
+/** Build the read-only message route from validated ids (ADR 0054; precedent ADR 0026). */
+export function showMailUrl(origin: string, folderId: string, mailId: string): string {
+  assertMailIds(folderId, mailId);
+  if (origin.replace(/\/$/, "") !== DEFAULT_ADAM_ORIGIN) {
+    throw new AdamError("forbidden", "Mail navigation requires the pinned ADAM origin.", false);
+  }
+  const params = new URLSearchParams({ baseClass: "ilmailgui", cmdClass: "ilMailFolderGUI", cmd: "showMail", mobj_id: folderId, mail_id: mailId });
+  return `${DEFAULT_ADAM_ORIGIN}/ilias.php?${params.toString()}`;
 }
 
 /** True when ADAM landed on the mail GUI (inbox list or a message), not elsewhere. */
@@ -55,16 +113,15 @@ export function isMailGuiUrl(raw: string): boolean {
   }
 }
 
-export function assertMailId(mailId: string): void {
-  if (!NUMERIC_ID.test(mailId)) {
-    throw new AdamError("stale_id", "mailId must be the decimal id from adam_list_mail.", false);
+export function assertMailIds(folderId: string, mailId: string): void {
+  if (!NUMERIC_ID.test(folderId) || !NUMERIC_ID.test(mailId)) {
+    throw new AdamError("stale_id", "folderId and mailId must be the decimal ids from adam_list_mail.", false);
   }
 }
 
 export type ParsedMailRow = {
   mailId: string;
   folderId: string;
-  url: string;
   subject: string;
   sender?: string;
   dateText?: string;
@@ -86,11 +143,11 @@ export type ParsedMailbox = {
 type Column = "status" | "sender" | "subject" | "attachments" | "date" | "other";
 
 const HEADER_COLUMNS: Array<[RegExp, Column]> = [
-  [/^status/i, "status"],
-  [/^(?:sender|from|absender(?:in)?|von)/i, "sender"],
-  [/^(?:subject|betreff)/i, "subject"],
+  [/^status\b/i, "status"],
+  [/^(?:sender|from|absender(?:in)?|von)\b/i, "sender"],
+  [/^(?:subject|betreff)\b/i, "subject"],
   [/^(?:attachments?|anh[äa]nge?|anhang)(?![a-zäöü])/i, "attachments"],
-  [/^(?:date|datum|sent|gesendet)/i, "date"],
+  [/^(?:date|datum|sent|gesendet)\b/i, "date"],
 ];
 
 /** Parse the first KS data table on the inbox page. Fields absent from the HTML stay absent. */
@@ -113,10 +170,9 @@ export function parseMailbox(html: string, now: Date = new Date()): ParsedMailbo
       if (column === "status") statusSeen = true;
       if (column !== "other" && !byColumn.has(column)) byColumn.set(column, cell.inner);
     });
-    const subjectCell = byColumn.get("subject") ?? cells.map((cell) => cell.inner).find((inner) => /cmd=showMail/i.test(inner));
-    const href = subjectCell ? showMailHref(subjectCell) : undefined;
-    const route = href ? showMailRoute(href) : undefined;
-    if (!route || !subjectCell) {
+    const subjectCell = byColumn.get("subject") ?? cells.map((cell) => cell.inner).find((inner) => subjectHref(inner) !== undefined);
+    const ids = subjectCell ? subjectHref(subjectCell) : undefined;
+    if (!ids || !subjectCell) {
       skippedRows += 1;
       continue;
     }
@@ -125,9 +181,8 @@ export function parseMailbox(html: string, now: Date = new Date()): ParsedMailbo
     const sentAt = dateText ? parseAdamTimestamp(dateText, now) : undefined;
     const attachments = byColumn.get("attachments");
     rows.push({
-      mailId: route.mailId,
-      folderId: route.folderId,
-      url: route.url,
+      mailId: ids.mailId,
+      folderId: ids.folderId,
       subject: textOf(subjectCell) || "(no subject)",
       ...(sender ? { sender } : {}),
       ...(dateText ? { dateText } : {}),
@@ -151,11 +206,12 @@ export type ParsedMailMessage = {
   attachments: MailAttachment[];
 };
 
-type Field = "sender" | "recipients" | "subject" | "date" | "body" | "attachments";
+type Field = "sender" | "recipients" | "cc" | "subject" | "date" | "body" | "attachments";
 
 const FIELD_LABELS: Array<[RegExp, Field]> = [
   [/^(?:from|sender|von|absender(?:in)?)$/i, "sender"],
   [/^(?:to|an|empfänger(?:in)?|recipients?)$/i, "recipients"],
+  [/^(?:cc|kopie)$/i, "cc"],
   [/^(?:subject|betreff)$/i, "subject"],
   [/^(?:date|datum|sent|gesendet)$/i, "date"],
   [/^(?:message|nachricht|body|text|mitteilung|inhalt)$/i, "body"],
@@ -163,10 +219,11 @@ const FIELD_LABELS: Array<[RegExp, Field]> = [
 ];
 
 /**
- * NEEDS LIVE VERIFICATION (ADR 0054): the 10.12 `showMail` markup was not probed.
- * Accepts the label/value shapes ILIAS renders read-only data in — legacy
- * property-form rows (`form-group` + `control-label`), KS characteristic values,
- * KS item properties and `<dt>/<dd>` — and fails closed without a labelled body.
+ * ADR 0054, live 10.12 shape: `form.form-horizontal` with `div.ilFormHeader > h2.ilHeader`
+ * (subject) and `div.form-group.row` rows of `<label>From:</label>` + a sibling value
+ * `div` (From / To / CC / Subject / Date / Message; Message uses `<br>` breaks).
+ * KS characteristic values, KS item properties and `<dt>/<dd>` are accepted too.
+ * Fails closed without a labelled body.
  */
 export function parseMailMessage(html: string, now: Date = new Date()): ParsedMailMessage | undefined {
   const fields = new Map<Field, string>();
@@ -179,8 +236,11 @@ export function parseMailMessage(html: string, now: Date = new Date()): ParsedMa
   const fullBody = bodyText(bodyHtml);
   const truncated = fullBody.length > MAX_PAGE_CHARS;
   const sender = redactText(textOf(fields.get("sender") ?? ""));
-  const recipients = redactText(textOf(fields.get("recipients") ?? ""));
-  const subject = textOf(fields.get("subject") ?? "");
+  const to = textOf(fields.get("recipients") ?? "");
+  const cc = textOf(fields.get("cc") ?? "");
+  const recipients = redactText([to, cc ? `CC: ${cc}` : ""].filter(Boolean).join("; "));
+  const heading = html.match(/<h2\b[^>]*class=["'][^"']*\bilHeader\b[^"']*["'][^>]*>([\s\S]*?)<\/h2>/i)?.[1];
+  const subject = textOf(fields.get("subject") ?? "") || textOf(heading ?? "");
   const dateText = textOf(fields.get("date") ?? "");
   const sentAt = dateText ? parseAdamTimestamp(dateText, now) : undefined;
   return {
@@ -197,7 +257,7 @@ export function parseMailMessage(html: string, now: Date = new Date()): ParsedMa
 
 function labelledValues(html: string): Array<{ label: string; value: string }> {
   const pairs: Array<{ label: string; value: string }> = [];
-  // Legacy read-only property form: <div class="form-group"><label …>From</label><div class="col-…">value</div></div>
+  // Read-only property form (live 10.12): <div class="form-group row"><label …>From:</label><div class="col-…">value</div></div>
   for (const { block } of extractClassBlocksAt(html, "form-group")) {
     const label = block.match(/<label\b[^>]*>([\s\S]*?)<\/label>/i);
     if (!label) continue;
@@ -307,14 +367,19 @@ function labelOf(html: string): string {
   return [textOf(html), ...labels.map((label) => textOf(label))].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
-function showMailHref(html: string): string | undefined {
+/** First link in the cell that yields mail identities; the href (and any rtoken) is dropped. */
+function subjectHref(html: string): MailIds | undefined {
   for (const match of html.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["']/gi)) {
-    if (/cmd=showMail\b/i.test(match[1]!)) return match[1];
+    const ids = rowMailIds(match[1]!);
+    if (ids) return ids;
   }
   return undefined;
 }
 
 function readStatus(statusCell: string, row: string): ParsedMailRow["status"] {
+  // Live 10.12: <img class="icon mailu small"> (unread) / <img class="icon mailr small"> (read).
+  if (/class=["'][^"']*\bmailu\b/i.test(statusCell)) return "unread";
+  if (/class=["'][^"']*\bmailr\b/i.test(statusCell)) return "read";
   const label = labelOf(statusCell);
   if (/\b(?:unread|ungelesen|new|neu)\b/i.test(label)) return "unread";
   if (/\b(?:read|gelesen)\b/i.test(label)) return "read";

@@ -322,12 +322,14 @@ export class FixtureAdamProvider implements AdamProvider {
     return withListingState(paginate(items, options), items.length > 0 ? "ok" : "empty");
   }
 
-  async readMail(mailId: string, options?: MailReadOptions): Promise<MailMessage> {
+  async readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage> {
     throwIfCancelled(options?.signal);
-    if (!/^\d{1,12}$/.test(mailId)) throw new AdamError("stale_id", "mailId must be the decimal id from adam_list_mail.", false);
-    const entry = fixtureMail.find(({ header }) => header.mailId === mailId);
+    if (!/^\d{1,12}$/.test(folderId) || !/^\d{1,12}$/.test(mailId)) {
+      throw new AdamError("stale_id", "folderId and mailId must be the decimal ids from adam_list_mail.", false);
+    }
+    const entry = fixtureMail.find(({ header }) => header.mailId === mailId && header.folderId === folderId);
     if (!entry) {
-      throw new AdamError("not_found", `Mail ${mailId} is not on the first page of the ADAM inbox. Call adam_list_mail and use a mailId from it.`, false);
+      throw new AdamError("not_found", `ADAM did not open mail ${mailId}; it may have been moved or deleted. Refresh adam_list_mail.`, false);
     }
     this.openedMail.add(mailId);
     return entry.message;

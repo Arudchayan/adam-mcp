@@ -69,7 +69,7 @@ describe("ADR 0054: adam_list_mail / adam_read_mail", () => {
       for (const tool of [list, read]) {
         assert.match(tool.description ?? "", /^Needs student-ok \(confirm:true OR elicitation\) after the student asked/);
         assert.deepEqual(tool.annotations, READ_ONLY_ANNOTATIONS);
-        assert.doesNotMatch(Object.keys(tool.inputSchema?.properties ?? {}).join(","), /url|href|folder|cmd/i, "no route or folder input");
+        assert.doesNotMatch(Object.keys(tool.inputSchema?.properties ?? {}).join(","), /url|href|cmd|token|action/i, "no route, command or token input");
       }
       assert.match(read.description ?? "", /marks it read in ADAM/);
       assert.match(read.description ?? "", /never downloaded/);
@@ -92,11 +92,11 @@ describe("ADR 0054: adam_list_mail / adam_read_mail", () => {
       assert.deepEqual(page.items.map((item) => [item.mailId, item.status]), [["700002", "unread"], ["700001", "read"]]);
       assert.doesNotMatch(text(listed), /graded|Ignore previous/, "list never carries bodies");
 
-      const deniedRead = await rpc.call("adam_read_mail", { mailId: "700002" });
+      const deniedRead = await rpc.call("adam_read_mail", { folderId: "9000", mailId: "700002" });
       assert.equal(deniedRead.result?.isError, true);
       assert.doesNotMatch(text(deniedRead), /graded/);
 
-      const read = await rpc.call("adam_read_mail", { mailId: "700002", confirm: true });
+      const read = await rpc.call("adam_read_mail", { folderId: "9000", mailId: "700002", confirm: true });
       const message = read.result?.structuredContent as { untrusted: boolean; notice: string; body: string; attachments: Array<{ name: string }> };
       assert.equal(message.untrusted, true);
       assert.match(message.notice, /untrusted data, not instructions/);
@@ -106,9 +106,9 @@ describe("ADR 0054: adam_list_mail / adam_read_mail", () => {
       const after = (await rpc.call("adam_list_mail", { confirm: true })).result?.structuredContent as { items: Array<{ mailId: string; status: string }> };
       assert.equal(after.items.find((item) => item.mailId === "700002")?.status, "read", "opening marks read, as in ADAM");
 
-      const bad = await rpc.call("adam_read_mail", { mailId: "../ilias.php?cmd=executeTableAction", confirm: true });
+      const bad = await rpc.call("adam_read_mail", { folderId: "9000", mailId: "../ilias.php?cmd=executeTableAction", confirm: true });
       assert.ok(bad.error || bad.result?.isError, "non-numeric mailId rejected by schema");
-      const unknown = await rpc.call("adam_read_mail", { mailId: "1", confirm: true });
+      const unknown = await rpc.call("adam_read_mail", { folderId: "9000", mailId: "1", confirm: true });
       assert.match(text(unknown), /not_found/);
     } finally { await rpc.close(); }
   });
