@@ -17,6 +17,20 @@ export const ADAM_OBJECT_TYPES = [
   "impr",
   "svy",
   "poll",
+  // ADR 0057 (#130, #131): ILIAS 10.12 containers, scheduling and content modules.
+  "sess",
+  "grp",
+  "itgr",
+  "lso",
+  "book",
+  "copa",
+  "lm",
+  "htlm",
+  "wiki",
+  "glo",
+  "dcl",
+  "bibl",
+  "mcst",
   "unknown",
 ] as const;
 

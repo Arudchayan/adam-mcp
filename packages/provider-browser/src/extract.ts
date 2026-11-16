@@ -1,6 +1,7 @@
 import {
   canonicalUrl,
   DEFAULT_ADAM_ORIGIN,
+  isAdamObjectType,
   objectUrl,
   parseAdamRef,
   type AdamObject,
@@ -149,6 +150,15 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
       parsed.refId,
       toObject(parsed.type, parsed.refId, title, crumbTrail, provenanceBase(link.href)),
     );
+  }
+  // ADR 0057: a row whose title link carries no type (ilias.php?baseClass=ilrepositorygui&ref_id=…,
+  // as ILIAS renders sessions and item groups) takes its type from the row's standard icon.
+  const iconTypes = rowIconTypes(snapshot.html ?? "");
+  for (const item of byRef.values()) {
+    if (item.type !== "unknown") continue;
+    const type = iconTypes.get(item.refId);
+    if (!type) continue;
+    byRef.set(item.refId, toObject(type, item.refId, item.title, item.breadcrumb, provenanceBase(item.provenance.sourceUrl)));
   }
   // ADR 0049: inline Poll blocks render a vote form, often without a title link.
   // The form action names the poll ref; listing it never submits the form.
@@ -497,6 +507,24 @@ const POLL_ACTION_LABEL = /^(?:vote|abstimmen|stimme abgeben|submit vote|show re
 
 function isPollActionLabel(text: string): boolean {
   return POLL_ACTION_LABEL.test(cleanTitle(text));
+}
+
+/**
+ * ADR 0057: ILIAS list rows are `div.ilContainerListItemOuter#lg_div_{refId}_pref_{parentRef}`
+ * with a standard icon `…/standard/icon_{type}.svg`. Only known types count; a custom
+ * uploaded icon gives no hint and the row stays `unknown`. A `tst` icon types the row
+ * as `tst`, so the deny policy drops it.
+ */
+export function rowIconTypes(html: string): Map<RefId, AdamObjectType> {
+  const found = new Map<RefId, AdamObjectType>();
+  const starts = [...html.matchAll(/<div\b[^>]*\bid="lg_div_(\d+)_pref_\d+"[^>]*>/gi)];
+  starts.forEach((start, index) => {
+    const end = starts[index + 1]?.index ?? Math.min(html.length, start.index! + 4000);
+    const row = html.slice(start.index!, end);
+    const icon = row.match(/<img\b[^>]*\bsrc="[^"]*\/standard\/icon_([a-z]+)\.svg"/i)?.[1]?.toLowerCase();
+    if (icon && isAdamObjectType(icon) && icon !== "unknown" && !found.has(start[1]!)) found.set(start[1]!, icon);
+  });
+  return found;
 }
 
 /**

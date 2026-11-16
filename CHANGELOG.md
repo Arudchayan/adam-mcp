@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sessions, groups, item groups, learning sequences, booking pools, content
+  pages, learning modules, wikis, glossaries, data collections, bibliographies
+  and mediacasts are typed and cited (`/go/{type}/{id}`) instead of `unknown`;
+  groups are walked like folders (#130, #131, ADR 0057).
 - Read-only staff views for tutors and course admins: `adam_list_course_members`
   (roster with roles) and `adam_get_exercise_grades` (per-assignment pass/fail
   matrix). Both are confirm-gated, follow only tabs ADAM advertises, and return

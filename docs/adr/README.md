@@ -4,6 +4,7 @@
 | --- | --- |
 | [0060](0060-read-only-staff-views.md) | Read-only staff views: course members and exercise grades (lab-verified) |
 | [0059](0059-enrolled-courses-membership-overview.md) | Enrolled courses from the membership overview when the Dashboard shows none |
+| [0057](0057-containers-and-content-module-types.md) | ILIAS 10.12 containers, scheduling and content-module types (identity, citations, group walk) |
 | [0056](0056-derived-tasks-and-private-notes.md) | Full Derived Tasks page in the calendar; Private Notes deferred |
 | [0055](0055-dashboard-news-block.md) | Dashboard News block and bounded News block pagination in `adam_list_news` |
 | [0054](0054-read-only-internal-mail.md) | Read-only ADAM internal mail (inbox headers + confirm-gated bodies) |

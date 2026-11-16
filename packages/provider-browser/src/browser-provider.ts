@@ -88,6 +88,8 @@ export const MEMBERSHIP_OVERVIEW_PATH = "/ilias.php?baseClass=ilmembershipovervi
 /** Cap for getCourse embedded children; truncation is signaled when the listing is larger. */
 export const MAX_COURSE_CHILDREN = 100;
 const TYPE_PROBE_ORDER: AdamObjectType[] = ["crs", "fold", "file", "exc", "cat"];
+/** Containers whose listing is walked (ADR 0057 adds ILIAS groups, which render like a course). */
+const isListingContainer = (type: AdamObjectType | undefined): boolean => type === "crs" || type === "fold" || type === "grp";
 
 /** Walk cache entry: catalog + provenance URLs only (no HTML/aria PageSnapshot body). */
 export type LivePage = {
@@ -1260,7 +1262,7 @@ export class BrowserAdamProvider implements AdamProvider {
       if (isDeniedObjectType(type) || type === "file" || type === "impr" || type === "cat" || type === "root") {
         return;
       }
-      if (type !== "crs" && type !== "fold" && type !== "exc") {
+      if (!isListingContainer(type) && type !== "exc") {
         return;
       }
       // ADR 0048: exercise pages are leaves; their titles already come from the parent listing.
@@ -1316,7 +1318,7 @@ export class BrowserAdamProvider implements AdamProvider {
           (item) => item.refId !== catalog.current?.refId && !isDeniedObjectType(item.type),
         ).length;
         const listing = classifyListing(snapshot, childCount);
-        if (listing.state === "unknown" && (catalog.current?.type === "crs" || catalog.current?.type === "fold")) {
+        if (listing.state === "unknown" && (isListingContainer(catalog.current?.type))) {
           skipped += 1;
           unknownListings += 1;
         }
@@ -1324,7 +1326,7 @@ export class BrowserAdamProvider implements AdamProvider {
         if (listing.state !== "ok") {
           continue;
         }
-        if (catalog.current?.type === "crs" || catalog.current?.type === "fold") {
+        if (isListingContainer(catalog.current?.type)) {
           for (const child of catalog.objects) {
             enqueue(child.type, child.refId);
           }
@@ -1572,7 +1574,7 @@ export class BrowserAdamProvider implements AdamProvider {
       (!parsed || parsed.refId === landed.refId)
     ) {
       const catalog = this.catalog(snapshot);
-      const container = catalog.current?.type === "crs" || catalog.current?.type === "fold";
+      const container = isListingContainer(catalog.current?.type);
       const children = catalog.objects.filter((item) => item.refId !== catalog.current?.refId);
       if (!container || classifyListing(snapshot, children.length).state !== "unknown") {
         this.pageByUrl.set(url, { snapshot, fetchedAt: this.clock() });

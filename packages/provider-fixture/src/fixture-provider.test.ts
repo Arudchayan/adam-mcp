@@ -545,3 +545,15 @@ describe("getForum client type hint", () => {
     );
   });
 });
+
+describe("ADR 0057: fixture group, session and wiki", () => {
+  it("a group is a walkable container with a session and a wiki", async () => {
+    const provider = createFixtureProvider();
+    const children = await provider.listChildren("100101");
+    assert.equal(children.items.find((item) => item.refId === "100140")?.type, "grp");
+    const inGroup = await provider.listChildren("100140", { type: "grp" });
+    assert.deepEqual(inGroup.items.map((item) => item.type).sort(), ["sess", "wiki"]);
+    const session = await provider.readPage("100141", { type: "sess" });
+    assert.match(session.text, /Synthetic room/);
+  });
+});
