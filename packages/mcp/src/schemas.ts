@@ -573,3 +573,63 @@ export const mailMessageOutputSchema = z
     ).describe("Names and sizes only; attachments are never downloaded"),
   })
   .passthrough();
+
+/** ADR 0060 (#128): staff views. Other people's names and grades: confirm-gated, lab-verified. */
+const STAFF_CONFIRM_HELP =
+  "Optional gate. Set true only after the user (a tutor or course admin) asked for this staff view. Returns other people's names, logins and grade status, so it is personal data. Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {\"refId\":\"...\",\"confirm\":true}.";
+
+export const getCourseMembersInputSchema = z
+  .object({
+    refId: z.string().min(1).describe(REF_ID_HELP),
+    type: objectTypeHintSchema,
+    confirm: z.literal(true).optional().describe(STAFF_CONFIRM_HELP),
+  })
+  .superRefine(refineObjectRef)
+  .transform(resolveObjectRef);
+
+export const getExerciseGradesInputSchema = getCourseMembersInputSchema;
+
+const staffViewFields = {
+  untrusted: z.literal(true),
+  notice: z.string(),
+  refId: z.string(),
+  url: z.string(),
+  evidence: z.literal("lab-verified").describe("Parsed from ILIAS 10.12 lab markup; not yet seen on ADAM with a staff account"),
+  provenance: provenanceSchema,
+};
+
+export const courseMembersOutputSchema = z
+  .object({
+    ...staffViewFields,
+    members: z.array(
+      z
+        .object({
+          name: z.string(),
+          login: z.string().optional().describe("Email-shaped logins are redacted"),
+          roles: z.array(z.string()),
+          passed: z.boolean().optional(),
+          tutorialSupport: z.boolean().optional(),
+          notification: z.boolean().optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+const gradeStatusSchema = z.enum(["passed", "failed", "not_graded", "unknown"]);
+
+export const exerciseGradesOutputSchema = z
+  .object({
+    ...staffViewFields,
+    participants: z.array(
+      z
+        .object({
+          name: z.string(),
+          login: z.string().optional(),
+          grades: z.array(z.object({ assignment: z.number().int(), assignmentId: z.string().optional(), status: gradeStatusSchema }).passthrough()),
+          total: gradeStatusSchema.optional(),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();

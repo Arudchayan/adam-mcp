@@ -218,6 +218,46 @@ export type NewsItem = {
 };
 
 /**
+ * ADR 0060 (#128): staff views. One course member as ILIAS's Members table shows
+ * it to a tutor or course admin; email-shaped values are redacted.
+ */
+export type CourseMember = {
+  name: string;
+  login?: string;
+  roles: string[];
+  passed?: boolean;
+  tutorialSupport?: boolean;
+  notification?: boolean;
+};
+
+export type CourseMembers = {
+  refId: RefId;
+  url: string;
+  members: CourseMember[];
+  /** Lab-verified ILIAS 10.12 markup; not yet observed on ADAM itself. */
+  evidence: "lab-verified";
+  provenance: Provenance;
+};
+
+export type GradeStatus = "passed" | "failed" | "not_graded" | "unknown";
+
+/** ADR 0060: one participant row of an exercise's Grades View matrix. */
+export type ExerciseGradeRow = {
+  name: string;
+  login?: string;
+  grades: Array<{ assignment: number; assignmentId?: string; status: GradeStatus }>;
+  total?: GradeStatus;
+};
+
+export type ExerciseGrades = {
+  refId: RefId;
+  url: string;
+  participants: ExerciseGradeRow[];
+  evidence: "lab-verified";
+  provenance: Provenance;
+};
+
+/**
  * ADR 0054: one row of the ADAM internal mailbox (ilMailFolderGUI). Header
  * fields only — never the message body. Sender is a display name with any
  * email address redacted. `mailId` / `folderId` are ILIAS's own numeric ids.

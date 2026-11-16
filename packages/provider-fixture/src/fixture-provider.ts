@@ -13,6 +13,8 @@ import {
   type AdamProvider,
   preferCalendarEvents,
   type CalendarEvent,
+  type CourseMembers,
+  type ExerciseGrades,
   type ExerciseObject,
   type ForumObject,
   type FileExtract,
@@ -332,6 +334,22 @@ export class FixtureAdamProvider implements AdamProvider {
       this.openedMail.has(header.mailId) ? { ...header, status: "read" as const } : header,
     );
     return withListingState(paginate(items, options), items.length > 0 ? "ok" : "empty");
+  }
+
+  /** ADR 0060: the fixture user is a student, so the staff Members view is not offered. */
+  async getCourseMembers(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<CourseMembers> {
+    throwIfCancelled(options?.signal);
+    const record = requireTypedRecord(refId, options?.type);
+    if (record.object.type !== "crs") throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not a course.`);
+    throw new AdamError("forbidden", `Your role in ${refId} does not offer ADAM's "Members" view (tutor or course-admin only). This is not a missing object.`, false);
+  }
+
+  /** ADR 0060: the fixture user is a student, so the staff Grades View is not offered. */
+  async getExerciseGrades(refId: RefId, options?: { type?: AdamObject["type"]; signal?: AbortSignal }): Promise<ExerciseGrades> {
+    throwIfCancelled(options?.signal);
+    const record = requireTypedRecord(refId, options?.type);
+    if (record.object.type !== "exc") throw new AdamError("unsupported_type", `ref_id ${refId} is ${record.object.type}, not an exercise.`);
+    throw new AdamError("forbidden", `Your role in ${refId} does not offer ADAM's "Submissions and Grades" view (tutor or course-admin only). This is not a missing object.`, false);
   }
 
   async readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage> {

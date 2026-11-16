@@ -2,10 +2,10 @@
 
 | ADR | Title |
 | --- | --- |
+| [0060](0060-read-only-staff-views.md) | Read-only staff views: course members and exercise grades (lab-verified) |
 | [0059](0059-enrolled-courses-membership-overview.md) | Enrolled courses from the membership overview when the Dashboard shows none |
 | [0056](0056-derived-tasks-and-private-notes.md) | Full Derived Tasks page in the calendar; Private Notes deferred |
 | [0055](0055-dashboard-news-block.md) | Dashboard News block and bounded News block pagination in `adam_list_news` |
-| [0055](0055-dashboard-news-block.md) | Dashboard News block in `adam_list_news` (pagination deferred) |
 | [0054](0054-read-only-internal-mail.md) | Read-only ADAM internal mail (inbox headers + confirm-gated bodies) |
 | [0053](0053-exercise-assignment-detail.md) | Exercise assignment detail pages (`detail: true`; files, sample solution, team, evaluation) |
 | [0052](0052-exercise-assignment-views.md) | Exercise assignment views (Ongoing / Upcoming / Past / All) |

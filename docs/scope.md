@@ -4,7 +4,7 @@ Community connector for a student’s own MCP host against ADAM (ILIAS 10 at `ht
 
 ## Ships
 
-**Tools:** `adam_session_status`, `adam_login`, `adam_list_courses`, `adam_get_course`, `adam_list_children`, `adam_read_page` (confirm), `adam_list_files`, `adam_get_file`, `adam_extract_file_text` (confirm; text only), `adam_get_exercise` (confirm; instruction bodies; no submit), `adam_get_forum` (confirm when thread posts; no post/reply), `adam_search`, `adam_list_calendar`, `adam_list_news`, `adam_list_mail` (confirm; inbox senders/subjects, first page), `adam_read_mail` (confirm; one body; opening marks it read in ADAM; attachment names only — ADR 0054).
+**Tools:** `adam_session_status`, `adam_login`, `adam_list_courses`, `adam_get_course`, `adam_list_children`, `adam_read_page` (confirm), `adam_list_files`, `adam_get_file`, `adam_extract_file_text` (confirm; text only), `adam_get_exercise` (confirm; instruction bodies; no submit), `adam_get_forum` (confirm when thread posts; no post/reply), `adam_search`, `adam_list_calendar`, `adam_list_news`, `adam_list_mail` (confirm; inbox senders/subjects, first page), `adam_read_mail` (confirm; one body; opening marks it read in ADAM; attachment names only — ADR 0054), `adam_list_course_members` and `adam_get_exercise_grades` (confirm; tutor/admin staff views, read-only, lab-verified — ADR 0060).
 
 **Resources:** `adam://me/courses`, `adam://crs/{refId}`, `adam://fold/{refId}`, `adam://file/{refId}`, `adam://exc/{refId}` (exercise metadata only — no instruction bodies; use `adam_get_exercise` + confirm), `adam://frm/{refId}` (forum meta + thread summaries; no post bodies).
 

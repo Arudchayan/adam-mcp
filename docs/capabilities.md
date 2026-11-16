@@ -80,7 +80,7 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | Private Notes / Comments | Personal notes | deferred | ADR 0056 — main-bar route seen, 0 notes on the probed account, so item markup is unverified; would be confirm-gated; never `exportNotesHTML` / `setSortation` |
 | Learning Progress / Personal Workspace | Progress, own files | unavailable | ADR 0056 — not offered to students on ADAM |
 | mail | Messaging | partial (`adam_list_mail` inbox headers + `adam_read_mail` body, both confirm-gated; no send) | ADR 0054 — inbox KS table structure **live-seen** 2026-11-15; subject link + `showMail` route + message view probed live (ADR 0054) |
-| grades / LP staff views | Scores | out | skip |
+| members / grades staff views | Roster, grade matrix (tutor/admin) | partial (`adam_list_course_members`, `adam_get_exercise_grades`; confirm-gated, read-only) | ADR 0060 — **lab-verified** on ILIAS 10.12, ADAM-unverified (student account sees `forbidden`); cohort LP views out until evidence |
 | `tst` / ADAM EXAM | Tests/exams | out | deny stays |
 | members gallery | Roster | out (off by default) | skip |
 
