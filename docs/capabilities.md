@@ -66,15 +66,16 @@ Writes (submit, post, mail send), gradebook, member gallery, `tst` / ADAM EXAM, 
 | page / course page | Announcements, dates | yes | smoke + date parse |
 | `file` | PDFs/slides | partial (meta + extract) | **re-confirmed** live metadata 2026-09-14 tip 5099529 (file×37); extract confirm exercised |
 | `exc` | Instructions, deadline, status | tool bodies via `adam_get_exercise` + confirm; resource `adam://exc/{refId}` is metadata only (no instructionText) | **live-seen** 2026-11-15: per-assignment units, `view` ongoing/upcoming/past/all (ADR 0052); labeled synthetic `100021` (AT5) |
-| `sess` | Class meetings | uncertain | wait-for-inventory — empty enrolled re-verify; not hunting |
+| `sess` | Class meetings | partial (typed in listings, `/go/sess/` citation, `read_page` visible text; dates/materials not parsed) | ADR 0057 — **lab-verified** (ILIAS 10.12 row icon + `infoScreen` link); not seen on ADAM enrolled courses |
 | `webr` | External links | partial (read_page) | **live-seen** 2026-10-02 `2291288`/`2291289` via `https://adam.unibas.ch/go/webr/{id}` (`read_page` page-text, ~2.2KB; no generic fetch; no fixture invented) |
-| `htlm` / `lm` / SCORM | Learning modules | no/uncertain | gated — needs live refId + capture per §4 principle, parked until sighted |
+| `htlm` / `lm` / SCORM | Learning modules | partial (`lm`/`htlm` typed + cited, `read_page`; no TOC or per-page reads; SCORM not typed) | ADR 0057 — **lab-verified** identity |
 | `frm` | Forums | **Known** (list + `adam_get_forum` + `adam://frm/{refId}`) | **live-seen** list 2026-09-14 tip 5099529; live threads from HTML when parse succeeds; missing HTML honest-empty / fail-closed posts; fixture `threadId` posts OK |
-| `wiki` / `blog` / Etherpad | Collab | no | gated — needs live refId + capture per §4 principle, parked until sighted |
+| `wiki` / `blog` / Etherpad | Collab | partial (`wiki` typed via `ilWikiHandlerGUI`, cited, `read_page`; no page list; Etherpad plugin unmapped) | ADR 0057 — **lab-verified** identity; Etherpad needs ADAM evidence |
+| `itgr` / `lso` / `book` / `copa` / `glo` / `dcl` / `bibl` / `mcst` | Item groups, learning sequences, booking pools, content pages, glossaries, data collections, bibliographies, mediacasts | partial (typed + cited leaves, `read_page` visible text; no bookings or entries) | ADR 0057 — **lab-verified** identity (ILIAS 10.12 permalinks, GUI classes, row icons) |
 | `svy` | Surveys | partial (list + `read_page` info screen; never submitted) | ADR 0049 — `/go/svy/{id}` citations, `baseClass=ilObjSurveyGUI` landings; synthetic `100130`; **live-seen** as `svy` in listings 2026-11-15 |
 | `poll` | Inline course polls | partial (list from vote form + `read_page`; never voted) | ADR 0049 — `/go/poll/{id}` citations; synthetic `100131`; live markup re-verify pending (#124) |
 | `root` | Repository root categories | yes (ILIAS 10.12 `.il-card` tiles) | ADR 0049; **live-seen** 2026-11-15 (6 categories, `ok`) |
-| `grp` / ADAMtools | Groups | no | gated — needs live refId + capture per §4 principle, parked until sighted |
+| `grp` / ADAMtools | Groups | yes (walkable container like `crs`/`fold`) | ADR 0057 — **lab-verified**; synthetic `100140`; not seen on ADAM enrolled courses |
 | news sideblock | What changed | yes | **live-seen** 2026-11-15 (`block_news_{id}` UI items, #141) |
 | calendar GUI | Agenda | partial→stronger | Dashboard Tasks + Calendar blocks as `source: calendar` (ADR 0051); full Tasks page on unscoped calendars (ADR 0056, live verification pending); exc deadlines; file-row dates excluded; calendar views and iCal feeds not read (write routes / tokens) |
 | Private Notes / Comments | Personal notes | deferred | ADR 0056 — main-bar route seen, 0 notes on the probed account, so item markup is unverified; would be confirm-gated; never `exportNotesHTML` / `setSortation` |

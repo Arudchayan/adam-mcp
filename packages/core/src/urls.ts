@@ -9,6 +9,8 @@ const GO_PATH = /\/go\/([a-z0-9]+)\/(\d+)(?:\/|$)/i;
 const REF_ID_QUERY = /[?&]ref_id=(\d+)/i;
 const GOTO_ADAM = /goto_adam_([a-z]+)_(\d+)/i;
 const GOTO_TARGET = /(?:[?&]target=|\/goto\.php\/)([a-z]+)_(\d+)/i;
+/** ILIAS 10 permalink without short URLs: /goto.php/{type}/{refId} (ADR 0057). */
+const GOTO_PATH = /^\/goto\.php\/([a-z]+)\/(\d+)\/?$/i;
 
 const CMD_CLASS_TO_TYPE: Record<string, AdamObjectType> = {
   ilobjcategorygui: "cat",
@@ -28,10 +30,30 @@ const CMD_CLASS_TO_TYPE: Record<string, AdamObjectType> = {
   // ADR 0049: read-only Survey and inline Poll identity. Never a write path.
   ilobjsurveygui: "svy",
   ilobjpollgui: "poll",
+  // ADR 0057: ILIAS 10.12 GUI class names (components/ILIAS/*), read-only identity only.
+  ilobjsessiongui: "sess",
+  ilobjgroupgui: "grp",
+  ilobjitemgroupgui: "itgr",
+  ilobjlearningsequencegui: "lso",
+  ilobjlearningsequencelearnergui: "lso",
+  ilobjbookingpoolgui: "book",
+  ilobjcontentpagegui: "copa",
+  ilobjlearningmodulegui: "lm",
+  illmpresentationgui: "lm",
+  ilobjfilebasedlmgui: "htlm",
+  ilhtlmpresentationgui: "htlm",
+  ilobjwikigui: "wiki",
+  ilwikihandlergui: "wiki",
+  ilobjglossarygui: "glo",
+  ilglossarypresentationgui: "glo",
+  ilobjdatacollectiongui: "dcl",
+  ilobjbibliographicgui: "bibl",
+  ilobjmediacastgui: "mcst",
+  ilmediacasthandlergui: "mcst",
 };
 
 /** baseClass values trusted to name the ref_id's own type (ADR 0049). */
-const BASE_CLASS_TYPES = new Set(["ilobjsurveygui", "ilobjpollgui"]);
+const BASE_CLASS_TYPES = new Set(["ilobjsurveygui", "ilobjpollgui", "ilwikihandlergui", "ilmediacasthandlergui", "illmpresentationgui", "ilhtlmpresentationgui", "ilglossarypresentationgui"]);
 
 export function isAdamObjectType(value: string): value is AdamObjectType {
   return (ADAM_OBJECT_TYPES as readonly string[]).includes(value);
@@ -65,6 +87,32 @@ export function objectTypeLabel(type: AdamObjectType): string {
       return "Survey";
     case "poll":
       return "Poll";
+    case "sess":
+      return "Session";
+    case "grp":
+      return "Group";
+    case "itgr":
+      return "Item group";
+    case "lso":
+      return "Learning sequence";
+    case "book":
+      return "Booking pool";
+    case "copa":
+      return "Content page";
+    case "lm":
+      return "Learning module";
+    case "htlm":
+      return "HTML learning module";
+    case "wiki":
+      return "Wiki";
+    case "glo":
+      return "Glossary";
+    case "dcl":
+      return "Data collection";
+    case "bibl":
+      return "Bibliography";
+    case "mcst":
+      return "Mediacast";
     case "unknown":
       return "Unknown object";
     default: {
@@ -110,6 +158,11 @@ export function parseAdamRef(input: string): { type: AdamObjectType; refId: RefI
     const goMatch = url.pathname.match(GO_PATH);
     if (goMatch) {
       return typedRef(goMatch[1], goMatch[2]);
+    }
+
+    const gotoPath = url.pathname.match(GOTO_PATH);
+    if (gotoPath) {
+      return typedRef(gotoPath[1], gotoPath[2]);
     }
 
     const gotoFile = `${url.pathname}${url.search}`.match(GOTO_ADAM);

@@ -361,6 +361,18 @@ const course2PollPage: PageContent = {
   inferredDates: [],
 };
 
+/** ADR 0057: labeled synthetic Group (walkable container) holding a Session and a Wiki. */
+const course2Crumbs = [...course2Breadcrumb, crumb("crs", "100101", "00000-02 – Synthetic Algorithms Lab")];
+const course2Group = obj("grp", "100140", "[SYNTHETIC] Tutorial group A", course2Crumbs, { accessClass: "Authenticated Users", updatedAt: "2026-09-03T09:00:00.000Z" });
+const groupCrumbs = [...course2Crumbs, crumb("grp", "100140", "[SYNTHETIC] Tutorial group A")];
+const groupSession = obj("sess", "100141", "[SYNTHETIC] 05.10.2026, 10:15 - 12:00: Tutorial 1", groupCrumbs, { accessClass: "Authenticated Users", updatedAt: "2026-09-03T09:05:00.000Z" });
+const groupWiki = obj("wiki", "100142", "[SYNTHETIC] Group notes wiki", groupCrumbs, { accessClass: "Authenticated Users", updatedAt: "2026-09-03T09:10:00.000Z" });
+const groupSessionPage: PageContent = {
+  ...groupSession,
+  text: ["Tutorial 1 (labeled fixture, not live).", "Date: 05.10.2026, 10:15 - 12:00", "Location: Synthetic room 00.001"].join("\n"),
+  inferredDates: [],
+};
+
 const course2Page: PageContent = {
   ...course2,
   text: [
@@ -567,11 +579,14 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "100030": { object: quiz, children: [], page: quizPage },
   "100101": {
     object: course2,
-    children: ["100121", "100130", "100131"],
+    children: ["100121", "100130", "100131", "100140"],
     page: course2Page,
   },
   "100121": { object: course2Exercise, children: [], page: undefined },
   "100130": { object: course2Survey, children: [], page: course2SurveyPage },
+  "100140": { object: course2Group, children: ["100141", "100142"] },
+  "100141": { object: groupSession, children: [], page: groupSessionPage },
+  "100142": { object: groupWiki, children: [] },
   "100131": { object: course2Poll, children: [], page: course2PollPage },
   "100201": {
     object: catalogOnlyCourse,
