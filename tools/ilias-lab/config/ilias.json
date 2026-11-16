@@ -1,0 +1,16 @@
+{
+  "common": { "client_id": "lab" },
+  "database": {
+    "host": "db",
+    "user": "ilias",
+    "password": "lab-only-db-password",
+    "database": "ilias",
+    "create_database": false
+  },
+  "filesystem": { "data_dir": "/var/www/files" },
+  "logging": { "enable": true, "path_to_logfile": "/var/www/logs/ilias.log", "errorlog_dir": "/var/www/logs/" },
+  "http": { "path": "http://localhost:8080" },
+  "systemfolder": { "contact": { "firstname": "Lab", "lastname": "Admin", "email": "lab-admin@example.test" } },
+  "utilities": { "path_to_convert": "/usr/bin/convert" },
+  "preview": { "path_to_ghostscript": "/usr/bin/gs" }
+}
