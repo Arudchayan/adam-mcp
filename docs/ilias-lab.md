@@ -82,8 +82,23 @@ node tools/ilias-lab/seed/seed-ui.mjs <exc ref_id>   # assignments via the web U
   (past with an instruction file and a sample solution, current with a file, a
   team upload, a future one). ILIAS's SOAP exercise import crashes on
   assignments in v10.12, so this step uses the UI.
-- Not seeded yet: `htlm` (SOAP accepts it but it never appears in the course)
-  and `dcl` (SOAP fails), submissions and tutor feedback.
+```bash
+node tools/ilias-lab/seed/seed-objects-ui.mjs <course ref_id>   # dcl via the web UI
+```
+
+```bash
+node tools/ilias-lab/seed/seed-grading.mjs <exc ref_id>         # submissions + evaluations
+```
+
+- `seed-objects-ui.mjs`: `dcl`, which SOAP cannot create. `htlm` *is* created by
+  SOAP; `getTreeChilds` just does not list that type.
+- `seed-grading.mjs`: both students upload a file to the current sheet; the
+  tutor sets Passed / Failed and writes an evaluation statement for each. The
+  student then sees `Status: Passed` and the statement on the assignment page.
+
+What a student sees in "Lab Course": 19 list rows across 16 types. `itgr`
+renders as a block, `poll` inline, the closed `grp` and the `svy` / `dcl`
+objects (own activation settings) are not list rows for a student.
 
 Why the extra steps: SOAP needs PHP's `soap` extension and the container must
 also answer on port 8080, because ILIAS loads its own WSDL from the request's
