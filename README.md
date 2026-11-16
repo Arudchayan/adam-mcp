@@ -8,10 +8,13 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-**0.4.0 is in preparation, not published.** It adds selected Web Link metadata,
-session ownership and boundary hardening. **0.3.0 is published**, including selected local downloads and discovery
-efficiency improvements. See the
-[release and public-package verification record](docs/audit/2026-10-21-v0.3.0-release-readiness.md).
+**0.4.0 is ready for release review, not yet published.** It adds per-assignment
+exercise detail, read-only ADAM mail, Dashboard news, tasks and calendar, typed
+sessions, groups, wikis and other ILIAS 10.12 objects, read-only tutor views,
+and session and boundary hardening. **0.3.0 is published**, including selected
+local downloads and discovery efficiency improvements. See the
+[0.3.0 publication record](docs/audit/2026-10-21-v0.3.0-release-readiness.md) and the
+[0.4.0 release-candidate record](docs/audit/2026-11-16-v0.4.0-release-candidate.md).
 
 ![Demo](docs/demo/demo.gif)
 
@@ -22,7 +25,8 @@ The narrated overview illustrates a study workflow with realistic synthetic cour
 ## What you can ask
 
 - Show timestamped course news from this week.
-- What deadlines do I have?
+- What deadlines do I have, and what have I already submitted?
+- Do I have unread ADAM mail?
 - Find the exercise sheet about Fourier transforms.
 - Summarize this course page and give me the ADAM link.
 - List the material available for this course.
@@ -120,18 +124,22 @@ The client starts ADAM MCP as a local process and communicates over stdio. ADAM 
 | `adam_list_files` / `adam_get_file` | File metadata and URLs, not bytes |
 | `adam_extract_file_text` | Local PDF, text, notebook (`.ipynb`) and uploaded HTML extract, paged with `startPage` (`confirm: true` OR elicitation) |
 | `adam_search` | Title matches in enrolled objects |
-| `adam_list_calendar` / `adam_list_news` | Exercise deadlines, Dashboard tasks and events, dated course news |
-| `adam_get_exercise` | One entry per assignment with deadline and your status; `view` reads ongoing, upcoming, past or all (`confirm: true` OR elicitation); no submit |
+| `adam_list_calendar` / `adam_list_news` | Exercise deadlines, Dashboard tasks and events, dated course and Dashboard news |
+| `adam_get_exercise` | One entry per assignment with deadline and your status; `view` reads ongoing, upcoming, past or all; `detail: true` adds schedule, your submission, instruction-file and sample-solution names, team and tutor evaluation (`confirm: true` OR elicitation); no submit |
 | `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true` OR elicitation; no post/reply |
+| `adam_list_mail` / `adam_read_mail` | Inbox headers and one selected message body; opening marks it read, as in ADAM; attachment names only (`confirm: true` OR elicitation); no send |
+| `adam_list_course_members` / `adam_get_exercise_grades` | Tutor and course-admin views of a course's members and an exercise's grade matrix; students get `forbidden`; lab-verified (`confirm: true` OR elicitation); no grading |
 | `adam_login` / `adam_session_status` | Chrome session in the live runtime |
 
 Document and thread text requires approval for the selected object. Your connected model receives the returned text. See [tool contracts](docs/tool-contracts.md) for confirmation, pagination, recovery and completeness rules.
 
-For page, file-text, exercise, and forum-post reads, request the specific object first, then approve the read. Clients with elicitation support can ask for approval interactively; other clients pass `confirm: true`. Declining or cancelling returns no body text. Forum summaries do not require body-read approval. See [tool contracts](docs/tool-contracts.md#confirmation) for the precise contract.
+For page, file-text, exercise, forum-post, mail and staff-view reads, request the specific object first, then approve the read. Clients with elicitation support can ask for approval interactively; other clients pass `confirm: true`. Declining or cancelling returns no body text. Forum summaries do not require body-read approval. See [tool contracts](docs/tool-contracts.md#confirmation) for the precise contract.
 
 ## Limitations
 
-- No writes, mail, grades, or exam (`tst`) objects.
+- No writes of any kind: no submissions, posts, mail sending, grading or bookings. Exam (`tst`) objects are denied.
+- Sessions, groups, item groups, learning sequences, booking pools, content pages, learning modules, wikis, glossaries, data collections, bibliographies and mediacasts are listed, cited and readable as page text. Their deeper structure (session materials, wiki pages, glossary terms and similar) is not parsed yet ([#165](https://github.com/Arudchayan/adam-mcp/issues/165)).
+- Staff views are built from a local ILIAS 10.12 lab and have not been confirmed with an ADAM staff account. They fail closed if ADAM's markup differs.
 - Search covers titles and available page text in your enrolled course tree. It does not use ADAM’s global search, and search does not open exercise pages. Calendar dates come from exercise deadlines, the Dashboard Tasks and Calendar blocks, and dated course text. File upload times are not reported as events, and the full ILIAS calendar interface is not read.
 - Scanned PDFs are not OCR’d.
 - Supported PDFs are parsed page by page, with an 8 MiB transfer cap, 40,000

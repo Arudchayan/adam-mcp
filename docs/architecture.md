@@ -34,7 +34,7 @@ Bump the pin in this file when changing the server dependency major or the negot
 
 ## Confirm vs elicitation (A3)
 
-`confirm: true` on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, and `adam_get_forum` (when `threadId` is set) is an **interim schema gate** used **after the student asked to read** that object. It is the explicit fallback argument for hosts without elicitation support. The argument is optional in the schema so omission can enter the capability-gated elicitation handler. No body is returned before either explicit confirmation or accepted boolean elicitation. The flag is **not**:
+`confirm: true` on `adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, `adam_get_forum` (when `threadId` is set), `adam_list_mail`, `adam_read_mail`, `adam_list_course_members` and `adam_get_exercise_grades` is an **interim schema gate** used **after the student asked to read** that object. It is the explicit fallback argument for hosts without elicitation support. The argument is optional in the schema so omission can enter the capability-gated elicitation handler. No body is returned before either explicit confirmation or accepted boolean elicitation. The flag is **not**:
 
 - an OS permission dialog,
 - MCP **elicitation**, or

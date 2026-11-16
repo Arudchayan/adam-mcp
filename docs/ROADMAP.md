@@ -18,7 +18,7 @@ Living sequencing for University of Basel ADAM coverage. Community project — n
 
 We already have an authenticated Chrome session. Gaps are usually **object types not present in the courses inspected so far**, not missing login. When a type is found live, record it in capabilities.md; expansion still requires the capture gate below. `sess` remains **wait-for-inventory** after empty enrolled re-verify. `webr` is **Known/live (page-text only)** from the 2026-10-02 sightings recorded in capabilities.md; no matching scrubbed listing/Weblinks-tab capture was found in the issue #84 repository review. `frm` is **Known/live** 2026-09-14 (tip 5099529).
 
-**Stop rule:** do not expand `sess` / `webr` / `htlm` / `lm` / Postbox / `grp` / `svy` / `wiki` / `blog` / Etherpad / LP without an enrolled-inventory sighting (live refId + scrubbed capture). No code without inventory.
+**Stop rule:** do not expand a type or view without evidence: an enrolled-inventory sighting (live refId + scrubbed capture), or, for views the student account cannot see, a capture from the local ILIAS 10.12 lab ([ilias-lab.md](ilias-lab.md)) labelled **lab-verified** in the ADR, capabilities.md and tool output. No code without evidence.
 
 ## Phase A — Harden shipped reads (fixture-first)
 
@@ -69,7 +69,20 @@ Black-box QA on 0.4.0 filed #118–#133. All bugs are fixed, live-verified and c
 | Web Link destinations | #84 | Live-verified (PR #113, ADR 0042) |
 | Sign-in across shutdown | #133 | Not planned: auth cookies are session-scoped (docs/session-recovery.md) |
 
-Open epics #127–#132 are trackers. Each remaining type or service still needs a live sighting and scrubbed capture first (stop rule above).
+Epics #127–#132 are closed (November 2026):
+
+| Item | Issue | Status |
+| --- | --- | --- |
+| Exercise detail: schedule, own submission, files, sample solution, team, evaluation | #129 | Done (PR #152, #162, ADR 0053) |
+| Read-only ADAM mail, confirm-gated | #132 | Done (PR #155, ADR 0054) |
+| Dashboard News block and bounded News pagination | #132 | Done (PR #156, #158, ADR 0055) |
+| Full Tasks page; Private Notes deferred | #132 | Done (ADR 0056) |
+| Enrolled courses from the membership overview | — | Done (PR #160, ADR 0059) |
+| Local ILIAS 10.12 lab for structure evidence | #128 | Done (PR #161) |
+| Staff views: members and grade matrix (lab-verified) | #128 | Done (PR #163, ADR 0060) |
+| Containers and content modules typed; groups walked | #127, #130, #131 | Done (PR #164, ADR 0057) |
+
+Evidence-gated remainder (staff confirmation on ADAM, peer review, per-type readers, Opencast/Etherpad, Private Notes): [#165](https://github.com/Arudchayan/adam-mcp/issues/165).
 
 ## Phase B — valuable unread surfaces (reads only)
 

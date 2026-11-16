@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - Release candidate (not yet published)
+
 ### Added
 
 - Sessions, groups, item groups, learning sequences, booking pools, content
@@ -34,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File listings carry extension, size and change time per row (#122).
 - Read-only `svy` and `poll` types and repository-root category cards (#124,
   ADR 0049).
+- Approved selected Web Link reads resolve up to eight validated ADAM redirect
+  routes without fetching external destinations. Queries, fragments and unknown
+  path schemas are omitted; ADAM source URLs retain exact launch routes (#84).
 
 ### Fixed
 
@@ -48,18 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Calendar no longer reports file upload times as events (#119).
 - Genuinely empty folders list as empty instead of failing (#86, ADR 0050).
 - Files over the extract cap suggest `adam-mcp download` (#121).
-
-
-## [0.4.0] - In preparation
-
-### Added
-
-- Approved selected Web Link reads resolve up to eight validated ADAM redirect
-  routes without fetching external destinations. Queries, fragments and unknown
-  path schemas are omitted; ADAM source URLs retain exact launch routes (#84).
-
-### Fixed
-
 - Stdio EOF releases provider connections without stopping the separately owned
   session holder; shutdown waits for in-flight SDK initialization (ADR 0044).
 - Cross-process Chrome lifecycle ownership, generation-owned handoffs and

@@ -2,7 +2,7 @@
 
 MCP server for University of Basel ADAM.
 
-Version `0.4.0` is in preparation and is not yet published. The CLI bundles the project's workspace code;
+Version `0.4.0` is a release candidate and is not yet published. The CLI bundles the project's workspace code;
 npm installs its declared runtime dependencies.
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
@@ -35,10 +35,14 @@ path, source URL, size and digest. It adds no MCP tool and sends no file bytes t
 the model. Destination filesystems must support hard links; HTML-shaped and empty
 responses are refused. See [download details](https://github.com/Arudchayan/adam-mcp/blob/main/docs/downloads.md).
 
-Page text, file text, exercise instructions, and forum posts require approval for
-the selected object. Clients with elicitation support can request approval;
-other clients use `confirm: true`. Summaries and metadata remain read-only.
-Exams, grades, submissions, and other writes are unsupported. Scanned PDFs require
+0.4.0 adds per-assignment exercise detail, read-only ADAM mail, Dashboard news,
+tasks and calendar, typed sessions, groups, wikis and other ILIAS 10.12 objects,
+and lab-verified read-only tutor views of course members and exercise grades.
+
+Page text, file text, exercise instructions, forum posts, mail and staff views
+require approval for the selected object. Clients with elicitation support can
+request approval; other clients use `confirm: true`. Summaries and metadata remain
+read-only. Exams, submissions, mail sending, grading and other writes are unsupported. Scanned PDFs require
 opening the file in ADAM; OCR is not provided.
 
 For client configuration and the currently verified clone/setup path, see the
