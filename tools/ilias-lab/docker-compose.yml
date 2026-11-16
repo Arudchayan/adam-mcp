@@ -1,0 +1,34 @@
+# Local ILIAS 10.12 lab: DOM-structure evidence only (docs/ilias-lab.md).
+# Never point adam-mcp at it; adam-mcp's origin stays pinned to adam.unibas.ch.
+name: adam-ilias-lab
+services:
+  db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_DATABASE: ilias
+      MARIADB_USER: ilias
+      MARIADB_PASSWORD: lab-only-db-password
+      MARIADB_ROOT_PASSWORD: lab-only-root-password
+    # ILIAS's install guide creates the database as utf8 / utf8_general_ci. utf8mb4
+    # widens its tables past InnoDB's row limit (error 1118) when importing the base dump.
+    command: ["--character-set-server=utf8", "--collation-server=utf8_general_ci", "--innodb-strict-mode=0", "--innodb-default-row-format=dynamic", "--sql-mode="]
+    volumes: [db:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+  web:
+    build: ./web
+    depends_on:
+      db: { condition: service_healthy }
+    # Loopback only: the lab is never exposed beyond this machine.
+    ports: ["127.0.0.1:8080:80"]
+    environment:
+      ILIAS_HTTP_PATH: http://localhost:8080
+    volumes:
+      - ${ILIAS_SRC:?set ILIAS_SRC to an ILIAS v10.12 checkout}:/var/www/ilias
+      - files:/var/www/files
+      - ./config:/var/www/config:ro
+volumes:
+  db: {}
+  files: {}
