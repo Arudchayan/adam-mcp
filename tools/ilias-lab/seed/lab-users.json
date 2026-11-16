@@ -1,0 +1,44 @@
+{
+  "_note": "Lab-only throwaway accounts for a local ILIAS at http://localhost:8080. Never real credentials. admin is ILIAS's documented setup default.",
+  "admin": {
+    "login": "root",
+    "password": "homer"
+  },
+  "users": [
+    {
+      "login": "lab.student",
+      "firstname": "Lab",
+      "lastname": "Student",
+      "password": "lab-student-Pass1!",
+      "role": "student"
+    },
+    {
+      "login": "lab.student2",
+      "firstname": "Lab",
+      "lastname": "Student Two",
+      "password": "lab-student2-Pass1!",
+      "role": "student"
+    },
+    {
+      "login": "lab.tutor",
+      "firstname": "Lab",
+      "lastname": "Tutor",
+      "password": "lab-tutor-Pass1!",
+      "role": "tutor"
+    },
+    {
+      "login": "lab.admin",
+      "firstname": "Lab",
+      "lastname": "Course Admin",
+      "password": "lab-admin-Pass1!",
+      "role": "admin"
+    },
+    {
+      "login": "lab.sysadmin",
+      "firstname": "Lab",
+      "lastname": "System Admin",
+      "password": "lab-sysadmin-Pass1!",
+      "role": "system"
+    }
+  ]
+}

@@ -52,3 +52,40 @@ editing your own.
 Captures from the lab use the same structure-only approach as ADAM evidence:
 tags, classes and route shapes, with text masked. They are labelled
 **lab-verified, ADAM-unverified** until the same view is seen on ADAM.
+
+## Seeding test data
+
+With the lab running (keep one WSL shell open, or WSL stops the containers):
+
+```bash
+sh seed/lab-sql.sh prepare        # in tools/ilias-lab: enable SOAP
+```
+
+```bash
+node tools/ilias-lab/seed/seed.mjs              # from the repo root
+```
+
+```bash
+sh seed/lab-sql.sh prepare && sh seed/lab-sql.sh online   # lab accounts usable, objects online
+```
+
+```bash
+node tools/ilias-lab/seed/seed-ui.mjs <exc ref_id>   # assignments via the web UI
+```
+
+- `seed.mjs` (SOAP): the users from `seed/lab-users.json` (student ×2, tutor,
+  course admin, and a system admin used only for UI seeding), plus "Lab Course"
+  with the four users as Member/Tutor/Admin and one each of `fold`, `sess`,
+  `itgr`, `lso`, `book`, `copa`, `lm`, `wiki`, `glo`, `bibl`, `mcst`, `frm`,
+  `webr`, `svy`, `poll`, `file`, `blog`, `grp`, `exc`. It is idempotent by title.
+- `seed-ui.mjs` (web UI, as the lab system admin): four exercise assignments
+  (past with an instruction file and a sample solution, current with a file, a
+  team upload, a future one). ILIAS's SOAP exercise import crashes on
+  assignments in v10.12, so this step uses the UI.
+- Not seeded yet: `htlm` (SOAP accepts it but it never appears in the course)
+  and `dcl` (SOAP fails), submissions and tutor feedback.
+
+Why the extra steps: SOAP needs PHP's `soap` extension and the container must
+also answer on port 8080, because ILIAS loads its own WSDL from the request's
+host. ILIAS keeps forcing a password change while `root` has its setup default,
+so UI seeding uses a separate system-admin account instead.
