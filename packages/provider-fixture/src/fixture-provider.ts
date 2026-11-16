@@ -210,6 +210,8 @@ export class FixtureAdamProvider implements AdamProvider {
           ...unit,
           ...(unit.deadline ? { schedule: { deadline: unit.deadline } } : {}),
           ...(unit.ownStatus === "none" ? { submission: { submittedFiles: "You have not submitted any files.", lastSubmission: "No submission yet." } } : {}),
+          // Names only, as on the live Files panel; no download route is modeled.
+          instructionFiles: [{ name: "[SYNTHETIC] exercise-1-sheet.pdf" }],
           detailStatus: "read" as const,
         })),
       };

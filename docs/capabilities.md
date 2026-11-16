@@ -38,7 +38,7 @@ Map real Uni Basel ADAM student workflows to MCP coverage. Read-only Phase A/B. 
 
 | Journey | User need | MCP today | Notes |
 | --- | --- | --- | --- |
-| Exercise awareness | Instructions, due date, own hand-in status | **Known** (`adam_get_exercise` per-assignment units + `view`); **live-seen** 2026-11-15 | ADR 0052 views via advertised routes; ADR 0053 `detail: true` reads each assignment page (schedule, own submission; **fixture-only**, live pending); instruction/feedback files not read (#129); submit stays in ADAM |
+| Exercise awareness | Instructions, due date, own hand-in status | **Known** (`adam_get_exercise` per-assignment units + `view`); **live-seen** 2026-11-15 | ADR 0052 views via advertised routes; ADR 0053 `detail: true` reads each assignment page (schedule, own submission, instruction-file and sample-solution names, team status, tutor evaluation; panels beyond schedule/submission are lab-evidenced, live pending); file contents not read (#129); submit stays in ADAM |
 | News / what changed | New files & activity when lecturers enable News | **Known**; **live-seen** 2026-11-15 (10 items, 7 courses) | course `block_news` UI items, dated, keyed by news_id; block pagination and Dashboard news not read |
 | Session / timetable blocks | Class dates in course (`sess`) | uncertain | **Wait-for-inventory** (empty enrolled re-verify; not hunting) |
 

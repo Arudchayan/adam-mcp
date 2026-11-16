@@ -7,7 +7,7 @@
 | [0055](0055-dashboard-news-block.md) | Dashboard News block and bounded News block pagination in `adam_list_news` |
 | [0055](0055-dashboard-news-block.md) | Dashboard News block in `adam_list_news` (pagination deferred) |
 | [0054](0054-read-only-internal-mail.md) | Read-only ADAM internal mail (inbox headers + confirm-gated bodies) |
-| [0053](0053-exercise-assignment-detail.md) | Exercise assignment detail pages (`detail: true`) |
+| [0053](0053-exercise-assignment-detail.md) | Exercise assignment detail pages (`detail: true`; files, sample solution, team, evaluation) |
 | [0052](0052-exercise-assignment-views.md) | Exercise assignment views (Ongoing / Upcoming / Past / All) |
 | [0051](0051-dashboard-tasks-and-calendar.md) | Dashboard Tasks and Calendar blocks as calendar sources |
 | [0050](0050-structurally-empty-folders.md) | Structurally empty folders |
