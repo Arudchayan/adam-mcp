@@ -30,7 +30,7 @@ describe("#120 exercise assignments", () => {
   it("returns one unit per assignment with deadline, requirement, type and own status", () => {
     const units = parseExerciseUnits(page(
       assignment("Sheet 3", [["Edit Until", "20. Nov 2026, 12:00"], ["Requirement", "Optional"], ["Last Submission", "No submission yet."], ["Type", "Upload"], ["Status", "Not Graded"]], "5 Days, 18 Hours to Submit") +
-      assignment("Sheet 2", [["Bearbeitung bis", "6. Nov 2026, 12:00"], ["Anforderung", "Pflicht"], ["Letzte Abgabe", "5. Nov 2026, 21:14"], ["Status", "Nicht bewertet"]]) +
+      assignment("Sheet 2", [["Bearbeitung bis", "6. Nov 2026, 12:00"], ["Anforderung", "Pflicht"], ["Datum der letzten Abgabe", "5. Nov 2026, 21:14"], ["Status", "Nicht bewertet"]]) +
       assignment("Sheet 1", [["Edit Until", "23. Oct 2026, 12:00"], ["Last Submission", "22. Oct 2026, 09:00"], ["Status", "Passed"]]),
     ), "", now);
     assert.equal(units?.length, 3);

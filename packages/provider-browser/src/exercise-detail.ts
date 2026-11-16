@@ -1,4 +1,13 @@
-import { DEFAULT_ADAM_ORIGIN, type ExerciseSchedule, type ExerciseSubmission, type RefId } from "adam-core";
+import {
+  DEFAULT_ADAM_ORIGIN,
+  redactText,
+  type ExerciseEvaluation,
+  type ExerciseFileRef,
+  type ExerciseSchedule,
+  type ExerciseSubmission,
+  type ExerciseTeam,
+  type RefId,
+} from "adam-core";
 import { parseAdamTimestamp } from "./deadlines.ts";
 import { extractClassBlocksAt, textOf } from "./ui-items.ts";
 
@@ -38,19 +47,31 @@ export type ExerciseDetail = {
   instructionText?: string;
   schedule?: ExerciseSchedule;
   submission?: ExerciseSubmission;
+  instructionFiles?: ExerciseFileRef[];
+  sampleSolution?: ExerciseFileRef;
+  team?: ExerciseTeam;
+  evaluation?: ExerciseEvaluation;
 };
 
-const INSTRUCTIONS = /^(?:work instructions|arbeitsanweisungen?)$/i;
+// Official ILIAS 10.12 lang strings (en | de); lang keys in the trailing comments.
+const INSTRUCTIONS = /^(?:work instructions|arbeitsanweisung(?:en)?)$/i; // exc_instruction
 const SUBMISSION = /^(?:submission|abgabe)$/i;
+const FILES = /^(?:files|dateien)$/i; // files
+const SAMPLE_SOLUTION = /^(?:sample solution|musterlösung)$/i; // exc_global_feedback_file
+const TEAM = /^team$/i; // exc_team
+const EVALUATION = /^(?:evaluation by tutor|rückmeldungen)$/i; // exc_feedback
 const DEADLINE = /^(?:edit until|bearbeitung bis|bearbeitbar bis|deadline|abgabetermin|ended on|beendet am|endete am)$/i;
-const SUBMITTED_FILES = /^(?:submitted files|abgegebene dateien)$/i;
-const LAST_SUBMISSION = /^(?:last submission|letzte abgabe)$/i;
+const SUBMITTED_FILES = /^(?:submitted files|bereits abgegebene dateien)$/i; // already_delivered_files
+const LAST_SUBMISSION = /^(?:last submission|datum der letzten abgabe)$/i; // exc_last_submission
+const EVALUATION_STATEMENT = /^(?:evaluation statement|text-feedback)$/i; // exc_tbl_comment
+const STATUS = /^status$/i;
 
 /**
- * ADR 0053: the ILIAS 10.12 assignment detail page's `panel-sub` blocks
- * "Work Instructions" (text column + Schedule card) and "Submission" (label/value
- * rows). Instruction files, sample solutions and feedback are not parsed (no live
- * evidence yet). Returns undefined when neither panel is recognisable.
+ * ADR 0053: the ILIAS 10.12 assignment detail page's `panel-sub` blocks:
+ * "Work Instructions" (text column + Schedule card), "Submission", "Files",
+ * "Sample Solution", "Team" and "Evaluation by Tutor" (label/value rows).
+ * Metadata only: file names, never download links; buttons and forms are ignored.
+ * Returns undefined when neither Work Instructions nor Submission is recognisable.
  */
 export function parseExerciseDetail(html: string, now: Date = new Date()): ExerciseDetail | undefined {
   let found = false;
@@ -70,6 +91,23 @@ export function parseExerciseDetail(html: string, now: Date = new Date()): Exerc
       found = true;
       const submission = parseSubmission(body);
       if (submission) detail.submission = submission;
+    } else if (FILES.test(heading)) {
+      const files = fileNames(body);
+      if (files.length > 0) detail.instructionFiles = files;
+    } else if (SAMPLE_SOLUTION.test(heading)) {
+      const [file] = fileNames(body);
+      if (file) detail.sampleSolution = file;
+    } else if (TEAM.test(heading)) {
+      const status = panelRows(body).map((row) => row.value).filter(Boolean).join(" ");
+      if (status) detail.team = { status: redactText(status) };
+    } else if (EVALUATION.test(heading)) {
+      const evaluation: ExerciseEvaluation = {};
+      for (const row of panelRows(body)) {
+        if (!row.value) continue;
+        if (EVALUATION_STATEMENT.test(row.label)) evaluation.statement = redactText(row.value);
+        else if (STATUS.test(row.label)) evaluation.status = row.value;
+      }
+      if (Object.keys(evaluation).length > 0) detail.evaluation = evaluation;
     }
   }
   return found ? detail : undefined;
@@ -77,8 +115,9 @@ export function parseExerciseDetail(html: string, now: Date = new Date()): Exerc
 
 function parseSchedule(card: string, now: Date): ExerciseSchedule | undefined {
   const schedule: ExerciseSchedule = {};
+  const titles = new Set(extractClassBlocksAt(card, "card-title").map(({ block }) => block));
   for (const { block } of extractClassBlocksAt(card, "caption")) {
-    if (/\bcard-title\b/.test(block) || /<div\b[^>]*class=["'][^"']*\bcaption\b/i.test(block)) continue;
+    if (titles.has(block)) continue;
     const strong = block.match(/<strong\b[^>]*>([\s\S]*?)<\/strong>/i)?.[1];
     if (strong !== undefined) {
       const remaining = textOf(strong);
@@ -100,16 +139,31 @@ function parseSchedule(card: string, now: Date): ExerciseSchedule | undefined {
 
 function parseSubmission(body: string): ExerciseSubmission | undefined {
   const submission: ExerciseSubmission = {};
-  for (const { block } of extractClassBlocksAt(body, "row")) {
-    const labelBlock = extractClassBlocksAt(block, "control-label")[0]?.block;
-    if (labelBlock === undefined) continue;
-    const label = textOf(labelBlock).replace(/[:·]\s*$/, "");
-    const value = textOf(stripButtons(block.replace(labelBlock, "")));
+  for (const { label, value } of panelRows(body)) {
     if (!value) continue;
     if (SUBMITTED_FILES.test(label)) submission.submittedFiles = value;
     else if (LAST_SUBMISSION.test(label)) submission.lastSubmission = value;
   }
   return Object.keys(submission).length > 0 ? submission : undefined;
+}
+
+/** Files / Sample Solution rows: the label is the file name; the Download link is never kept or followed. */
+function fileNames(body: string): ExerciseFileRef[] {
+  return panelRows(body).filter((row) => row.label).map((row) => ({ name: row.label }));
+}
+
+/** `div.row` → `control-label` text + the rest of the row as text (buttons, forms and link targets dropped). */
+function panelRows(body: string): Array<{ label: string; value: string }> {
+  const rows: Array<{ label: string; value: string }> = [];
+  for (const { block } of extractClassBlocksAt(body, "row")) {
+    const labelBlock = extractClassBlocksAt(block, "control-label")[0]?.block;
+    if (labelBlock === undefined) continue;
+    rows.push({
+      label: textOf(labelBlock).replace(/[:·]\s*$/, ""),
+      value: textOf(stripButtons(block.replace(labelBlock, ""))),
+    });
+  }
+  return rows;
 }
 
 function stripButtons(html: string): string {

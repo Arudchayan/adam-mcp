@@ -5,7 +5,8 @@ import { parseUiItems, type UiItem } from "./ui-items.ts";
 // Past assignments label the closed deadline "Ended On" (live ILIAS 10.12, ADR 0052).
 const DEADLINE = /^(?:edit until|bearbeitung bis|bearbeitbar bis|deadline|abgabetermin|abgabefrist|submission until|abgabe bis|end(?:s)?|ende|ended on|beendet am|endete am)$/i;
 const REQUIREMENT = /^(?:requirement|anforderung|pflicht)$/i;
-const LAST_SUBMISSION = /^(?:last submission|letzte abgabe)$/i;
+// Official ILIAS 10.12 exc_last_submission (en | de).
+const LAST_SUBMISSION = /^(?:last submission|datum der letzten abgabe)$/i;
 const SUBMISSION_TYPE = /^(?:type|typ|abgabetyp)$/i;
 const STATUS = /^(?:status)$/i;
 const ASSIGNMENT_LABELS = [DEADLINE, REQUIREMENT, LAST_SUBMISSION, SUBMISSION_TYPE, STATUS];

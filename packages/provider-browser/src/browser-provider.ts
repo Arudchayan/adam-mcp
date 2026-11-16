@@ -663,13 +663,23 @@ export class BrowserAdamProvider implements AdamProvider {
       }
       const deadline = unit.deadline ?? detail.schedule?.deadline;
       const lastSubmission = detail.submission?.lastSubmission;
+      // A tutor's Passed/Failed outranks the overview; otherwise keep the overview logic.
+      const evaluated = detail.evaluation?.status ? ownStatus(detail.evaluation.status, undefined, now) : "unknown";
+      const graded = unit.ownStatus === "passed" || unit.ownStatus === "failed";
+      const resolved = !graded && (evaluated === "passed" || evaluated === "failed")
+        ? evaluated
+        : lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus;
       units.push({
         ...unit,
         ...(deadline ? { deadline } : {}),
         ...(detail.instructionText ? { instructionText: detail.instructionText } : {}),
         ...(detail.schedule ? { schedule: detail.schedule } : {}),
         ...(detail.submission ? { submission: detail.submission } : {}),
-        ownStatus: lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus,
+        ...(detail.instructionFiles ? { instructionFiles: detail.instructionFiles } : {}),
+        ...(detail.sampleSolution ? { sampleSolution: detail.sampleSolution } : {}),
+        ...(detail.team ? { team: detail.team } : {}),
+        ...(detail.evaluation ? { evaluation: detail.evaluation } : {}),
+        ownStatus: resolved,
         detailStatus: "read",
       });
     }

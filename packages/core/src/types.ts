@@ -125,6 +125,14 @@ export type ExerciseUnit = {
   schedule?: ExerciseSchedule;
   /** Detail-page submission panel, this user's own (ADR 0053, `detail: true`). */
   submission?: ExerciseSubmission;
+  /** Detail-page instruction file names; metadata only, never downloaded (ADR 0053). */
+  instructionFiles?: ExerciseFileRef[];
+  /** Detail-page sample solution file name, when ADAM shows one (ADR 0053). */
+  sampleSolution?: ExerciseFileRef;
+  /** Detail-page team panel status text, redacted (ADR 0053). */
+  team?: ExerciseTeam;
+  /** Detail-page tutor evaluation (ADR 0053). */
+  evaluation?: ExerciseEvaluation;
   /** Whether the assignment's detail page was read (ADR 0053, only with `detail: true`). */
   detailStatus?: ExerciseDetailStatus;
 };
@@ -140,6 +148,17 @@ export type ExerciseSchedule = {
 export type ExerciseSubmission = {
   submittedFiles?: string;
   lastSubmission?: string;
+};
+
+export type ExerciseFileRef = { name: string };
+
+export type ExerciseTeam = { status: string };
+
+export type ExerciseEvaluation = {
+  /** Tutor's evaluation statement, redacted. */
+  statement?: string;
+  /** As ADAM labels it, e.g. "Passed" / "Failed". */
+  status?: string;
 };
 
 /** read: parsed; no_link: no allowlisted detail link; unrecognized: page had no known panels; not_read: over the per-call cap. */

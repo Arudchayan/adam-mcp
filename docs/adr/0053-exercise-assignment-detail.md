@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (slice 1 of #129; live verification pending)
+Accepted (slice 1 of #129, live-verified; slice 2 amendment below, lab evidence)
 
 ## Context
 
@@ -29,11 +29,51 @@ Issue #129: `adam_get_exercise` returns units parsed from the exercise overview 
   - `submission`: `{ submittedFiles, lastSubmission }`, ADAM's own text for this user. `ownStatus` keeps the overview logic: when the overview left it `unknown`, it is recomputed with the same function from the detail `Last Submission`.
   - `detailStatus`: `read | no_link | unrecognized | not_read`.
 - Headings match English and German labels. A page without a recognisable Work Instructions or Submission panel is `unrecognized`, and no text is guessed.
-- **Not parsed:** instruction files, sample solutions, peer or tutor feedback. There is no live evidence of their markup yet, so no selectors are invented. They are left to the ILIAS lab workstream.
 
 ## Consequences
 
 - Same confirm gate as `adam_get_exercise`. Detail pages are body reads of the same approved exercise. `adam://exc/{refId}` never passes `detail`.
 - Errors on a detail page (session expiry, cancellation, stale id) fail the whole call, as with any other read. Partial results are only produced for structural reasons (`no_link`, `unrecognized`, `not_read`).
 - The fixture provider mirrors the shape: with `detail:true` it derives `schedule` and `submission` from the synthetic unit and marks it `read`.
-- Live verification still needed: the exact title-link keys and `cmd` value (the allowlist may need widening), whether the landed URL stays on the presentation route, German labels, and a sample with real instruction text.
+- Live verification (slice 1): the default view and `view:"all"` read detail pages on ADAM after `mode` was allowlisted.
+
+## Amendment: Files, Sample Solution, Team, Evaluation by Tutor (slice 2)
+
+### Evidence
+
+The local ILIAS 10.12 lab (`tools/ilias-lab/`, #161) uses the same student-view labels and panels as ADAM. The assignment detail page can carry four more `panel-sub` panels with the Submission panel's structure: a `.panel-heading.ilBlockHeader > h3` heading, then `.panel-body > div.row`s holding a `div.control-label > p` label and a sibling `div.col-* > p` value.
+
+1. **Files** (instruction files): one row per file. The label is the file name; the value is a `Download` link (`cmdClass=ilexsubmissiongui&cmd=downloadFile&file=…`).
+2. **Sample Solution**: the same shape, with `cmd=downloadGlobalFeedbackFile`. It appears only when available (in the lab, after the deadline).
+3. **Team** (team assignments): the value is status text such as "You are not assigned to a team yet!", plus `div.ilFormInfo` and a **Create Team** button, which is a write.
+4. **Evaluation by Tutor**: an `Evaluation Statement` row holding the tutor's text, and a `Status` row (`Passed`, `Failed`, …).
+
+Official ILIAS v10.12 lang strings (en | de):
+
+| Key | en | de |
+| --- | --- | --- |
+| exc_instruction | Work Instructions | Arbeitsanweisung |
+| files | Files | Dateien |
+| exc_global_feedback_file | Sample Solution | Musterlösung |
+| exc_team | Team | Team |
+| exc_feedback | Evaluation by Tutor | Rückmeldungen |
+| exc_tbl_comment | Evaluation Statement | Text-Feedback |
+| already_delivered_files | Submitted Files | Bereits abgegebene Dateien |
+| exc_last_submission | Last Submission | Datum der letzten Abgabe |
+
+### Decision
+
+- With `detail: true`, each unit may also carry:
+  - `instructionFiles: [{ name }]` and `sampleSolution: { name }`: the row labels (file names) only.
+  - `team: { status }`: the team panel's text with buttons removed, passed through `redactText`. Member names appear only if ADAM shows them in that text.
+  - `evaluation: { statement?, status? }`: the statement is passed through `redactText`.
+- A panel ADAM does not show stays absent.
+- **Metadata only.** Download links (`downloadFile`, `downloadGlobalFeedbackFile`), the Create Team button and every other team, submit or download route are never kept, returned or followed. Reading the text of exercise files would need its own ADR.
+- `ownStatus`: a tutor `Status` of Passed or Failed (via the same `ownStatus()` patterns) wins over the overview, unless the overview already said passed or failed. Otherwise the slice 1 logic is unchanged.
+- German labels now use the official strings above, in both the detail parser and the overview's Last Submission label. The slice 1 guesses ("abgegebene Dateien", "Letzte Abgabe") never matched. The slice 1 Work Instructions pattern also failed to match the singular "Arbeitsanweisung"; that is fixed too.
+
+### Consequences
+
+- Same confirm gate and the same single page per assignment: no extra navigation.
+- The fixture provider adds a synthetic `instructionFiles` name with `detail: true`.
+- Live and lab verification still needed: the four panels on ADAM itself, a graded assignment's Evaluation panel, and a team assignment.

@@ -359,6 +359,28 @@ export const exerciseOutputSchema = adamObjectOutputSchema.extend({
         .passthrough()
         .optional()
         .describe("detail:true only: this user's own submission panel"),
+      instructionFiles: z
+        .array(z.object({ name: z.string() }).passthrough())
+        .optional()
+        .describe("detail:true only: instruction file names (metadata only; open the ADAM URL to download)"),
+      sampleSolution: z
+        .object({ name: z.string() })
+        .passthrough()
+        .optional()
+        .describe("detail:true only: sample solution file name, when ADAM shows one"),
+      team: z
+        .object({ status: z.string() })
+        .passthrough()
+        .optional()
+        .describe("detail:true only: team panel status text as ADAM shows it (emails redacted)"),
+      evaluation: z
+        .object({
+          statement: z.string().optional().describe("Tutor's evaluation statement (emails redacted)"),
+          status: z.string().optional().describe("As ADAM labels it, e.g. Passed / Failed"),
+        })
+        .passthrough()
+        .optional()
+        .describe("detail:true only: Evaluation by Tutor panel"),
       detailStatus: z
         .enum(["read", "no_link", "unrecognized", "not_read"])
         .optional()
