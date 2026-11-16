@@ -52,6 +52,8 @@ export function requestConfirmElicitation(toolName: string, refId?: string) {
     : toolName === "adam_get_exercise" ? "Read these exercise instructions"
     : toolName === "adam_list_mail" ? "List your ADAM inbox (senders and subjects)"
     : toolName === "adam_read_mail" ? "Open this ADAM mail message (ADAM will mark it as read, as opening it in a browser does)"
+    : toolName === "adam_list_course_members" ? "List this course's members (names, logins and roles)"
+    : toolName === "adam_get_exercise_grades" ? "Read this exercise's grades for all participants"
     : "Read this course page";
   const target = !refId ? ""
     : toolName === "adam_read_mail" ? ` (mail ${refId})`

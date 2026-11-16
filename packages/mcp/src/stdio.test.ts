@@ -912,7 +912,7 @@ describe("A6 resources for read-by-id", () => {
       const names = (tools.result?.tools ?? []).map((tool) => tool.name).sort();
       assert.deepEqual(
         names.filter((name) => name.startsWith("adam_get_")),
-        ["adam_get_course", "adam_get_exercise", "adam_get_file", "adam_get_forum"],
+        ["adam_get_course", "adam_get_exercise", "adam_get_exercise_grades", "adam_get_file", "adam_get_forum"],
       );
 
       const course = await rpc(child, {

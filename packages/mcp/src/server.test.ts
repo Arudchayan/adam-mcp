@@ -38,6 +38,8 @@ describe("read-only MCP facade", () => {
       "adam_list_calendar",
       "adam_list_news",
       "adam_list_mail",
+      "adam_list_course_members",
+      "adam_get_exercise_grades",
     ]);
     // ADR 0054: opening a message marks it read, so it is a read with a state side effect.
     assert.deepEqual([...READ_STATE_TOOLS], ["adam_read_mail"]);
@@ -297,6 +299,7 @@ describe("A6 resources for read-by-id", () => {
     assert.deepEqual(getById.sort(), [
       "adam_get_course",
       "adam_get_exercise",
+      "adam_get_exercise_grades",
       "adam_get_file",
       "adam_get_forum",
     ]);

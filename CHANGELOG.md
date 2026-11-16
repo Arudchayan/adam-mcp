@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Read-only staff views for tutors and course admins: `adam_list_course_members`
+  (roster with roles) and `adam_get_exercise_grades` (per-assignment pass/fail
+  matrix). Both are confirm-gated, follow only tabs ADAM advertises, and return
+  `forbidden` to students. Parsers are lab-verified on ILIAS 10.12 (#128, ADR 0060).
 - An unscoped `adam_list_calendar` also reads ADAM’s full Tasks page, so every
   listed task deadline appears, not just the Dashboard block’s first page. An
   unreadable Tasks page marks the calendar partial (#132, ADR 0056).
