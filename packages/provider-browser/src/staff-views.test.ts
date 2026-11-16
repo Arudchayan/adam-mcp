@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable } from "./staff-views.ts";
+import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable, tableRange } from "./staff-views.ts";
 
 /**
  * ADR 0060 (#128): captures from the local ILIAS 10.12 lab (tools/ilias-lab), seeded
@@ -34,10 +34,24 @@ describe("ADR 0060: staff views from the ILIAS 10.12 lab", () => {
   });
 
   it("redacts email-shaped logins and names", () => {
-    const html = lab("course-members-tutor").replace(">\n lab.student2 <", ">someone@unibas.ch<").replace(/>\s*lab\.student2\s*</, ">someone@unibas.ch<");
+    const original = lab("course-members-tutor");
+    const html = original.replace(/>\s*lab\.student2\s*</, ">someone@unibas.ch<");
+    assert.notEqual(html, original, "the fixture login was replaced");
     const members = parseCourseMembers(html);
     assert.ok(members);
+    assert.equal(members.length, 5);
     assert.equal(members.some((member) => JSON.stringify(member).includes("someone@unibas.ch")), false);
+  });
+
+  it("reads the table footer range and fails closed on rows it cannot align or find", () => {
+    assert.deepEqual(tableRange(lab("course-members-tutor")), { from: 1, to: 5, total: 5 });
+    assert.equal(tableRange("<p>no table</p>"), undefined);
+    // The footer promises rows but no row has the expected shape.
+    const noRows = lab("course-members-tutor").replace(/class="tblrow\d"/g, 'class="odd"');
+    assert.equal(parseCourseMembers(noRows), undefined);
+    // A row with fewer cells than headers (colspan) is not guessed at.
+    const short = lab("exercise-grades-view-tutor").replace(/(<tr\b[^>]*class="tblrow\d"[^>]*>\s*)<td\b[^>]*>[\s\S]*?<\/td>/i, "$1");
+    assert.equal(parseExerciseGrades(short), undefined);
   });
 
   it("parses the Grades View matrix: one status per assignment and a total", () => {
@@ -84,6 +98,7 @@ describe("ADR 0060: staff views from the ILIAS 10.12 lab", () => {
     assert.equal(advertisedStaffRoute(link(`${ok}&cmd=deleteParticipants`), COURSE, /^ilCourseMembershipGUI$/i), undefined);
     assert.equal(advertisedStaffRoute(link(`${ok}&ref_id=86`), COURSE, /^ilCourseMembershipGUI$/i), undefined);
     assert.equal(advertisedStaffRoute(link(`${ok}&ass_id=1x`), COURSE, /^ilCourseMembershipGUI$/i), undefined);
+    assert.equal(advertisedStaffRoute(link(ok.replace("ilrepositorygui", "ilmailgui")), COURSE, /^ilCourseMembershipGUI$/i), undefined);
   });
 
   it("explains a missing staff view as forbidden, not a missing object", () => {

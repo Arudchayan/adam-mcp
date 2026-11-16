@@ -39,7 +39,7 @@ import { filenameFromContentDisposition } from "./download-metadata.ts";
 import { ownStatus, parseExerciseAssignments } from "./exercise-parse.ts";
 import { EXERCISE_DETAIL_CAP, exerciseAssignmentDetailUrl, parseExerciseDetail } from "./exercise-detail.ts";
 import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
-import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable } from "./staff-views.ts";
+import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable, tableRange } from "./staff-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
 
 /** #121: only a response that names an .html/.htm file is an uploaded HTML course file. */
@@ -602,10 +602,18 @@ export class BrowserAdamProvider implements AdamProvider {
     const course = await this.openObject(refId, options?.type ?? "crs", { cacheGeneration: this.walkGeneration, signal: options?.signal, expectedType: "crs", callerType: options?.type });
     const route = advertisedStaffRoute(course.html ?? "", refId, /^ilCourseMembershipGUI$/i);
     if (!route) throw staffViewUnavailable(refId, "Members");
-    const page = await this.openAuthorized(route, options?.signal);
-    const members = parseCourseMembers(page.html ?? "");
+    let page = await this.openAuthorized(route, options?.signal);
+    let members = parseCourseMembers(page.html ?? "");
+    if (!members) {
+      // The Members tab can land on another sub-tab (gallery, groups); follow its advertised Edit Participants sub-tab.
+      const participants = advertisedStaffRoute(page.html ?? "", refId, /^ilCourseMembershipGUI$/i, /^participants$/i);
+      if (participants) {
+        page = await this.openAuthorized(participants, options?.signal);
+        members = parseCourseMembers(page.html ?? "");
+      }
+    }
     if (!members) throw new AdamError("provider_unavailable", `ADAM's Members view for ${refId} was not recognised; no member list was returned.`, false);
-    return { refId, url: objectUrl("crs", refId, this.origin), members, evidence: "lab-verified", provenance: { sourceUrl: objectUrl("crs", refId, this.origin), fetchedAt: this.fetchedAt(page), provider: "browser", freshness: "live-browser-session" } };
+    return { refId, url: objectUrl("crs", refId, this.origin), members, ...staffTableTruncation(page.html ?? "", members.length), evidence: "lab-verified", provenance: { sourceUrl: objectUrl("crs", refId, this.origin), fetchedAt: this.fetchedAt(page), provider: "browser", freshness: "live-browser-session" } };
   }
 
   /**
@@ -625,7 +633,7 @@ export class BrowserAdamProvider implements AdamProvider {
     const page = await this.openAuthorized(gradesRoute, options?.signal);
     const participants = parseExerciseGrades(page.html ?? "");
     if (!participants) throw new AdamError("provider_unavailable", `ADAM's Grades View for ${refId} was not recognised; no grades were returned.`, false);
-    return { refId, url: objectUrl("exc", refId, this.origin), participants, evidence: "lab-verified", provenance: { sourceUrl: objectUrl("exc", refId, this.origin), fetchedAt: this.fetchedAt(page), provider: "browser", freshness: "live-browser-session" } };
+    return { refId, url: objectUrl("exc", refId, this.origin), participants, ...staffTableTruncation(page.html ?? "", participants.length), evidence: "lab-verified", provenance: { sourceUrl: objectUrl("exc", refId, this.origin), fetchedAt: this.fetchedAt(page), provider: "browser", freshness: "live-browser-session" } };
   }
 
   async getExercise(refId: RefId, options?: ObjectOpenOptions & { view?: ExerciseView; detail?: boolean }): Promise<ExerciseObject> {
@@ -1701,4 +1709,11 @@ function filterRange(events: CalendarEvent[], from?: string, to?: string): Calen
     const stamp = event.startsAt ? Date.parse(event.startsAt) : 0;
     return stamp >= start && stamp <= end;
   });
+}
+
+/** ADR 0060: ADAM renders one table page; say so when the footer range shows more rows. */
+function staffTableTruncation(html: string, parsed: number): { truncated?: true; totalHint?: number } {
+  const range = tableRange(html);
+  if (!range) return {};
+  return range.total > parsed ? { truncated: true, totalHint: range.total } : { totalHint: range.total };
 }

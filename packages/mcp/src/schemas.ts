@@ -594,6 +594,8 @@ const staffViewFields = {
   notice: z.string(),
   refId: z.string(),
   url: z.string(),
+  truncated: z.literal(true).optional().describe("ADAM rendered only the first page of this table; raise Rows per page in ADAM to see all"),
+  totalHint: z.number().int().optional().describe("Row count from ADAM's table footer"),
   evidence: z.literal("lab-verified").describe("Parsed from ILIAS 10.12 lab markup; not yet seen on ADAM with a staff account"),
   provenance: provenanceSchema,
 };

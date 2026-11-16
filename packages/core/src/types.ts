@@ -234,6 +234,9 @@ export type CourseMembers = {
   refId: RefId;
   url: string;
   members: CourseMember[];
+  /** ADAM rendered only the first table page (ADR 0060); totalHint is its footer count. */
+  truncated?: true;
+  totalHint?: number;
   /** Lab-verified ILIAS 10.12 markup; not yet observed on ADAM itself. */
   evidence: "lab-verified";
   provenance: Provenance;
@@ -253,6 +256,9 @@ export type ExerciseGrades = {
   refId: RefId;
   url: string;
   participants: ExerciseGradeRow[];
+  /** ADAM rendered only the first table page (ADR 0060); totalHint is its footer count. */
+  truncated?: true;
+  totalHint?: number;
   evidence: "lab-verified";
   provenance: Provenance;
 };

@@ -36,6 +36,18 @@ const checkbox = (cell: string) => {
   return box ? /\bchecked\b/i.test(box) : undefined;
 };
 
+/**
+ * ilTable2 footer "(1 - 5 of 5)" / "(1 - 5 von 5)": the rendered page range. Lets the
+ * caller say when a table has more rows than ADAM rendered on this page.
+ */
+export function tableRange(html: string): { from: number; to: number; total: number } | undefined {
+  const match = html.match(/class="ilTableFootLight"[^>]*>\s*\((\d+)\s*-\s*(\d+)\s+(?:of|von)\s+(\d+)\)/i);
+  return match ? { from: Number(match[1]), to: Number(match[2]), total: Number(match[3]) } : undefined;
+}
+
+/** Rows that disagree with the header count (colspan, grouped headers) are not guessed at. */
+const aligned = (cells: string[], headers: unknown[]) => cells.length >= headers.length;
+
 // Official ILIAS 10.12 en/de column labels (lang files).
 const COLUMN = {
   name: /^(Name)$/i,
@@ -56,6 +68,7 @@ export function parseCourseMembers(html: string): CourseMember[] | undefined {
     const members: CourseMember[] = [];
     for (const row of dataRows(table)) {
       const cells = cellsOf(row);
+      if (!aligned(cells, headers)) return undefined;
       // The first cell is the row-selection checkbox column, which has no header.
       const offset = cells.length - headers.length;
       const cell = (pattern: RegExp) => { const i = at(pattern); return i < 0 ? undefined : cells[i + offset]; };
@@ -63,7 +76,7 @@ export function parseCourseMembers(html: string): CourseMember[] | undefined {
       if (!name) continue;
       const login = textOf(cell(COLUMN.login) ?? "");
       const roles = textOf(cell(COLUMN.roles) ?? "");
-      const member: CourseMember = { name: redactText(name), roles: roles ? roles.split(/\s*,\s*/).filter(Boolean) : [] };
+      const member: CourseMember = { name: redactText(name), roles: roles ? roles.split(/\s*,\s*/).filter(Boolean).map((role) => redactText(role)) : [] };
       if (login) member.login = redactText(login);
       for (const [key, pattern] of [["passed", COLUMN.passed], ["tutorialSupport", COLUMN.tutorialSupport], ["notification", COLUMN.notification]] as const) {
         const value = checkbox(cell(pattern) ?? "");
@@ -71,6 +84,7 @@ export function parseCourseMembers(html: string): CourseMember[] | undefined {
       }
       members.push(member);
     }
+    if (members.length === 0 && (tableRange(html)?.total ?? 0) > 0) return undefined;
     return members;
   }
   return undefined;
@@ -95,6 +109,7 @@ export function parseExerciseGrades(html: string): ExerciseGradeRow[] | undefine
   const rows: ExerciseGradeRow[] = [];
   for (const row of dataRows(table)) {
     const cells = cellsOf(row);
+    if (!aligned(cells, headers)) return undefined;
     const offset = cells.length - headers.length;
     const label = textOf(cells[offset] ?? "");
     if (!label) continue;
@@ -109,9 +124,12 @@ export function parseExerciseGrades(html: string): ExerciseGradeRow[] | undefine
     if (totalAt >= 0) entry.total = statusOf(cells[totalAt + offset] ?? "");
     rows.push(entry);
   }
+  if (rows.length === 0 && (tableRange(html)?.total ?? 0) > 0) return undefined;
   return rows;
 }
 
+/** Repository and exercise handlers only (the lab's Members and exercise tabs). */
+const STAFF_BASE_CLASS = /^il(repository|exercisehandler)gui$/i;
 const ROUTE_KEYS = new Set(["baseClass", "cmdNode", "cmdClass", "cmd", "ref_id", "vw", "member_id", "part_id", "ass_id"]);
 /** Sticky selection parameters ILIAS carries on exercise sub-tabs; digits only. */
 const NUMERIC_KEYS = ["vw", "member_id", "part_id", "ass_id"];
@@ -129,6 +147,7 @@ export function advertisedStaffRoute(html: string, refId: RefId, cmdClass: RegEx
     const keys = [...url.searchParams.keys()];
     if (keys.some((key) => !ROUTE_KEYS.has(key)) || new Set(keys).size !== keys.length) continue;
     if (!cmdClass.test(url.searchParams.get("cmdClass") ?? "") || url.searchParams.get("ref_id") !== refId) continue;
+    if (url.searchParams.has("baseClass") && !STAFF_BASE_CLASS.test(url.searchParams.get("baseClass")!)) continue;
     const command = url.searchParams.get("cmd");
     if (cmd ? !cmd.test(command ?? "") : command !== null && !/^(show\w*|members|participants)$/i.test(command)) continue;
     if (url.searchParams.has("cmdNode") && !/^[a-z0-9:]{1,40}$/i.test(url.searchParams.get("cmdNode")!)) continue;
