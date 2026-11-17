@@ -6,7 +6,7 @@ Confirm decision table — Confirm contract: pass confirm:true OR approve elicit
 
 | Case | Action |
 | --- | --- |
-| Body tools (`adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, `adam_get_forum` with `threadId`) | Pass `confirm: true` OR approve elicitation |
+| Body tools (`adam_read_page`, `adam_extract_file_text`, `adam_get_exercise`, `adam_get_forum` with `threadId`, `adam_list_mail`, `adam_read_mail`, `adam_list_course_members`, `adam_get_exercise_grades`) | Pass `confirm: true` OR approve elicitation |
 | Host without elicitation | `confirm: true` is required |
 | Decline / cancel | Same `confirmation_required`, no data |
 | `adam_get_forum` without `threadId` | No confirm (summaries only) |
