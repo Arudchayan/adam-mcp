@@ -1,5 +1,7 @@
 import type { AdamObjectType, ObjectDetail, RefId } from "adam-core";
 import type { RouteRule } from "../advertised-route.ts";
+import { readGlossary } from "./glo.ts";
+import { readWiki } from "./wiki.ts";
 import { readBookingPool } from "./book.ts";
 import { readLearningSequence } from "./lso.ts";
 import { readSession } from "./sess.ts";
@@ -52,6 +54,8 @@ export type ObjectReader = (ctx: ReaderContext) => Promise<ReaderResult | undefi
  * file in this folder (for example `import { readSession } from "./sess.ts";`).
  */
 export const OBJECT_READERS: Partial<Record<AdamObjectType, ObjectReader>> = {
+  glo: readGlossary,
+  wiki: readWiki,
   sess: readSession,
   book: readBookingPool,
   lso: readLearningSequence,
