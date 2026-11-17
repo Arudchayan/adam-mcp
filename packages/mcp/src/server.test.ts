@@ -38,6 +38,7 @@ describe("read-only MCP facade", () => {
       "adam_list_calendar",
       "adam_list_news",
       "adam_list_mail",
+      "adam_list_notes",
       "adam_list_course_members",
       "adam_get_exercise_grades",
     ]);

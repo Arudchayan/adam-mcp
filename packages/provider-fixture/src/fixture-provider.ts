@@ -24,6 +24,8 @@ import {
   type MailListOptions,
   type MailMessage,
   type MailReadOptions,
+  type NoteItem,
+  type NoteListOptions,
   type NewsItem,
   type PageContent,
   type Paginated,
@@ -38,6 +40,7 @@ import {
   newsEnabledCourseIds,
   fixtureForumPostsByThread,
   fixtureMail,
+  fixtureNotes,
 } from "./catalog.ts";
 // forum posts map imported below with catalog symbols
 import { LongWalkStub } from "./long-walk.ts";
@@ -336,6 +339,13 @@ export class FixtureAdamProvider implements AdamProvider {
       this.openedMail.has(header.mailId) ? { ...header, status: "read" as const } : header,
     );
     return withListingState(paginate(items, options), items.length > 0 ? "ok" : "empty");
+  }
+
+  /** ADR 0063: the fixture student's two synthetic notes; the overview is one snapshot. */
+  async listNotes(options?: NoteListOptions): Promise<Paginated<NoteItem>> {
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    throwIfCancelled(options?.signal);
+    return withListingState(paginate(fixtureNotes, options), fixtureNotes.length > 0 ? "ok" : "empty");
   }
 
   /** ADR 0060: the fixture user is a student, so the staff Members view is not offered. */
