@@ -1,0 +1,32 @@
+# ADR 0061: Cross-course reads fit MCP host timeouts
+
+## Status
+
+Accepted. This ADR lowers the elapsed walk budget that ADR 0024 bounded and ADR 0025 kept at two minutes.
+
+## Context
+
+The 0.4.0 release-candidate walkthrough ran in an independent client chat. In that client, unscoped `adam_list_calendar` and `adam_list_news` timed out every time (4 of 4 calls) at the host's request limit, while course-scoped calls worked. Many MCP hosts cancel a request after 60 s. The server's walk budget was 120 s, so it never reported a partial result before the host gave up.
+
+A live timing of the student account's full enrolled walk (8 courses, 34 pages) took 118 s. About 0.7 s per page was the actual page load. The rest was two waits:
+
+- **Content tab.** Every course page tried to click a `Content`/`Inhalt` tab with a 3 s timeout. ADAM courses already land on Content, so each course spent the full 3 s. That added up to 8 × 3 s.
+- **Listing readiness.** The readiness wait (ADR 0005, ADR 0007) returns only when it sees listing rows or empty-folder copy. Pages that legitimately have neither (the Dashboard, an exercise, a structurally empty folder) waited out the full 12 s. That happened five times per walk.
+
+## Decision
+
+- The Content tab is clicked only when it is **visible at that moment** (`isVisible()`, which does not wait). The 3 s click timeout applies only to a tab that exists.
+- The listing-ready probe also returns true once the document has reached `readyState === "complete"`, every same-origin frame is complete, and 750 ms (`LISTING_SETTLE_GRACE_MS`) has passed since the load event. A same-origin frame that is still loading, or still on `about:blank` while naming a `src`, keeps the wait going, so delayed frames (ADR 0007) are still awaited. The 12 s timeout remains the upper bound.
+- `MAX_WALK_MS` drops from 120 s to **45 s**. A walk that reaches the budget returns what it has read, with `partial: true` and `time_budget`, as before. The read-budget error now names the configured budget and suggests `courseRefId`.
+
+## Results (live, student account, counts only)
+
+- The full walk went from 118 s to 37.5 s with the same 34 pages and 35 navigations. A repeat within a minute takes 2.2 s, because cached pages are reused.
+- Unscoped `adam_list_calendar` completes in 38.7–39.6 s and is not partial, with the same 17 events as the earlier 107 s run.
+- `adam_list_news` then shares the walk, takes 0.0 s, and returns 22 items.
+
+## Consequences
+
+- Hosts with a 60 s request limit get complete cross-course answers on accounts of this size. Larger accounts get an honest partial result, not a host timeout.
+- Codex's generated `tool_timeout_sec` (ADR 0025) is unchanged; it exists for interactive login.
+- Pages that render rows late, after load, could be read earlier than before. The same-origin frame checks and the unchanged folder recovery (ADR 0030, ADR 0050) keep classifying a still-blank listing as `unknown`, never as empty.

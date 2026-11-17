@@ -87,15 +87,25 @@ function sameOriginDataAction(block: string): string | undefined {
   }
 }
 
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " " };
+const ENTITY = /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|(amp|quot|apos|lt|gt|nbsp));/gi;
+
+/**
+ * Decodes the HTML entities ADAM text carries. ILIAS escapes some news and item text
+ * twice (`&amp;amp;`), so a second pass runs only while a literal `&amp;` entity remains.
+ */
+export function decodeEntities(text: string): string {
+  const once = (value: string) => value.replace(ENTITY, (whole, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
+    if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? whole;
+    const code = dec !== undefined ? Number(dec) : parseInt(hex!, 16);
+    return Number.isInteger(code) && code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff) ? String.fromCodePoint(code) : whole;
+  });
+  const first = once(text);
+  return /&(?:amp|quot|apos|lt|gt|nbsp|#\d+|#x[0-9a-f]+);/i.test(first) && /&amp;/i.test(text) ? once(first) : first;
+}
+
 export function textOf(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
+  return decodeEntities(html.replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim();
 }

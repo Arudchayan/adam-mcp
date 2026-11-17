@@ -158,7 +158,9 @@ export function parseMailbox(html: string, now: Date = new Date()): ParsedMailbo
   const rows: ParsedMailRow[] = [];
   let skippedRows = 0;
   for (const row of blocks(table, "tr")) {
-    const cells = blocks(row, "td", true);
+    // ILIAS 10.12 tpl.datacell.html opens every cell with a responsive
+    // `<span class="c-table-data__cell__col-title">{title}: </span>` label; it is not cell content.
+    const cells = blocks(row, "td", true).map((cell) => ({ ...cell, inner: withoutColumnTitle(cell.inner) }));
     if (cells.length === 0) continue;
     if (cells.length === 1 && !/<a\b/i.test(cells[0]!.inner)) continue; // "No records" row
     const byColumn = new Map<Column, string>();
@@ -326,6 +328,11 @@ function firstTable(html: string): string | undefined {
 }
 
 type Cell = { attrs: string; inner: string };
+
+/** Drops the KS data-table cell's own column-title label (ILIAS 10.12 tpl.datacell.html). */
+export function withoutColumnTitle(inner: string): string {
+  return inner.replace(/<span\b[^>]*\bclass="[^"]*\bc-table-data__cell__col-title\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, "");
+}
 
 function blocks(html: string, tag: string): string[];
 function blocks(html: string, tag: string, withAttrs: true): Cell[];

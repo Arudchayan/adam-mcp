@@ -102,3 +102,18 @@ describe("AT6 preferCalendarEvents", () => {
     assert.notEqual(calendarEventDedupeKey(items[0]!), calendarEventDedupeKey(items[1]!));
   });
 });
+
+describe("page date at an exercise deadline instant (client walkthrough, 0.4.0 RC)", () => {
+  it("merges the course-page copy into the exercise deadline", () => {
+    const provenance = { sourceUrl: "https://adam.unibas.ch/go/crs/1", fetchedAt: "2026-11-17T10:00:00.000Z", provider: "fixture" as const, freshness: "fixture" as const };
+    const items = preferCalendarEvents([
+      { title: "Exercise 1 · Deadline: 20. Nov 2026, 23:59", startsAt: "2026-11-20T22:59:00.000Z", source: "page", confidence: "inferred", objectRefId: "1", provenance },
+      { title: "Sheet 1 (Deadline)", startsAt: "2026-11-20T22:59:00.000Z", source: "exc", confidence: "explicit", objectRefId: "2", provenance },
+      { title: "Mid-term", startsAt: "2026-11-21T09:00:00.000Z", source: "page", confidence: "inferred", objectRefId: "1", provenance },
+    ]);
+    assert.equal(items.length, 2);
+    const deadline = items.find((item) => item.source === "exc");
+    assert.deepEqual(deadline?.seenIn?.sort(), ["exc", "page"]);
+    assert.ok(items.some((item) => item.title === "Mid-term"), "a page date at another instant stays");
+  });
+});

@@ -17,15 +17,17 @@ const dashboardLink = (mailId: string, folder = "9000") =>
   `ilias.php?baseClass=ilmailgui&amp;cmdNode=a1:b2&amp;cmdClass=ilMailFolderGUI&amp;cmd=showMail&amp;mobj_id=${folder}&amp;mail_id=${mailId}`;
 const tableAction = (action: string, mailId = "700002") => subjectLink(mailId).replace("ilMailFolderGUI_action=show", `ilMailFolderGUI_action=${action}`);
 
+/** ILIAS 10.12 tpl.datacell.html: every data cell opens with a responsive column-title label. */
+const t = (title: string) => `<span class="c-table-data__cell__col-title">${title}: </span>`;
 const row = (mailId: string, opts: { read: boolean; sender: string; subject: string; attach: boolean; date: string; href?: string }) => `
 <tr class="c-table-data__row" role="row">
   <td class="c-table-data__cell c-table-data__row-selection"><input type="checkbox" name="mail_ids[]" value="${mailId}"></td>
-  <td class="c-table-data__cell c-table-data__cell--status"><img class="icon ${opts.read ? "mailr" : "mailu"} small" src="x.svg" alt=""></td>
-  <td class="c-table-data__cell c-table-data__cell--status"><span class="il-avatar"><img src="a.png" alt="Avatar"></span></td>
-  <td class="c-table-data__cell c-table-data__cell--text">${opts.sender}</td>
-  <td class="c-table-data__cell c-table-data__cell--link"><a href="${opts.href ?? subjectLink(mailId)}">${opts.subject}</a></td>
-  <td class="c-table-data__cell c-table-data__cell--status">${opts.attach ? '<span class="glyph" aria-label="Attachment"><span class="glyphicon glyphicon-paperclip"></span></span>' : ""}</td>
-  <td class="c-table-data__cell c-table-data__cell--date">${opts.date}</td>
+  <td class="c-table-data__cell c-table-data__cell--status">${t("Status")}<img class="icon ${opts.read ? "mailr" : "mailu"} small" src="x.svg" alt=""></td>
+  <td class="c-table-data__cell c-table-data__cell--status">${t("Avatar")}<span class="il-avatar"><img src="a.png" alt="Avatar"></span></td>
+  <td class="c-table-data__cell c-table-data__cell--text">${t("Sender")}${opts.sender}</td>
+  <td class="c-table-data__cell c-table-data__cell--link">${t("Subject")}<a href="${opts.href ?? subjectLink(mailId)}">${opts.subject}</a></td>
+  <td class="c-table-data__cell c-table-data__cell--status">${t("Attachments")}${opts.attach ? '<span class="glyph" aria-label="Attachment"><span class="glyphicon glyphicon-paperclip"></span></span>' : ""}</td>
+  <td class="c-table-data__cell c-table-data__cell--date">${t("Date")}${opts.date}</td>
   <td class="c-table-data__cell c-table-data__rowaction"><div class="dropdown"><button data-action="${tableAction("deleteMails", mailId)}">Delete</button><a href="${tableAction("markMailsRead", mailId)}">Mark as read</a></div></td>
 </tr>`;
 
@@ -253,5 +255,17 @@ describe("ADR 0054: BrowserAdamProvider mail", () => {
     assert.match(page.notice ?? "", /not proof the inbox is empty/);
     const elsewhere = build({ [MAILBOX_URL]: snapshotFromHtml(`${origin}/ilias.php?baseClass=ilDashboardGUI`, "Dashboard", "<main></main>", "Dashboard Abmelden") });
     await assert.rejects(() => elsewhere.provider.listMail(), (error: unknown) => error instanceof AdamError && error.code === "provider_unavailable");
+  });
+});
+
+describe("ILIAS 10.12 data-cell column titles (client walkthrough, 0.4.0 RC)", () => {
+  it("never leaks the responsive column-title label into values or the attachment flag", () => {
+    const parsed = parseMailbox(inboxHtml(row("700010", { read: true, sender: "Synthetic Tutor", subject: "Sheet 3", attach: false, date: "17. Nov 2026, 09:15" })));
+    const mail = parsed.rows[0]!;
+    assert.equal(mail.subject, "Sheet 3");
+    assert.equal(mail.sender, "Synthetic Tutor");
+    assert.doesNotMatch(mail.dateText ?? "", /Date:/);
+    assert.ok(mail.sentAt, "the date parses once its label is gone");
+    assert.equal(mail.hasAttachments, false);
   });
 });

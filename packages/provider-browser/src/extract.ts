@@ -16,7 +16,7 @@ import {
   type RefId,
 } from "adam-core";
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
-import { extractClassBlocksAt, extractIdBlocks, extractIdBlocksWithId, parseUiItems } from "./ui-items.ts";
+import { decodeEntities, extractClassBlocksAt, extractIdBlocks, extractIdBlocksWithId, parseUiItems } from "./ui-items.ts";
 import { advertisedNewsPage, type NewsBlockRef, type NewsBlockType } from "./news-paging.ts";
 import { parseFileRows } from "./file-rows.ts";
 import { parseExerciseUnits } from "./exercise-parse.ts";
@@ -776,7 +776,7 @@ function fileHints(title: string): Pick<FileObject, "mimeType"> {
 }
 
 function stripTags(value: string): string {
-  return value.replace(/<[^>]+>/g, " ");
+  return decodeEntities(value.replace(/<[^>]+>/g, " "));
 }
 
 function cleanTitle(value: string): string {

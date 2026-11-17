@@ -96,6 +96,9 @@ const LISTING_PROBE_FUNCTION = `((document) => {
 
 export const LISTING_PROBE_SCRIPT = `${LISTING_PROBE_FUNCTION}(document)`;
 
+/** ADR 0061: grace after load before a row-less page counts as ready. */
+export const LISTING_SETTLE_GRACE_MS = 750;
+
 const LISTING_READY_SCRIPT = `(() => {
   const probe = ${LISTING_PROBE_FUNCTION};
   const documents = [document];
@@ -106,9 +109,25 @@ const LISTING_READY_SCRIPT = `(() => {
     } catch { /* Cross-origin frames never contribute content. */ }
   }
   const results = documents.map(probe);
-  return results.some((result) => result.itemRows > 0) ||
+  if (results.some((result) => result.itemRows > 0) ||
     (documents.length === 1 && results[0].emptyCopy) ||
-    (documents.length > 1 && results.slice(1).some((result) => result.emptyCopy));
+    (documents.length > 1 && results.slice(1).some((result) => result.emptyCopy))) return true;
+  // ADR 0061: a page with no listing rows (Dashboard, exercise, empty folder) is ready once
+  // it and every same-origin frame have loaded and a short grace has passed, instead of
+  // waiting out the whole timeout. A frame still loading, or still on about:blank while it
+  // names a src, keeps the wait going (delayed frames, ADR 0007).
+  if (document.readyState !== "complete") return false;
+  for (const frame of [...document.querySelectorAll("iframe, frame")].slice(0, 20)) {
+    try {
+      const inner = frame.contentDocument;
+      if (!inner) continue;
+      if (inner.readyState !== "complete") return false;
+      const src = frame.getAttribute("src");
+      if (inner.location.href === "about:blank" && src && src !== "about:blank") return false;
+    } catch { /* Cross-origin frames never contribute content. */ }
+  }
+  const loaded = performance.getEntriesByType("navigation")[0]?.loadEventEnd || 0;
+  return loaded > 0 && performance.now() - loaded >= ${LISTING_SETTLE_GRACE_MS};
 })()`;
 
 /** Runs in the page: text-free tag/class skeleton of the main content area (debug capture). */
@@ -445,12 +464,15 @@ export class PlaywrightAdamSession implements AdamBrowserSession {
           throw error;
         }
         if (/\/go\/crs\//i.test(target)) {
-          await page
+          // ADR 0061: only when the tab is visible now; a course already on Content has none
+          // to click, and waiting out a click timeout cost 3 s per course.
+          const contentTab = page
             .locator("[role='tab'], a, button")
             .filter({ hasText: /^(Content|Inhalt)$/i })
-            .first()
-            .click({ timeout: 3_000 })
-            .catch(() => undefined);
+            .first();
+          if (await contentTab.isVisible().catch(() => false)) {
+            await contentTab.click({ timeout: 3_000 }).catch(() => undefined);
+          }
         }
         await page.waitForFunction(LISTING_READY_SCRIPT, undefined, { timeout: 12_000 }).catch(() => undefined);
         await this.rejectIfBlocked(page);

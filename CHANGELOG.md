@@ -42,6 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Unscoped `adam_list_calendar` / `adam_list_news` no longer time out in MCP
+  clients: the full walk drops from about 118 s to 38 s by skipping idle waits,
+  and the read budget is 45 s (ADR 0061). Found in the release-candidate walkthrough.
+- Mail headers no longer carry ILIAS's responsive column labels (`Subject:`,
+  `Sender:`), dates parse, and `hasAttachments` is no longer always true.
+- News and listing text decode HTML entities, including double-escaped `&amp;amp;`.
+- A course page's copy of an exercise deadline merges into that deadline in the calendar.
 - A time-budget abort no longer signs the background session out: cancelling
   a navigation never closes the holder's last tab (#118, #126, ADR 0045).
 - Breadcrumbs run root to parent without duplicates (#122, #126).
