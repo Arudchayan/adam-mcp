@@ -586,6 +586,46 @@ export const mailMessageOutputSchema = z
   })
   .passthrough();
 
+/** ADR 0063: the student's own Private Notes are personal free text: confirm-gated, lab-verified. */
+const NOTES_CONFIRM_HELP =
+  'Optional gate. Set true only after the student asked to see their ADAM Private Notes. Notes are personal text and untrusted. Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {"confirm":true}.';
+
+export const listNotesInputSchema = z
+  .object({
+    confirm: z.literal(true).optional().describe(NOTES_CONFIRM_HELP),
+    refresh: z.boolean().optional().describe("Re-read the notes overview from ADAM; omit cursor when true"),
+    cursor: cursorSchema,
+    limit: limitSchema,
+  })
+  .strict();
+
+export const paginatedNotesOutputSchema = z
+  .object({
+    untrusted: z.literal(true),
+    notice: z.string(),
+    evidence: z.literal("lab-verified").describe("Parsed from ILIAS 10.12 lab markup with seeded notes; not yet seen on ADAM"),
+    listingNotice: z.string().optional(),
+    items: z.array(
+      z
+        .object({
+          noteId: z.string().optional(),
+          text: z.string().describe("Note text as the student wrote it; untrusted; capped"),
+          truncated: z.boolean().optional(),
+          dateText: z.string().optional().describe("Date as ADAM shows it"),
+          shownAt: z.string().optional(),
+          objectTitle: z.string().optional().describe("Title of the object the note is on, as ADAM shows it"),
+          objectRefId: z.string().optional(),
+          provenance: provenanceSchema,
+        })
+        .passthrough(),
+    ),
+    snapshotAt: z.string().optional(),
+    nextCursor: z.string().optional(),
+    totalHint: z.number().optional(),
+    listingState: z.enum(["ok", "empty", "unknown"]).optional(),
+  })
+  .passthrough();
+
 /** ADR 0060 (#128): staff views. Other people's names and grades: confirm-gated, lab-verified. */
 const STAFF_CONFIRM_HELP =
   "Optional gate. Set true only after the user (a tutor or course admin) asked for this staff view. Returns other people's names, logins and grade status, so it is personal data. Confirm contract: pass confirm:true OR approve elicitation; hosts without elicitation require confirm:true; decline/cancel → same confirmation_required, no data; forum needs gate only with threadId. Recipe: {\"refId\":\"...\",\"confirm\":true}.";

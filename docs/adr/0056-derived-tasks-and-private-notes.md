@@ -28,7 +28,7 @@ The Calendar's `jumpToCalendar` lands on `ilcalendarmonthgui`, which carries man
 - **Honest failure.** The page counts as read only when it lands on `ilderivedtasksgui` and shows either the listing panel or an info message box with no listing (the explicit empty state). Anything else, or a non-auth open error, leaves the events out and marks the calendar `partial` with `unreadable_page`. Cancellation, `unauthorized`, `forbidden` and `stale_id` still surface (ADR 0015 / 0016).
 - Search and news are unchanged. The Tasks page is not part of the shared walk.
 
-### Private Notes: deferred
+### Private Notes: deferred (superseded by ADR 0063)
 
 `adam_list_notes` is **not** added. The only live evidence is labels on an empty page (0 notes), so the item markup that would carry note text and origin is unverified. Notes are personal free text, and a parser written blind could leak or misattribute them. Revisit when an account with at least one private note can be probed structure-only. That design would be confirm-gated like `adam_read_page`, return text and an origin `/go/{type}/{ref}` only, and never request `exportNotesHTML` or `setSortation`.
 

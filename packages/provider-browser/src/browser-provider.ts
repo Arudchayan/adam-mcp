@@ -27,6 +27,9 @@ import {
   type MailListOptions,
   type MailMessage,
   type MailReadOptions,
+  NOTE_TEXT_LIMIT,
+  type NoteItem,
+  type NoteListOptions,
   type NewsItem,
   type ObjectOpenOptions,
   type PageContent,
@@ -64,6 +67,7 @@ import {
 } from "./extract.ts";
 import { MAX_NEWS_EXTRA_PAGES, NEWS_PAGING_RESERVE_MS, type NewsBlockRef } from "./news-paging.ts";
 import { isMailGuiUrl, landedMailIds, MAILBOX_URL, parseMailbox, parseMailMessage, showMailUrl } from "./mail-parse.ts";
+import { isNotesLanding, NOTES_URL, notesListingState, parseNotes } from "./notes-parse.ts";
 import { pageHeading, parseForumPage, resolveForumThreadUrl, threadIdFromHref } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
@@ -1080,6 +1084,37 @@ export class BrowserAdamProvider implements AdamProvider {
       ...rest,
       provenance: { sourceUrl: MAILBOX_URL, fetchedAt: this.fetchedAt(snapshot), provider: "browser", freshness: "live-browser-session" },
     };
+  }
+
+  /**
+   * ADR 0063: the student's Private Notes overview, opened through the fixed main-bar
+   * route only (never export, sortation, comments or table actions). Read-only: the page
+   * is parsed once and cursor pages reuse that snapshot. Notes are untrusted text.
+   */
+  async listNotes(options?: NoteListOptions): Promise<Paginated<NoteItem>> {
+    throwIfCancelled(options?.signal);
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    await this.assertSessionEnabled(options?.signal);
+    const key = "notes:private";
+    if (!options?.refresh) {
+      const continuation = this.pagination.continue<NoteItem>(key, options);
+      if (continuation) return continuation;
+    }
+    const snapshot = await this.openAuthorized(NOTES_URL, options?.signal);
+    if (!isNotesLanding(snapshot.url)) {
+      throw new AdamError("provider_unavailable", "ADAM did not open Private Notes. Open Private Notes in ADAM once, then retry.", false);
+    }
+    const parsed = parseNotes(snapshot.html ?? "");
+    const provenance = { sourceUrl: NOTES_URL, fetchedAt: this.fetchedAt(snapshot), provider: "browser" as const, freshness: "live-browser-session" };
+    const items: NoteItem[] = parsed.notes.map((note) => ({ ...note, provenance }));
+    const notices: string[] = [];
+    if (!parsed.notesFound) notices.push("ADAM's Private Notes page showed no recognisable notes list; this is not proof there are no notes.");
+    if (parsed.skipped > 0) notices.push(`${parsed.skipped} note(s) had no readable text and were left out.`);
+    if (items.some((item) => item.truncated)) notices.push(`Some note texts were cut at ${NOTE_TEXT_LIMIT} characters.`);
+    return this.pagination.first(key, items, options, {
+      listingState: notesListingState(parsed),
+      ...(notices.length > 0 ? { notice: notices.join(" ") } : {}),
+    });
   }
 
   private async openMailbox(signal?: AbortSignal): Promise<PageSnapshot> {
