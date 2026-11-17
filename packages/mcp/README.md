@@ -2,7 +2,7 @@
 
 MCP server for University of Basel ADAM.
 
-Version `0.4.0` is published. The CLI bundles the project's workspace code;
+Version `0.4.0` is published; `0.5.0` is a release candidate. The CLI bundles the project's workspace code;
 npm installs its declared runtime dependencies.
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
@@ -39,7 +39,12 @@ responses are refused. See [download details](https://github.com/Arudchayan/adam
 tasks and calendar, typed sessions, groups, wikis and other ILIAS 10.12 objects,
 and lab-verified read-only tutor views of course members and exercise grades.
 
-Page text, file text, exercise instructions, forum posts, mail and staff views
+0.5.0 adds typed reads (`adam_read_page` `detail`) of sessions, wikis, glossaries,
+learning modules, data collections, booking-pool free slots, learning sequences,
+mediacasts and bibliographies, read-only Private Notes (`adam_list_notes`) and
+anonymous exercise peer review.
+
+Page text, file text, exercise instructions, forum posts, mail, notes and staff views
 require approval for the selected object. Clients with elicitation support can
 request approval; other clients use `confirm: true`. Summaries and metadata remain
 read-only. Exams, submissions, mail sending, grading and other writes are unsupported. Scanned PDFs require

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - Release candidate (not yet published)
+
 ### Added
 
 - `adam_read_page` returns a typed `detail` for ILIAS 10.12 objects (ADR 0062):
