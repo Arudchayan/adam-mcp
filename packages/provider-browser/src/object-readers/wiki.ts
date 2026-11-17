@@ -1,29 +1,25 @@
+import { DEFAULT_ADAM_ORIGIN, type RefId } from "adam-core";
 import type { RouteRule } from "../advertised-route.ts";
 import { tableRange } from "../staff-views.ts";
 import { extractClassBlocksAt, textOf } from "../ui-items.ts";
-import type { ObjectReader, ReaderPage } from "./index.ts";
+import type { ObjectReader } from "./index.ts";
 
 /**
  * ADR 0062 / #165: wiki (`wiki`) reader, lab-verified against ILIAS 10.12 (tools/ilias-lab,
  * wiki "Lab wiki pages", ref 117; student views in fixtures/lab/wiki-*-student.json).
  *
- * - `pages`: the wiki's All Pages table (the sub-tab the start page advertises).
- * - `subPage`: an opaque page slug from `pages`. The slug is the ILIAS page id (the title with
- *   underscores). The page is found by following the `gotoPage` internal links the wiki
- *   pages render, breadth first from the start page, within WIKI_CRAWL_LIMIT pages.
- *   A page the crawl does not reach returns undefined (the provider reports stale_id).
+ * - `pages`: the wiki's All Pages table, one row per page. Only the page title, its numeric
+ *   id and the table footer count are read. The last editor (avatar, login) and dates are not.
+ * - `subPage`: the numeric page id (`wpage_{id}`). Reading one opens the page's own permalink
+ *   (`goto.php/wiki/wpage_{id}_{ref}`), which the All Pages view advertises. No crawl.
  */
 
-/** Pages the sub-page crawl may open (on top of the All Pages listing); well under MAX_READER_PAGES. */
-export const WIKI_CRAWL_LIMIT = 8;
-
-const SLUG = /^[A-Za-z0-9_.-]{1,80}$/;
 /** The All Pages sub-tab the wiki advertises from its pages. */
-const ALL_PAGES: RouteRule = { cmdClass: /^ilobjwikigui$/i, cmd: /^allPages$/, keys: { page: SLUG, wpg_id: /^\d{1,9}$/ } };
-/** The internal link a wiki page renders to another existing page. */
-const PAGE_LINK: RouteRule = { cmdClass: /^ilobjwikigui$/i, cmd: /^gotoPage$/, keys: { page: SLUG, from_page: SLUG } };
+const ALL_PAGES: RouteRule = { cmdClass: /^ilobjwikigui$/i, cmd: /^allPages$/, keys: { page: /^[A-Za-z0-9_.-]{1,80}$/, wpg_id: /^\d{1,9}$/ } };
+const PAGE_ID = /^\d{1,9}$/;
+const PERMALINK_PATH = /^\/(?:goto\.php\/wiki|go\/wiki)\/wpage_(\d{1,9})_(\d{1,9})$/;
 
-export type WikiPage = { title: string; subPage?: string };
+export type WikiPage = { title: string; subPage: string };
 
 export type WikiDetail = {
   kind: "wiki";
@@ -35,38 +31,58 @@ export type WikiDetail = {
   truncated?: boolean;
 };
 
+/**
+ * The permalink of one wiki page, as the All Pages view links it. Accepts `goto.php/wiki/wpage_{id}_{ref}`
+ * and `go/wiki/wpage_{id}_{ref}` on the pinned origin only, with no query string, no fragment and no
+ * credentials. Returns the absolute URL, or undefined when the href is anything else (another ref,
+ * another wiki, a foreign origin, a query, or a non-digit id). `pageId` restricts it to one id.
+ */
+export function wikiPermalink(raw: string, refId: RefId, pageId?: string): string | undefined {
+  // A bare "?" or "#" is still a query or fragment, so check the raw href as well as the parsed URL.
+  if (/[?#]/.test(raw)) return undefined;
+  let url: URL;
+  try { url = new URL(raw.replace(/&amp;/gi, "&"), DEFAULT_ADAM_ORIGIN); } catch { return undefined; }
+  if (url.origin !== DEFAULT_ADAM_ORIGIN || url.username || url.password) return undefined;
+  if (url.search !== "" || url.hash !== "") return undefined;
+  const match = url.pathname.match(PERMALINK_PATH);
+  if (!match) return undefined;
+  const [, id, ref] = match;
+  if (ref !== refId) return undefined;
+  if (pageId !== undefined && (!PAGE_ID.test(pageId) || id !== pageId)) return undefined;
+  return url.href;
+}
+
+/** Permalinks of pages in this wiki (any id), as `{ id, title }`. Markup inside a link (icons) is not a page row. */
+function pageRows(html: string, refId: RefId): Array<{ id: string; title: string }> {
+  const rows: Array<{ id: string; title: string }> = [];
+  for (const match of html.matchAll(/<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+    if (/<[a-z!]/i.test(match[2]!)) continue;
+    const url = wikiPermalink(match[1]!, refId);
+    const id = url?.match(/wpage_(\d{1,9})_/)?.[1];
+    const title = textOf(match[2]!);
+    if (!id || !title || rows.some((row) => row.id === id)) continue;
+    rows.push({ id, title });
+  }
+  return rows;
+}
+
 /** The page title ILIAS shows as the page heading (`ilc_page_title_PageTitle`). */
 export function wikiPageTitle(html: string): string | undefined {
   const text = html.match(/<h1\b[^>]*class="[^"]*\bilc_page_title_PageTitle\b[^"]*"[^>]*>([\s\S]*?)<\/h1>/i)?.[1];
   return text === undefined ? undefined : textOf(text) || undefined;
 }
 
-/** The ILIAS page id of a title: spaces become underscores. Undefined when the id would not be a safe id. */
-export function wikiPageSlug(title: string): string | undefined {
-  const slug = title.trim().replace(/\s+/g, "_");
-  return SLUG.test(slug) ? slug : undefined;
-}
-
-/** The All Pages table: one row per page, linked to the page's `goto.php/wiki/wpage_<id>_<ref>`. */
-export function parseWikiPages(html: string): { pages: WikiPage[]; pageCount: number; truncated: boolean } | undefined {
-  const titles: string[] = [];
-  for (const match of html.matchAll(/<a\b[^>]*\bhref="[^"]*\/wiki\/wpage_\d+_\d+"[^>]*>([\s\S]*?)<\/a>/gi)) {
-    // A page title is plain text; a link with markup inside (for example the "Last Visited Page" icon) is not a row.
-    if (/<[a-z!]/i.test(match[1]!)) continue;
-    const title = textOf(match[1]!);
-    if (title && !titles.includes(title)) titles.push(title);
-  }
-  if (titles.length === 0) {
+/** The All Pages table: one row per page, with the page id from its permalink. */
+export function parseWikiPages(html: string, refId: RefId): { pages: WikiPage[]; pageCount: number; truncated: boolean } | undefined {
+  const rows = pageRows(html, refId);
+  if (rows.length === 0) {
     // ILIAS shows this sentence for a wiki without pages; anything else is not recognised.
     return /This object is empty/i.test(html) ? { pages: [], pageCount: 0, truncated: false } : undefined;
   }
-  const pages = titles.map((title) => {
-    const subPage = wikiPageSlug(title);
-    return subPage ? { title, subPage } : { title };
-  });
+  const pages = rows.map(({ id, title }) => ({ title, subPage: id }));
   const range = tableRange(html);
-  const pageCount = Math.max(titles.length, range?.total ?? 0);
-  return { pages, pageCount, truncated: pageCount > titles.length };
+  const pageCount = Math.max(rows.length, range?.total ?? 0);
+  return { pages, pageCount, truncated: pageCount > rows.length };
 }
 
 /** The wiki page content (the COPage container), or the whole page text when the container is absent. */
@@ -76,17 +92,11 @@ function contentText(html: string, fallback: string): string {
   return text || fallback;
 }
 
-/** Internal links to existing pages only: ILIAS marks a link to a page that does not exist with `ilWikiPageMissing`. */
-function existingPageLinks(ctx: { routes(html: string, rule: RouteRule): string[] }, html: string): string[] {
-  const anchors = [...html.matchAll(/<a\b[^>]*>/gi)].map((m) => m[0]).filter((tag) => !/ilWikiPageMissing/i.test(tag));
-  return ctx.routes(anchors.join(""), PAGE_LINK);
-}
-
 export const readWiki: ObjectReader = async (ctx) => {
   const allUrl = ctx.route(ctx.page.html, ALL_PAGES);
   if (!allUrl) return undefined;
   const listing = await ctx.open(allUrl);
-  const inventory = parseWikiPages(listing.html);
+  const inventory = parseWikiPages(listing.html, ctx.refId);
   if (!inventory) return undefined;
   const startPage = wikiPageTitle(ctx.page.html);
   const detail: WikiDetail = {
@@ -99,23 +109,19 @@ export const readWiki: ObjectReader = async (ctx) => {
   };
   if (!ctx.subPage) return { detail };
 
-  const target = ctx.subPage;
-  const startSlug = startPage ? wikiPageSlug(startPage) : undefined;
-  if (target === startSlug) return { detail, text: contentText(ctx.page.html, ctx.page.text) };
+  // The id must be one the listing advertises; its permalink is the only page opened.
+  if (!inventory.pages.some((page) => page.subPage === ctx.subPage)) return undefined;
+  const permalink = wikiPermalinkFor(listing.html, ctx.refId, ctx.subPage);
+  if (!permalink) return undefined;
+  const page = await ctx.open(permalink);
+  return { detail, text: contentText(page.html, page.text) };
+};
 
-  // Breadth-first over the links existing pages render, from the start page, bounded.
-  const seen = new Set<string>(startSlug ? [startSlug] : []);
-  const queue = existingPageLinks(ctx, ctx.page.html);
-  let opened = 0;
-  while (queue.length > 0 && opened < WIKI_CRAWL_LIMIT) {
-    const url = queue.shift()!;
-    const slug = new URL(url).searchParams.get("page");
-    if (!slug || seen.has(slug)) continue;
-    seen.add(slug);
-    const next: ReaderPage = await ctx.open(url);
-    opened++;
-    if (slug === target) return { detail, text: contentText(next.html, next.text) };
-    queue.push(...existingPageLinks(ctx, next.html));
+/** The advertised permalink for one page id in the All Pages listing, or undefined. */
+function wikiPermalinkFor(listingHtml: string, refId: RefId, pageId: string): string | undefined {
+  for (const match of listingHtml.matchAll(/<a\b[^>]*\bhref="([^"]*)"/gi)) {
+    const url = wikiPermalink(match[1]!, refId, pageId);
+    if (url) return url;
   }
   return undefined;
-};
+}
