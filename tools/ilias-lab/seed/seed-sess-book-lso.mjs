@@ -1,15 +1,16 @@
 // Seeds the lab objects behind the sess / book / lso object readers (ADR 0062, #165):
-//   session ref 88 (date, place, description, materials), booking pool ref 91 (schedule and
-// three bookable items), learning sequence ref 90 (online, three ordered content pages).
-// Idempotent: each step checks the current state first. All text is synthetic and labelled "Lab".
-// Lab-only: http://localhost:8080 and the lab accounts in lab-users.json. Never point this at ADAM.
+//   a dated session "Lab sess dated" in Lab Course (ref looked up by title; created when absent),
+//   booking pool ref 91 (schedule and three bookable items), learning sequence ref 90 (online,
+//   three ordered content pages). Idempotent: each step checks the current state first.
+// All text is synthetic and labelled "Lab". Lab-only: http://localhost:8080 and the lab accounts
+// in lab-users.json. Never point this at ADAM.
 // Usage (from the repo root): node tools/ilias-lab/seed/seed-sess-book-lso.mjs
 import { labPage, LAB } from "./lab-page.mjs";
 
-const SESSION = 88;
+export const SESSION_TITLE = "Lab sess dated";
+const LAB_COURSE = 86;
 const BOOKING_POOL = 91;
 const LEARNING_SEQUENCE = 90;
-const LAB_COURSE = 86;
 const MATERIALS = ["Lab fold", "Lab webr"];
 const SCHEDULE = "Lab schedule (weekday slots)";
 const BOOKABLE = [
@@ -30,28 +31,51 @@ const go = async (path) => {
   await page.waitForLoadState("domcontentloaded");
 };
 
+/**
+ * ILIAS 10.12 datetime-local inputs in Chromium take month, day, year, then Tab to the time
+ * segments. Typing the whole string through `fill` is not persisted; segment typing is.
+ */
+async function typeDateTime(locator, [hour, minute]) {
+  await locator.click({ position: { x: 8, y: 10 } });
+  for (const part of ["12", "10", "2026"]) await page.keyboard.type(part);
+  await page.keyboard.press("Tab");
+  await page.keyboard.type(hour);
+  await page.keyboard.type(minute);
+  await page.keyboard.type("AM");
+}
+
+/** The ref of the lab session with SESSION_TITLE in Lab Course, or undefined. */
+async function sessionRef() {
+  await go(`goto.php?target=crs_${LAB_COURSE}`);
+  const href = await page.locator("a", { hasText: SESSION_TITLE }).first().getAttribute("href").catch(() => null);
+  return href?.match(/sess\/(\d+)|ref_id=(\d+)/)?.slice(1).find(Boolean);
+}
+
 try {
   log(`signed in as ${user.login}`);
 
-  // 1. Session: date, place, text.
-  await go(`ilias.php?baseClass=ilrepositorygui&ref_id=${SESSION}&cmdClass=ilObjSessionGUI&cmd=edit`);
-  const sessionEdit = page.locator('input[name="cmd[update]"]').first();
-  if (await sessionEdit.count()) {
-    await page.fill('input[name="event[start]"]', "2026-12-10T09:00");
-    await page.fill('input[name="event[end]"]', "2026-12-10T11:30");
+  // 1. Session: create with the appointment set in the creation form, when absent.
+  let session = await sessionRef();
+  if (!session) {
+    await go(`ilias.php?baseClass=ilrepositorygui&ref_id=${LAB_COURSE}&cmd=create&new_type=sess`);
+    await typeDateTime(page.locator('input[name="event[start]"]'), ["09", "00"]);
+    await typeDateTime(page.locator('input[name="event[end]"]'), ["11", "30"]);
+    await page.fill('input[name="title"]', SESSION_TITLE);
     await page.fill('textarea[name="location"]', "Lab room 0.01 (synthetic)");
     await page.fill('textarea[name="desc"]', "Lab seed: synthetic session description for the reader tests. Not real course content.");
     await page.fill('textarea[name="details"]', "Lab seed: bring the synthetic worksheet from the lab step list.");
-    await sessionEdit.click();
+    await page.locator('input[name="cmd[save]"]').first().click();
     await page.waitForLoadState("domcontentloaded");
-    log(`session ${SESSION}: saved (${page.url().includes("cmd=edit") ? "still on edit, check errors" : "ok"})`);
+    session = await sessionRef();
+    log(`session created: ${SESSION_TITLE} (ref ${session})`);
+  } else {
+    log(`session exists: ${SESSION_TITLE} (ref ${session})`);
   }
+  if (!session) throw new Error(`session "${SESSION_TITLE}" not found after create`);
 
   // 2. Session materials: assign the lab folder and weblink (already-existing lab objects).
   for (const title of MATERIALS) {
-    await go(`ilias.php?baseClass=ilrepositorygui&ref_id=${SESSION}&cmdClass=ilObjSessionGUI&cmd=materials`);
-    const assigned = await page.locator("tr", { hasText: title }).filter({ has: page.locator('input[name="items[]"]:checked') }).count();
-    if (assigned) { log(`material exists: ${title}`); continue; }
+    await go(`ilias.php?baseClass=ilrepositorygui&ref_id=${session}&cmdClass=ilObjSessionGUI&cmd=materials`);
     await page.fill('input[name="title"]', title);
     await page.getByRole("button", { name: "Apply Filter" }).click();
     await page.waitForLoadState("domcontentloaded");
@@ -59,7 +83,7 @@ try {
     if (!(await row.count())) { log(`material not found: ${title}`); continue; }
     await row.locator('input[name="items[]"]').check();
     await page.selectOption('select[name="selected_cmd2"]', "saveMaterials");
-    await page.getByRole("button", { name: "Apply" }).first().click();
+    await page.locator('input[name="select_cmd2"]').click();
     await page.waitForLoadState("domcontentloaded");
     log(`material assigned: ${title}`);
   }
@@ -144,7 +168,7 @@ try {
     log(`step published: ${title}`);
   }
 
-  log(`done (lab course ${LAB_COURSE}, sess ${SESSION}, book ${BOOKING_POOL}, lso ${LEARNING_SEQUENCE})`);
+  log(`done (session ${session}, book ${BOOKING_POOL}, lso ${LEARNING_SEQUENCE})`);
 } finally {
   await browser.close();
 }
