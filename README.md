@@ -8,13 +8,11 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-**0.4.0 is ready for release review, not yet published.** It adds per-assignment
-exercise detail, read-only ADAM mail, Dashboard news, tasks and calendar, typed
-sessions, groups, wikis and other ILIAS 10.12 objects, read-only tutor views,
-and session and boundary hardening. **0.3.0 is published**, including selected
-local downloads and discovery efficiency improvements. See the
-[0.3.0 publication record](docs/audit/2026-10-21-v0.3.0-release-readiness.md) and the
-[0.4.0 release-candidate record](docs/audit/2026-11-16-v0.4.0-release-candidate.md).
+**0.4.0 is published.** It adds per-assignment exercise detail, read-only ADAM
+mail, Dashboard news, tasks and calendar, typed sessions, groups, wikis and other
+ILIAS 10.12 objects, read-only tutor views, faster cross-course reads, and session
+and boundary hardening. See the [0.4.0 publication record](docs/audit/2026-11-17-v0.4.0-publication.md) and the
+[changelog](CHANGELOG.md).
 
 ![Demo](docs/demo/demo.gif)
 
@@ -40,7 +38,7 @@ You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 Install the published package. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
 
 ```bash
-npm install -g adam-mcp@0.3.0
+npm install -g adam-mcp@0.4.0
 adam-mcp setup --client codex --write --login
 ```
 
@@ -55,10 +53,10 @@ See [client compatibility](docs/client-compatibility.md) for what has been verif
 The [published package](https://www.npmjs.com/package/adam-mcp) ships a self-contained CLI:
 
 ```bash
-npx -y adam-mcp@0.3.0
+npx -y adam-mcp@0.4.0
 ```
 
-The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-10-21-v0.3.0-release-readiness.md) for source, integrity, client evidence and limits.
+The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-11-17-v0.4.0-publication.md) for source, integrity, client evidence and limits.
 
 ### Build from source
 
@@ -91,7 +89,7 @@ other browsers.
 
 Host-specific files (Cursor, Claude Desktop, VS Code, Windsurf, Claude Code, ChatGPT desktop, Codex): [docs/setup.md](docs/setup.md).
 
-### Save a selected file locally (0.3.0)
+### Save a selected file locally
 
 Find the file ID using `adam_list_files`, then run this command in your terminal.
 Use an existing directory outside any Git checkout:
