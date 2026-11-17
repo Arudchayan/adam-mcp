@@ -77,3 +77,24 @@ Official ILIAS v10.12 lang strings (en | de):
 - Same confirm gate and the same single page per assignment: no extra navigation.
 - The fixture provider adds a synthetic `instructionFiles` name with `detail: true`.
 - Live and lab verification still needed: the four panels on ADAM itself, a graded assignment's Evaluation panel, and a team assignment.
+
+## Amendment: peer review (#165, #175, 17 November 2026)
+
+**Field.** With `detail: true`, a unit may carry `peerReview`:
+
+```
+{ evidence: "lab-verified", deadlineText?, deadline?,
+  given: [{ reviewee: "Peer N", completed, textExcerpt? }],
+  received: [{ reviewer: "Peer N", text }] }
+```
+
+**Routes.** It is read from the assignment's Peer-Feedback panel and the `ilExPeerReviewGUI` views:
+- before the deadline, `editPeerReview` (read only, the form is never submitted);
+- after the deadline, `showGivenPeerReview`;
+- `showReceivedPeerReview` for received reviews.
+
+Each route is GET only and allowlisted by ref and assignment. `peer_id`, `rtoken` and write commands are rejected. This adds up to two extra GET pages per assignment that has the panel.
+
+**Privacy.** Peers are anonymous ("Peer N"). Texts are redacted and capped: 1,000 characters for received reviews, 300 for given ones.
+
+**Evidence.** Lab-verified in both the open and the closed peer-review state. The student's two ADAM exercises have no peer review. A live regression showed unchanged units (8 and 3) with `peerReview` absent.

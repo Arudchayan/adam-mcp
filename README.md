@@ -118,7 +118,7 @@ The client starts ADAM MCP as a local process and communicates over stdio. ADAM 
 | --- | --- |
 | `adam_list_courses` | Enrolled courses and ADAM URLs |
 | `adam_get_course` / `adam_list_children` | Course snapshot and folder contents |
-| `adam_read_page` | Page text (`confirm: true` OR elicitation) |
+| `adam_read_page` | Page text, plus a typed `detail` for sessions, wikis, glossaries, learning modules, data collections, booking pools and more; `subPage` reads one wiki page, module page or bibliography entry (`confirm: true` OR elicitation) |
 | `adam_list_files` / `adam_get_file` | File metadata and URLs, not bytes |
 | `adam_extract_file_text` | Local PDF, text, notebook (`.ipynb`) and uploaded HTML extract, paged with `startPage` (`confirm: true` OR elicitation) |
 | `adam_search` | Title matches in enrolled objects |
@@ -127,6 +127,7 @@ The client starts ADAM MCP as a local process and communicates over stdio. ADAM 
 | `adam_get_forum` | Forum meta and thread summaries; post bodies need `confirm: true` OR elicitation; no post/reply |
 | `adam_list_mail` / `adam_read_mail` | Inbox headers and one selected message body; opening marks it read, as in ADAM; attachment names only (`confirm: true` OR elicitation); no send |
 | `adam_list_course_members` / `adam_get_exercise_grades` | Tutor and course-admin views of a course's members and an exercise's grade matrix; students get `forbidden`; lab-verified (`confirm: true` OR elicitation); no grading |
+| `adam_list_notes` | Your own ADAM Private Notes (`confirm: true` OR elicitation); no editing |
 | `adam_login` / `adam_session_status` | Chrome session in the live runtime |
 
 Document and thread text requires approval for the selected object. Your connected model receives the returned text. See [tool contracts](docs/tool-contracts.md) for confirmation, pagination, recovery and completeness rules.

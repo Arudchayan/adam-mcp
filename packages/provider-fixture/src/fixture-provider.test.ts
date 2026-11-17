@@ -557,3 +557,15 @@ describe("ADR 0057: fixture group, session and wiki", () => {
     assert.match(session.text, /Synthetic room/);
   });
 });
+
+describe("ADR 0062: fixture parity for typed detail", () => {
+  it("returns a typed session and wiki detail, and rejects subPage", async () => {
+    const provider = createFixtureProvider();
+    const session = await provider.readPage("100141", { type: "sess" });
+    assert.equal(session.detailStatus, "read");
+    assert.equal(session.detail?.kind, "session");
+    const wiki = await provider.readPage("100142", { type: "wiki" });
+    assert.equal(wiki.detail?.kind, "wiki");
+    await assert.rejects(provider.readPage("100142", { type: "wiki", subPage: "1" }), (error: unknown) => error instanceof AdamError && error.code === "unsupported_type");
+  });
+});

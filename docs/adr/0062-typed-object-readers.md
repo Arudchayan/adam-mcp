@@ -48,3 +48,31 @@ The student account's courses contain none of these objects. The local lab runs 
 - One tool contract covers every type, so hosts see no new tools for the readers.
 - Lab-built parsers may drift from ADAM's markup. They degrade to text, not to wrong data.
 - Fixture parity is added per type as readers land.
+
+## Amendment: readers landed (#165, 17 November 2026)
+
+All readers are lab-verified on ILIAS 10.12 (`tools/ilias-lab`). The student account has no such objects on ADAM. Seed and capture scripts are in `tools/ilias-lab/seed/`; fixtures are in `packages/provider-browser/fixtures/lab/`.
+
+| Type | `detail.kind` | Fields | Navigation (advertised routes only) | PR |
+| --- | --- | --- | --- | --- |
+| `sess` | `session` | `dateText`, `startsAt`, `endsAt`, `location`, `details`, `description`, `materials[{title,type,refId,url}]` | Materials come from the parent course's listing, expanded at this session. The parent is taken from the breadcrumb and opened at its canonical `/go/crs/{ref}`. The session's own expand link is then followed, scoped to the session's row. Up to 3 pages. | #172 |
+| `book` | `booking-pool` | `objects[{title, description, bookable, freeSlots[{dayText,timeText,startsAt,endsAt,available}]}]` | Each bookable object's booking screen (`ilBookingProcessWithScheduleGUI`, `cmd=book`) is a GET week grid. A slot is never picked or confirmed. At most 5 objects, 10 slots each, current week only. | #172, #177 |
+| `lso` | `learning-sequence` | `items[{position,title,description,status,current}]` | The learner view only. | #172 |
+| `wiki` | `wiki` | `startPage`, `pages[{title, subPage}]`, `pageCount`, `truncated` | The `allPages` view. `subPage` is the numeric page id. It opens the advertised permalink `goto.php/wiki/wpage_{id}_{ref}` (or `/go/wiki/…`), validated by `wikiPermalink` because permalinks are not `ilias.php`. Editor names and logins are never read. | #173 |
+| `glo` | `glossary` | `terms[{term, definition}]`, `termCount`, `truncated` | None. Definitions are capped at 1,000 chars. | #173 |
+| `lm` | `learning-module` | `chapters[{title, pages[{title, subPage}]}]`, `pageCount` | `subPage` is the page `obj_id`, read through the presentation `cmd=layout` route. | #176 |
+| `htlm` | `html-module` | `startFileSet` | `subPage: "start"` reads the start file. The allowed presentation route (`ilHTLMPresentationGUI`) is answered with a same-origin redirect to `deliver.php/<token>/…`. The `/ilias.php` rule applies to the requested route; the final page must still be on the pinned origin. | #176 |
+| `copa` | `content-page` | `headings`, `sectionCount` | None. | #176 |
+| `dcl` | `data-collection` | `tables[{title, columns, rows, rowCount, truncated}]` | The first page of records (cap 100). Values are untrusted and redacted. | #174 |
+| `mcst` | `mediacast` | `items[{title, description?}]` | None. Never media bytes or download URLs. | #174 |
+| `bibl` | `bibliography` | `entries[{title, authors, year, citeKey, subPage}]`, `entryCount` | `subPage` is an entry id, read through the advertised `showDetails` route. `sendFile` is never followed. | #174 |
+| `itgr` | (listing) | Item groups appear in `adam_list_children`, from `cont_block_id=itgr_{ref}` blocks. This is **live-seen**: 5 item groups on the student's ADAM courses after #174, with no other listing changes. | n/a | #174 |
+
+**Not covered:**
+- Booking weeks other than the current one.
+- Mediacast descriptions of items other than the one shown.
+- Data-collection paging, other views and record details.
+- Content-page sections other than headings.
+- HTML-module files other than the start file. They are served under per-session `deliver.php` tokens.
+- Session materials under a group parent.
+- Learning-sequence links to the underlying objects.
