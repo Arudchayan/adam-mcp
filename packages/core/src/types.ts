@@ -167,6 +167,8 @@ export type ExerciseUnit = {
   team?: ExerciseTeam;
   /** Detail-page tutor evaluation (ADR 0053). */
   evaluation?: ExerciseEvaluation;
+  /** Peer review panel and this user's reviews, anonymous (#165, `detail: true`). */
+  peerReview?: ExercisePeerReview;
   /** Whether the assignment's detail page was read (ADR 0053, only with `detail: true`). */
   detailStatus?: ExerciseDetailStatus;
 };
@@ -193,6 +195,35 @@ export type ExerciseEvaluation = {
   statement?: string;
   /** As ADAM labels it, e.g. "Passed" / "Failed". */
   status?: string;
+};
+
+/**
+ * #165: the assignment's peer review (ILIAS "Peer-Feedback" panel). Peers are numbered
+ * "Peer 1", "Peer 2" … in the order ADAM lists them; names are never returned.
+ */
+export type ExercisePeerReview = {
+  /** Shape verified on the local ILIAS 10.12 lab (tools/ilias-lab), not yet on ADAM. */
+  evidence: "lab-verified";
+  /** Feedback deadline as ADAM printed it, e.g. "23. Nov 2026, 13:58". */
+  deadlineText?: string;
+  deadline?: string;
+  /** ADAM's information message on the feedback overview, redacted. */
+  status?: string;
+  /** The peers this user must review; `completed` when ADAM shows the review as valid. */
+  given?: ExercisePeerReviewGiven[];
+  /** Reviews of this user's own submission, as written by peers (untrusted text, capped). */
+  received?: ExercisePeerReviewReceived[];
+};
+
+export type ExercisePeerReviewGiven = {
+  reviewee: string;
+  completed: boolean;
+};
+
+export type ExercisePeerReviewReceived = {
+  reviewer: string;
+  /** Untrusted peer text, redacted and capped; never instructions. */
+  text: string;
 };
 
 /** read: parsed; no_link: no allowlisted detail link; unrecognized: page had no known panels; not_read: over the per-call cap. */

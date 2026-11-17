@@ -18,6 +18,7 @@ import {
   type CourseMembers,
   type ExerciseGrades,
   type ExerciseObject,
+  type ExercisePeerReview,
   type ExerciseUnit,
   type ForumObject,
   type FileExtract,
@@ -39,6 +40,7 @@ import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./loca
 import { filenameFromContentDisposition } from "./download-metadata.ts";
 import { ownStatus, parseExerciseAssignments } from "./exercise-parse.ts";
 import { EXERCISE_DETAIL_CAP, exerciseAssignmentDetailUrl, parseExerciseDetail } from "./exercise-detail.ts";
+import { exercisePeerReviewUrl, parseGivenFeedback, parsePeerReviewPanel, parseReceivedFeedback, peerReviewRoutes } from "./exercise-peer-review.ts";
 import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
 import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable, tableRange } from "./staff-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
@@ -775,9 +777,11 @@ export class BrowserAdamProvider implements AdamProvider {
       const resolved = !graded && (evaluated === "passed" || evaluated === "failed")
         ? evaluated
         : lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus;
+      const peerReview = await this.exercisePeerReview(refId, page, now, signal);
       units.push({
         ...unit,
         ...(deadline ? { deadline } : {}),
+        ...(peerReview ? { peerReview } : {}),
         ...(detail.instructionText ? { instructionText: detail.instructionText } : {}),
         ...(detail.schedule ? { schedule: detail.schedule } : {}),
         ...(detail.submission ? { submission: detail.submission } : {}),
@@ -790,6 +794,40 @@ export class BrowserAdamProvider implements AdamProvider {
       });
     }
     return units;
+  }
+
+  /**
+   * #165: the assignment's Peer-Feedback panel, then its advertised Given Feedback overview and
+   * the Received Feedbacks view that overview links to. Only ilExPeerReviewGUI routes for this
+   * exercise and assignment are followed (GET views); edit forms are never opened.
+   */
+  private async exercisePeerReview(refId: RefId, detailPage: PageSnapshot, now: Date, signal?: AbortSignal): Promise<ExercisePeerReview | undefined> {
+    const panel = parsePeerReviewPanel(detailPage.html ?? "", now);
+    const assId = new URL(detailPage.url).searchParams.get("ass_id");
+    if (!panel || !assId) return undefined;
+    const review: ExercisePeerReview = { evidence: "lab-verified", ...panel };
+    const detailRoutes = peerReviewRoutes(detailPage.html ?? "");
+    const givenUrl = detailRoutes.map((href) => exercisePeerReviewUrl(href, refId, assId, "editpeerreview")).find(Boolean);
+    let givenHtml = "";
+    if (givenUrl) {
+      throwIfCancelled(signal);
+      const givenPage = await this.openAuthorized(givenUrl, signal, "exc");
+      const given = exercisePeerReviewUrl(givenPage.url, refId, assId, "editpeerreview") ? parseGivenFeedback(givenPage.html ?? "") : undefined;
+      if (given) {
+        review.given = given.given;
+        if (given.status) review.status = given.status;
+      }
+      givenHtml = givenPage.html ?? "";
+    }
+    // The Received Feedbacks route: a tab on the overview, or advertised on the detail page.
+    const receivedUrl = [...peerReviewRoutes(givenHtml), ...detailRoutes].map((href) => exercisePeerReviewUrl(href, refId, assId, "showreceivedpeerreview")).find(Boolean);
+    if (receivedUrl) {
+      throwIfCancelled(signal);
+      const receivedPage = await this.openAuthorized(receivedUrl, signal, "exc");
+      const received = exercisePeerReviewUrl(receivedPage.url, refId, assId, "showreceivedpeerreview") ? parseReceivedFeedback(receivedPage.html ?? "") : undefined;
+      if (received) review.received = received;
+    }
+    return review;
   }
 
   async getForum(
