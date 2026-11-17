@@ -337,6 +337,30 @@ export type MailReadOptions = {
   signal?: AbortSignal;
 };
 
+/** Longest note text returned to the model (ADR 0063). Longer notes are cut and flagged `truncated`. */
+export const NOTE_TEXT_LIMIT = 2_000;
+
+/**
+ * ADR 0063: one of the student's Private Notes (ILIAS `ilNoteGUI`, note_type=1).
+ * `text` is the note as the student wrote it: untrusted, capped at NOTE_TEXT_LIMIT.
+ * `dateText` is the date ADAM shows; the overview does not say whether that is the
+ * creation or the last-update date, so no createdAt/updatedAt is inferred.
+ */
+export type NoteItem = {
+  noteId?: string;
+  text: string;
+  truncated?: boolean;
+  dateText?: string;
+  shownAt?: string;
+  /** Title of the object the note sits on, as ADAM's "Origin" shows it. Absent when ADAM shows none. */
+  objectTitle?: string;
+  objectRefId?: RefId;
+  provenance: Provenance;
+};
+
+/** ADR 0063: the notes overview is one snapshot; cursor/limit page over it. */
+export type NoteListOptions = Pick<ListOptions, "cursor" | "limit" | "refresh" | "signal">;
+
 export type CalendarEvent = {
   title: string;
   startsAt?: string;
