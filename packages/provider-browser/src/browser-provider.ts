@@ -87,6 +87,8 @@ export type BrowserProviderOptions = {
   clock?: () => number;
   /** Test seam; production enrolled walks have a two-minute elapsed-time budget. */
   walkTimeoutMs?: number;
+  /** Test seam: cap of the background completion walk (ADR 0061). */
+  backgroundWalkTimeoutMs?: number;
 };
 
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
@@ -98,6 +100,12 @@ const MAX_LIVE_PAGES = 48;
  * read stay cached for a minute, so asking again continues from there.
  */
 export const MAX_WALK_MS = 25_000;
+/**
+ * ADR 0061 amendment: after a walk stops on its budget, the same walk is finished in the
+ * background (pages already read come from the page cache) within this cap, and the
+ * complete result is cached, so asking again returns the whole listing.
+ */
+export const MAX_BACKGROUND_WALK_MS = 90_000;
 /** ADR 0059: the main bar's advertised "My Courses and Groups" overview. */
 export const MEMBERSHIP_OVERVIEW_PATH = "/ilias.php?baseClass=ilmembershipoverviewgui";
 /** Cap for getCourse embedded children; truncation is signaled when the listing is larger. */
@@ -170,6 +178,7 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly clock: () => number;
   private readonly pagination: SnapshotPagination;
   private readonly walkTimeoutMs: number;
+  private readonly backgroundWalkTimeoutMs: number;
   private metadataExpiresAt = 0;
   /** Identity-sensitive; cleared on login() / close() (ADR 0015). */
   private readonly typeByRefId = new Map<RefId, AdamObjectType>();
@@ -183,6 +192,10 @@ export class BrowserAdamProvider implements AdamProvider {
   private readonly walkInflight = new Map<string, SharedOperation<WalkResult>>();
   /** Refresh detaches reuse keys, but session invalidation must still cancel their work. */
   private readonly ownedWalks = new Set<SharedOperation<WalkResult>>();
+  /** ADR 0061: background completions of budget-limited walks (also in ownedWalks). */
+  private readonly backgroundWalks = new Set<SharedOperation<WalkResult>>();
+  /** ADR 0061: the budget-limited walk a background completion started from, per scope. */
+  private readonly lastPartialWalk = new Map<string, WalkResult>();
   private readonly ownedPages = new Set<SharedOperation<PageSnapshot>>();
   /** Bumped on clear so an in-flight walk cannot re-seed the memo after login/close. */
   private walkGeneration = 0;
@@ -208,6 +221,7 @@ export class BrowserAdamProvider implements AdamProvider {
     this.clock = options.clock ?? Date.now;
     this.pagination = new SnapshotPagination(this.clock);
     this.walkTimeoutMs = options.walkTimeoutMs ?? MAX_WALK_MS;
+    this.backgroundWalkTimeoutMs = options.backgroundWalkTimeoutMs ?? MAX_BACKGROUND_WALK_MS;
   }
 
   async status(): Promise<SessionStatus> {
@@ -237,6 +251,7 @@ export class BrowserAdamProvider implements AdamProvider {
   private clearSessionCaches(): void {
     this.walkGeneration += 1;
     this.walks.clear();
+    this.lastPartialWalk.clear();
     for (const operation of this.ownedWalks) operation.cancel();
     this.walkInflight.clear();
     this.pageByUrl.clear();
@@ -283,6 +298,7 @@ export class BrowserAdamProvider implements AdamProvider {
     // Detach old work without cancelling other callers or deleting their cursors.
     this.walkGeneration += 1;
     this.walks.clear();
+    this.lastPartialWalk.clear();
     this.walkInflight.clear();
     this.pageByUrl.clear();
     this.pageInflight.clear();
@@ -1313,7 +1329,23 @@ export class BrowserAdamProvider implements AdamProvider {
     this.walks.delete(scope);
     const existing = this.walkInflight.get(scope);
     if (existing && !existing.aborted) {
-      return existing.join(signal, onProgress);
+      const partial = this.backgroundWalks.has(existing) ? this.lastPartialWalk.get(scope) : undefined;
+      if (!partial) return existing.join(signal, onProgress);
+      // ADR 0061: a background completion may run longer than a host waits. Wait at most one
+      // read budget for it; otherwise answer with the partial walk that started it. Leaving the
+      // join does not cancel the background walk (keepAlive).
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const budget = new Promise<WalkResult>((resolve) => { timer = setTimeout(() => resolve(partial), this.walkTimeoutMs); });
+      const leave = new AbortController();
+      const onAbort = () => leave.abort(signal?.reason);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        return await Promise.race([existing.join(leave.signal, onProgress), budget]);
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
+        leave.abort();
+      }
     }
     if (this.ownedWalks.size >= 32) throw new AdamError("provider_unavailable", "ADAM discovery queue is full. Retry after current discovery finishes.", true);
     const generation = this.walkGeneration;
@@ -1322,6 +1354,9 @@ export class BrowserAdamProvider implements AdamProvider {
         if (generation === this.walkGeneration && !workSignal.aborted && !pages.partial) {
           this.walks.set(scope, { result: pages, fetchedAt: this.clock() });
           while (this.walks.size > 32) this.walks.delete(this.walks.keys().next().value!);
+        } else if (generation === this.walkGeneration && !workSignal.aborted && pages.partialReason === "time_budget") {
+          this.lastPartialWalk.set(scope, pages);
+          this.completeWalkInBackground(scope, generation, courseRefId, mode);
         }
         return pages;
       }));
@@ -1336,12 +1371,42 @@ export class BrowserAdamProvider implements AdamProvider {
     return inflight.join(signal, onProgress);
   }
 
+  /**
+   * ADR 0061 amendment: finish a budget-limited walk in the background and cache the
+   * complete result. It is bounded, cancelled by close()/login, kept alive when a waiter
+   * leaves, and never spawns another background walk. A call that arrives while it runs
+   * joins it instead of starting a second traversal.
+   */
+  private completeWalkInBackground(scope: string, generation: number, courseRefId: RefId | undefined, mode: WalkMode): void {
+    const running = this.walkInflight.get(scope);
+    if (running && !running.aborted && this.backgroundWalks.has(running)) return;
+    if (this.ownedWalks.size >= 32) return;
+    const background = new SharedOperation((workSignal, report) => this.walkLivePages(report, workSignal, generation, courseRefId, mode, this.backgroundWalkTimeoutMs)
+      .then((pages) => {
+        if (generation === this.walkGeneration && !workSignal.aborted && !pages.partial) {
+          this.walks.set(scope, { result: pages, fetchedAt: this.clock() });
+          while (this.walks.size > 32) this.walks.delete(this.walks.keys().next().value!);
+        }
+        return pages;
+      }), { keepAlive: true });
+    this.backgroundWalks.add(background);
+    this.ownedWalks.add(background);
+    this.walkInflight.set(scope, background);
+    void background.promise.finally(() => {
+      this.backgroundWalks.delete(background);
+      this.ownedWalks.delete(background);
+      this.lastPartialWalk.delete(scope);
+      if (this.walkInflight.get(scope) === background) this.walkInflight.delete(scope);
+    }).catch(() => undefined);
+  }
+
   private async walkLivePages(
     onProgress: ProgressReporter | undefined,
     signal: AbortSignal | undefined,
     generation: number,
     courseRefId?: RefId,
     mode: WalkMode = "full",
+    timeoutMs: number = this.walkTimeoutMs,
   ): Promise<WalkResult> {
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason);
@@ -1350,8 +1415,8 @@ export class BrowserAdamProvider implements AdamProvider {
     let expired = false;
     const timer = setTimeout(() => {
       expired = true;
-      controller.abort(new AdamError("provider_unavailable", `ADAM's ${Math.round(this.walkTimeoutMs / 1000)}-second read budget was reached before a usable listing. Retry, or narrow the request with courseRefId.`, true));
-    }, this.walkTimeoutMs);
+      controller.abort(new AdamError("provider_unavailable", `ADAM's ${Math.round(timeoutMs / 1000)}-second read budget was reached before a usable listing. Retry, or narrow the request with courseRefId.`, true));
+    }, timeoutMs);
     try {
       return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired, courseRefId, mode);
     } finally {

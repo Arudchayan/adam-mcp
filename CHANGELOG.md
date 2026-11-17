@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   received (ADR 0053 amendment).
 - Item groups appear in `adam_list_children` (#165).
 
+### Fixed
+
+- Unscoped `adam_list_calendar` / `adam_list_news` that stop at the 25 s budget
+  now finish in the background, so asking again returns the complete listing
+  (ADR 0061 amendment).
+
 ## [0.4.0 npm publication] - 2026-11-17
 
 ### Added
