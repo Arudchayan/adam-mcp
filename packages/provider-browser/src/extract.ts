@@ -16,7 +16,7 @@ import {
   type RefId,
 } from "adam-core";
 import { inferDates, parseAdamTimestamp } from "./deadlines.ts";
-import { decodeEntities, extractClassBlocksAt, extractIdBlocks, extractIdBlocksWithId, parseUiItems } from "./ui-items.ts";
+import { decodeEntities, extractClassBlocksAt, extractIdBlocks, extractIdBlocksWithId, parseUiItems, textOf } from "./ui-items.ts";
 import { advertisedNewsPage, type NewsBlockRef, type NewsBlockType } from "./news-paging.ts";
 import { parseFileRows } from "./file-rows.ts";
 import { parseExerciseUnits } from "./exercise-parse.ts";
@@ -168,6 +168,13 @@ export function extractCatalog(snapshot: PageSnapshot, fetchedAt: string): Extra
     }
     const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
     byRef.set(poll.refId, toObject("poll", poll.refId, poll.title, crumbTrail, provenanceBase(canonicalUrl("poll", poll.refId))));
+  }
+  // ADR 0062 (#165): an item group renders as a container block whose header is not a link; its
+  // members are the linked rows inside the block (listed above). The header names the group.
+  for (const group of itemGroupBlocks(snapshot.html ?? "")) {
+    if ((current && group.refId === current.refId) || byRef.has(group.refId)) continue;
+    const crumbTrail = breadcrumbs.concat(current ? [toBreadcrumb(current)] : []);
+    byRef.set(group.refId, toObject("itgr", group.refId, group.title, crumbTrail, provenanceBase(canonicalUrl("itgr", group.refId))));
   }
   const rowHints = parseFileRows(snapshot.html ?? "", fetchedAt ? new Date(fetchedAt) : new Date());
   const fileRowDates: ExtractedCatalog["fileRowDates"] = [];
@@ -515,6 +522,17 @@ function isPollActionLabel(text: string): boolean {
  * uploaded icon gives no hint and the row stays `unknown`. A `tst` icon types the row
  * as `tst`, so the deny policy drops it.
  */
+/** ADR 0062 (#165): item group container blocks (`cont_block_id=itgr_<ref>`) and their header titles. */
+export function itemGroupBlocks(html: string): Array<{ refId: RefId; title: string }> {
+  const groups: Array<{ refId: RefId; title: string }> = [];
+  for (const match of html.matchAll(/data-store-url="[^"]*\bcont_block_id=itgr_(\d{1,12})"[^>]*>\s*<div class="ilContainerBlockHeader">\s*<h2\b[^>]*>([\s\S]*?)<\/h2>/gi)) {
+    const refId = match[1]!;
+    const title = textOf(match[2]!);
+    if (title && !groups.some((group) => group.refId === refId)) groups.push({ refId, title });
+  }
+  return groups;
+}
+
 export function rowIconTypes(html: string): Map<RefId, AdamObjectType> {
   const found = new Map<RefId, AdamObjectType>();
   const starts = [...html.matchAll(/<div\b[^>]*\bid="lg_div_(\d+)_pref_\d+"[^>]*>/gi)];
