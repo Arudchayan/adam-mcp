@@ -12,6 +12,7 @@ import {
   type MailHeader,
   type MailMessage,
   type NewsItem,
+  type NoteItem,
   type PageContent,
   type Provenance,
   type RefId,
@@ -492,6 +493,34 @@ export const fixtureCalendar: CalendarEvent[] = [
     objectRefId: "100021",
     url: canonicalUrl("exc", "100021"),
     provenance: provenance({ type: "exc", refId: "100021" }),
+  },
+];
+
+/** ADR 0063: two synthetic Private Notes (fixture student). Text is synthetic, not lab or ADAM content. */
+const notesProvenance: Provenance = {
+  sourceUrl: `${DEFAULT_ADAM_ORIGIN}/ilias.php?baseClass=ildashboardgui&cmdClass=ilPDNotesGUI&cmd=showPrivateNotes&note_type=1`,
+  fetchedAt: FETCHED_AT,
+  provider: "fixture",
+  iliasVersion: ILIAS_VERSION,
+  freshness: "fixture",
+};
+
+export const fixtureNotes: NoteItem[] = [
+  {
+    noteId: "2",
+    text: "[SYNTHETIC] Revise week 3 slides before the quiz.",
+    dateText: "05. Sep 2026",
+    shownAt: "2026-09-05T00:00:00.000Z",
+    objectTitle: "00000-01 – Synthetic Multimedia Seminar",
+    objectRefId: "100001",
+    provenance: notesProvenance,
+  },
+  {
+    noteId: "1",
+    text: "[SYNTHETIC] Personal reminder without a reference object.",
+    dateText: "01. Sep 2026",
+    shownAt: "2026-09-01T00:00:00.000Z",
+    provenance: notesProvenance,
   },
 ];
 

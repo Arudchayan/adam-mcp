@@ -3,6 +3,9 @@ import type { RouteRule } from "../advertised-route.ts";
 import { readBibliography } from "./bibl.ts";
 import { readDataCollection } from "./dcl.ts";
 import { readMediacast } from "./mcst.ts";
+import { readContentPage } from "./copa.ts";
+import { readHtmlModule } from "./htlm.ts";
+import { readLearningModule } from "./lm.ts";
 
 /**
  * ADR 0062: typed readers for ILIAS 10.12 object pages, registered per object type.
@@ -49,4 +52,7 @@ export const OBJECT_READERS: Partial<Record<AdamObjectType, ObjectReader>> = {
   bibl: readBibliography,
   dcl: readDataCollection,
   mcst: readMediacast,
+  lm: readLearningModule,
+  htlm: readHtmlModule,
+  copa: readContentPage,
 };

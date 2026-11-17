@@ -18,6 +18,7 @@ import {
   type CourseMembers,
   type ExerciseGrades,
   type ExerciseObject,
+  type ExercisePeerReview,
   type ExerciseUnit,
   type ForumObject,
   type FileExtract,
@@ -27,6 +28,9 @@ import {
   type MailListOptions,
   type MailMessage,
   type MailReadOptions,
+  NOTE_TEXT_LIMIT,
+  type NoteItem,
+  type NoteListOptions,
   type NewsItem,
   type ObjectOpenOptions,
   type PageContent,
@@ -39,6 +43,7 @@ import { saveLocalDownload, downloadDirectory, type LocalDownload } from "./loca
 import { filenameFromContentDisposition } from "./download-metadata.ts";
 import { ownStatus, parseExerciseAssignments } from "./exercise-parse.ts";
 import { EXERCISE_DETAIL_CAP, exerciseAssignmentDetailUrl, parseExerciseDetail } from "./exercise-detail.ts";
+import { exercisePeerReviewUrl, parseGivenFeedback, parsePeerReviewPanel, parseReceivedFeedback, peerReviewRoutes } from "./exercise-peer-review.ts";
 import { exerciseViewUrl, unavailableExerciseView, type ExerciseView } from "./exercise-views.ts";
 import { advertisedStaffRoute, parseCourseMembers, parseExerciseGrades, staffViewUnavailable, tableRange } from "./staff-views.ts";
 export { filenameFromContentDisposition } from "./download-metadata.ts";
@@ -64,6 +69,7 @@ import {
 } from "./extract.ts";
 import { MAX_NEWS_EXTRA_PAGES, NEWS_PAGING_RESERVE_MS, type NewsBlockRef } from "./news-paging.ts";
 import { isMailGuiUrl, landedMailIds, MAILBOX_URL, parseMailbox, parseMailMessage, showMailUrl } from "./mail-parse.ts";
+import { isNotesLanding, NOTES_URL, notesListingState, parseNotes } from "./notes-parse.ts";
 import { pageHeading, parseForumPage, resolveForumThreadUrl, threadIdFromHref } from "./forum-parse.ts";
 import { createPlaywrightSession } from "./playwright-session.ts";
 import type { AdamBrowserSession, PageSnapshot, SessionStatus } from "./session-types.ts";
@@ -775,9 +781,11 @@ export class BrowserAdamProvider implements AdamProvider {
       const resolved = !graded && (evaluated === "passed" || evaluated === "failed")
         ? evaluated
         : lastSubmission && unit.ownStatus === "unknown" ? ownStatus(status, lastSubmission, now) : unit.ownStatus;
+      const peerReview = await this.exercisePeerReview(refId, page, now, signal);
       units.push({
         ...unit,
         ...(deadline ? { deadline } : {}),
+        ...(peerReview ? { peerReview } : {}),
         ...(detail.instructionText ? { instructionText: detail.instructionText } : {}),
         ...(detail.schedule ? { schedule: detail.schedule } : {}),
         ...(detail.submission ? { submission: detail.submission } : {}),
@@ -790,6 +798,40 @@ export class BrowserAdamProvider implements AdamProvider {
       });
     }
     return units;
+  }
+
+  /**
+   * #165: the assignment's Peer-Feedback panel, then its advertised Given Feedback overview and
+   * the Received Feedbacks view that overview links to. Only ilExPeerReviewGUI routes for this
+   * exercise and assignment are followed (GET views); edit forms are never opened.
+   */
+  private async exercisePeerReview(refId: RefId, detailPage: PageSnapshot, now: Date, signal?: AbortSignal): Promise<ExercisePeerReview | undefined> {
+    const panel = parsePeerReviewPanel(detailPage.html ?? "", now);
+    const assId = new URL(detailPage.url).searchParams.get("ass_id");
+    if (!panel || !assId) return undefined;
+    const review: ExercisePeerReview = { evidence: "lab-verified", ...panel };
+    const detailRoutes = peerReviewRoutes(detailPage.html ?? "");
+    // Open window: "Give Feedback" → editPeerReview. Closed window: "Give Feedback" → showGivenPeerReview.
+    let givenHtml = "";
+    for (const view of ["editpeerreview", "showgivenpeerreview"] as const) {
+      const givenUrl = detailRoutes.map((href) => exercisePeerReviewUrl(href, refId, assId, view)).find(Boolean);
+      if (!givenUrl) continue;
+      throwIfCancelled(signal);
+      const givenPage = await this.openAuthorized(givenUrl, signal, "exc");
+      const given = exercisePeerReviewUrl(givenPage.url, refId, assId, view) ? parseGivenFeedback(givenPage.html ?? "") : undefined;
+      if (given) review.given = given.given;
+      givenHtml = givenPage.html ?? "";
+      break;
+    }
+    // The Received Feedbacks route: a tab on the overview, or advertised on the detail page.
+    const receivedUrl = [...peerReviewRoutes(givenHtml), ...detailRoutes].map((href) => exercisePeerReviewUrl(href, refId, assId, "showreceivedpeerreview")).find(Boolean);
+    if (receivedUrl) {
+      throwIfCancelled(signal);
+      const receivedPage = await this.openAuthorized(receivedUrl, signal, "exc");
+      const received = exercisePeerReviewUrl(receivedPage.url, refId, assId, "showreceivedpeerreview") ? parseReceivedFeedback(receivedPage.html ?? "") : undefined;
+      if (received) review.received = received;
+    }
+    return review;
   }
 
   async getForum(
@@ -1080,6 +1122,37 @@ export class BrowserAdamProvider implements AdamProvider {
       ...rest,
       provenance: { sourceUrl: MAILBOX_URL, fetchedAt: this.fetchedAt(snapshot), provider: "browser", freshness: "live-browser-session" },
     };
+  }
+
+  /**
+   * ADR 0063: the student's Private Notes overview, opened through the fixed main-bar
+   * route only (never export, sortation, comments or table actions). Read-only: the page
+   * is parsed once and cursor pages reuse that snapshot. Notes are untrusted text.
+   */
+  async listNotes(options?: NoteListOptions): Promise<Paginated<NoteItem>> {
+    throwIfCancelled(options?.signal);
+    if (options?.refresh && options.cursor !== undefined) throw new AdamError("stale_id", "Refresh starts a new listing. Omit cursor.", false);
+    await this.assertSessionEnabled(options?.signal);
+    const key = "notes:private";
+    if (!options?.refresh) {
+      const continuation = this.pagination.continue<NoteItem>(key, options);
+      if (continuation) return continuation;
+    }
+    const snapshot = await this.openAuthorized(NOTES_URL, options?.signal);
+    if (!isNotesLanding(snapshot.url)) {
+      throw new AdamError("provider_unavailable", "ADAM did not open Private Notes. Open Private Notes in ADAM once, then retry.", false);
+    }
+    const parsed = parseNotes(snapshot.html ?? "");
+    const provenance = { sourceUrl: NOTES_URL, fetchedAt: this.fetchedAt(snapshot), provider: "browser" as const, freshness: "live-browser-session" };
+    const items: NoteItem[] = parsed.notes.map((note) => ({ ...note, provenance }));
+    const notices: string[] = [];
+    if (!parsed.notesFound) notices.push("ADAM's Private Notes page showed no recognisable notes list; this is not proof there are no notes.");
+    if (parsed.skipped > 0) notices.push(`${parsed.skipped} note(s) had no readable text and were left out.`);
+    if (items.some((item) => item.truncated)) notices.push(`Some note texts were cut at ${NOTE_TEXT_LIMIT} characters.`);
+    return this.pagination.first(key, items, options, {
+      listingState: notesListingState(parsed),
+      ...(notices.length > 0 ? { notice: notices.join(" ") } : {}),
+    });
   }
 
   private async openMailbox(signal?: AbortSignal): Promise<PageSnapshot> {

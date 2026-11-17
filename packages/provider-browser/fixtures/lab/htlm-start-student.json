@@ -1,0 +1,6 @@
+{
+ "name": "htlm-start-student",
+ "source": "ILIAS 10.12 lab (tools/ilias-lab), seed data",
+ "url": "http://localhost:8080/ilias.php?baseClass=ilHTLMPresentationGUI&ref_id=94",
+ "html": "<html><head></head><body><meta charset=\"utf-8\"><title>Lab HTML start</title><h1>Lab HTML start</h1><p>Synthetic lab text for the HTML module start page.</p><p><a href=\"lab-second.html\">Second lab page</a></p>\n</body></html>"
+}
