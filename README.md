@@ -8,13 +8,13 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-**0.4.0 is published; 0.5.0 is a release candidate.** 0.5.0 adds typed reads of
-sessions (date, location, materials), wikis and their pages, glossaries, learning
-modules, data collections, booking-pool free slots, learning sequences, mediacasts
-and bibliographies, read-only Private Notes, and anonymous exercise peer review.
-0.4.0 added per-assignment exercise detail, read-only ADAM mail, Dashboard news,
-tasks and calendar, typed ILIAS 10.12 objects, read-only tutor views, faster
-cross-course reads, and session and boundary hardening. See the [0.4.0 publication record](docs/audit/2026-11-17-v0.4.0-publication.md) and the
+**0.5.0 is published.** It adds typed reads of sessions (date, location, materials),
+wikis and their pages, glossaries, learning modules, data collections, booking-pool
+free slots, learning sequences, mediacasts and bibliographies, read-only Private
+Notes, anonymous exercise peer review, and cross-course reads that finish in the
+background. 0.4.0 added per-assignment exercise detail, read-only ADAM mail,
+Dashboard news, tasks and calendar, read-only tutor views, and session and boundary
+hardening. See the [0.5.0 publication record](docs/audit/2026-11-17-v0.5.0-publication.md) and the
 [changelog](CHANGELOG.md).
 
 ![Demo](docs/demo/demo.gif)
@@ -41,7 +41,7 @@ You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 Install the published package. Guided setup checks your installation, configures one client with a backup, opens Chrome for sign-in, and verifies your course listing.
 
 ```bash
-npm install -g adam-mcp@0.4.0
+npm install -g adam-mcp@0.5.0
 adam-mcp setup --client codex --write --login
 ```
 
@@ -56,10 +56,10 @@ See [client compatibility](docs/client-compatibility.md) for what has been verif
 The [published package](https://www.npmjs.com/package/adam-mcp) ships a self-contained CLI:
 
 ```bash
-npx -y adam-mcp@0.4.0
+npx -y adam-mcp@0.5.0
 ```
 
-The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-11-17-v0.4.0-publication.md) for source, integrity, client evidence and limits.
+The exact npm version was installed and checked outside the repository. See the [publication record](docs/audit/2026-11-17-v0.5.0-publication.md) for source, integrity, client evidence and limits.
 
 ### Build from source
 

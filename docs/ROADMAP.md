@@ -35,7 +35,7 @@ Checklist: [qa/phase-a-test-plan.md](qa/phase-a-test-plan.md), [qa/phase-a-mcp-c
 | Study-week `crs` / `fold` / `file` / pages | Known + live | Live pass 2026-09-06 |
 | A1 / A2 / A6 resource links, progress, read-by-id | Known (design) | Done (PR #8, `e52d947`) |
 | A3 / A4 confirm≠elicitation docs + SDK pin | Known | Done (PR #9 / `a5e1fd6`) |
-| Release tag / npm | Known | **0.4.0 published** 17 November 2026 ([record](audit/2026-11-17-v0.4.0-publication.md)); **0.3.0 published**; public registry integrity and installed CLI help/refusal verified 11 November 2026. See [publication evidence](audit/2026-10-21-v0.3.0-release-readiness.md). The original publication workflow's propagation-time verification failure remains recorded. |
+| Release tag / npm | Known | **0.5.0 published** 17 November 2026 ([record](audit/2026-11-17-v0.5.0-publication.md)); **0.4.0 published** 17 November 2026 ([record](audit/2026-11-17-v0.4.0-publication.md)); **0.3.0 published**; public registry integrity and installed CLI help/refusal verified 11 November 2026. See [publication evidence](audit/2026-10-21-v0.3.0-release-readiness.md). The original publication workflow's propagation-time verification failure remains recorded. |
 
 ## Phase A-thin — must-ship reads still incomplete
 

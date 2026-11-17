@@ -2,13 +2,13 @@
 
 MCP server for University of Basel ADAM.
 
-Version `0.4.0` is published; `0.5.0` is a release candidate. The CLI bundles the project's workspace code;
+Version `0.5.0` is published. The CLI bundles the project's workspace code;
 npm installs its declared runtime dependencies.
 
 You need Node.js 22+ and Google Chrome. Use a supported Node.js LTS release.
 
 ```bash
-npm install -g adam-mcp@0.4.0
+npm install -g adam-mcp@0.5.0
 ```
 
 Then:
