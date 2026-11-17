@@ -15,6 +15,7 @@ import type {
   NewsItem,
   ObjectOpenOptions,
   PageContent,
+  PageReadOptions,
   Paginated,
   ProgressReporter,
   ProviderId,
@@ -26,7 +27,8 @@ export type AdamProvider = {
   listCourses(options?: ListOptions): Promise<Paginated<AdamObject>>;
   getCourse(refId: RefId, options?: ObjectOpenOptions): Promise<AdamObject>;
   listChildren(refId: RefId, options?: ListOptions): Promise<Paginated<AdamObject>>;
-  readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent>;
+  /** ADR 0062: `subPage` reads one sub-page listed in an earlier `detail`. */
+  readPage(refId: RefId, options?: PageReadOptions): Promise<PageContent>;
   listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>>;
   getFile(refId: RefId, options?: ObjectOpenOptions): Promise<FileObject>;
   extractFileText(

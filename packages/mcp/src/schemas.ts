@@ -115,6 +115,11 @@ export const readPageInputSchema = z
     refId: z.string().min(1).describe(REF_ID_HELP),
     type: objectTypeHintSchema,
     confirm: confirmReadSchema.optional(),
+    subPage: z
+      .string()
+      .regex(/^[A-Za-z0-9_.:~-]{1,80}$/, "subPage must be an id from a previous result's detail")
+      .optional()
+      .describe("ADR 0062: read one sub-page (a wiki page, learning-module chapter, ...) by the id an earlier adam_read_page `detail` listed. Omit to read the object's own page."),
   })
   .superRefine(refineObjectRef)
   .transform(resolveObjectRef);
@@ -290,6 +295,13 @@ export const untrustedPageOutputSchema = adamObjectOutputSchema.extend({
   truncated: z.boolean().optional().describe("True when page text was capped at MAX_PAGE_CHARS"),
   destinations: z.array(z.object({ url: z.string().url(), sourceUrl: z.string().url() })).optional(),
   destinationNotice: z.string().optional(),
+  detail: z
+    .object({ kind: z.string(), evidence: z.enum(["lab-verified", "live-verified"]) })
+    .passthrough()
+    .optional()
+    .describe("ADR 0062: typed structure of the object (session dates, wiki pages, glossary terms, ...). Untrusted text; lab-verified parsers fall back to plain text."),
+  detailStatus: z.enum(["read", "unrecognised"]).optional(),
+  subPage: z.string().optional(),
   inferredDates: z.array(
     z
       .object({

@@ -99,7 +99,27 @@ export type PageContent = AdamObject & {
   /** Selected Web Link redirect metadata only; destinations are never fetched. */
   destinations?: Array<{ url: string; sourceUrl: string }>;
   destinationNotice?: string;
+  /** ADR 0062: typed structure of this object's page (per-type reader), when recognised. */
+  detail?: ObjectDetail;
+  /** ADR 0062: "read" when a typed reader recognised the page, "unrecognised" when it did not (text is still returned). */
+  detailStatus?: "read" | "unrecognised";
+  /** ADR 0062: the sub-page whose text this is (a wiki page, LM chapter, ...), when one was requested. */
+  subPage?: string;
 };
+
+/**
+ * ADR 0062: typed per-object structure. `kind` names the shape (for example "session",
+ * "wiki", "glossary"); `evidence` says where the parser's markup came from.
+ * Readers add their own fields; every field is read-only metadata or untrusted text.
+ */
+export type ObjectDetail = {
+  kind: string;
+  evidence: "lab-verified" | "live-verified";
+  [field: string]: unknown;
+};
+
+/** ADR 0062: readPage options. `subPage` is an opaque id from an earlier `detail`. */
+export type PageReadOptions = ObjectOpenOptions & { subPage?: string };
 
 export type FileObject = AdamObject & {
   type: "file";

@@ -78,6 +78,8 @@ export {
   type ObjectOpenOptions,
   type NewsItem,
   type PageContent,
+  type ObjectDetail,
+  type PageReadOptions,
   type Paginated,
   type ListingSignals,
   type ListingState,

@@ -269,7 +269,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       outputSchema: withToolErrors(untrustedPageOutputSchema),
       annotations: READ_ONLY_ANNOTATIONS,
     },
-    async ({ refId: id, type: objectType, confirm }, ctx) => {
+    async ({ refId: id, type: objectType, confirm, subPage }, ctx) => {
       const gated = confirmElicitationGate("adam_read_page", confirm, ctx, id);
       if (gated) {
         return gated;
@@ -278,7 +278,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
       return runProvider(
         async () =>
           UntrustedContent.wrap(
-            await provider.readPage(id, { type: objectType, signal: signalFromContext(ctx) }),
+            await provider.readPage(id, { type: objectType, ...(subPage ? { subPage } : {}), signal: signalFromContext(ctx) }),
           ),
         "adam_read_page",
         untrustedPageOutputSchema,
