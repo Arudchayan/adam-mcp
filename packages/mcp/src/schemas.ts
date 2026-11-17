@@ -398,13 +398,13 @@ export const exerciseOutputSchema = adamObjectOutputSchema.extend({
           evidence: z.literal("lab-verified"),
           deadlineText: z.string().optional().describe("Feedback deadline as ADAM printed it"),
           deadline: z.string().optional(),
-          status: z.string().optional().describe("ADAM's information message on the feedback overview (redacted)"),
           given: z
             .array(
               z
                 .object({
                   reviewee: z.string().describe("Anonymous peer label, e.g. Peer 1"),
-                  completed: z.boolean().describe("ADAM shows this review as valid"),
+                  completed: z.boolean().describe("Open window: ADAM shows the review as valid. Closed window: the student's own text is present."),
+                  textExcerpt: z.string().optional().describe("Closed window only: the student's own review text, redacted, capped at 300 characters"),
                 })
                 .passthrough(),
             )

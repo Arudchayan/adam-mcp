@@ -10,19 +10,24 @@ import { extractClassBlocksAt, sliceUntilClose, textOf } from "./ui-items.ts";
 
 /** #165: a peer's review text is untrusted; it is redacted and capped before it is returned. */
 export const PEER_REVIEW_TEXT_CAP = 1000;
+/** #165: the student's own review text on the closed given view, redacted and capped. */
+export const PEER_REVIEW_EXCERPT_CAP = 300;
 
-/** The two ILIAS 10.12 peer-review overviews this module reads (both GET). */
-export type PeerReviewView = "editpeerreview" | "showreceivedpeerreview";
-const VIEWS = new Set<string>(["editpeerreview", "showreceivedpeerreview"]);
+/**
+ * The ILIAS 10.12 peer-review overviews this module reads (all GET): the open Given Feedback
+ * list, the closed Given Feedback list with the student's own texts, and Received Feedbacks.
+ */
+export type PeerReviewView = "editpeerreview" | "showgivenpeerreview" | "showreceivedpeerreview";
+const VIEWS = new Set<string>(["editpeerreview", "showgivenpeerreview", "showreceivedpeerreview"]);
 const ALLOWED_KEYS = new Set(["baseClass", "cmdNode", "cmdClass", "cmd", "ref_id", "ass_id", "mode", "from_overview"]);
 const MODES = new Set(["ongoing", "future", "past", "all"]);
 
 /**
  * #165: a peer-review view link, allowed only when it is an ILIAS 10.12 `ilExPeerReviewGUI`
  * route for this exercise (`ref_id`) and this assignment (`ass_id`). Pinned origin,
- * `/ilias.php`, allowlisted keys only, no duplicates, no `peer_id`, no `rtoken`, and only
- * the Given Feedback or Received Feedbacks overview command. Edit forms
- * (`editPeerReviewItem`), updates and every other route are rejected.
+ * `/ilias.php`, allowlisted keys only, no duplicates, no `peer_id`, no `rtoken`, and only the
+ * named overview command. Edit forms (`editPeerReviewItem`), updates and every other route are
+ * rejected.
  */
 export function exercisePeerReviewUrl(href: string | undefined, refId: RefId, assId: string, view: PeerReviewView): string | undefined {
   if (!href) return undefined;
@@ -103,21 +108,50 @@ function itemProperties(item: string): Map<string, string> {
 /** Peers are numbered "Peer 1", "Peer 2" … in ADAM's order; ADAM's own labels are never returned. */
 export const peerLabel = (position: number): string => `Peer ${position + 1}`;
 
+/** The unlabelled value text of a panel row (links such as Download are dropped). */
+function unlabelledRowText(panelBody: string): string[] {
+  const texts: string[] = [];
+  for (const { block: row } of extractClassBlocksAt(panelBody, "row")) {
+    const labelBlock = extractClassBlocksAt(row, "control-label")[0]?.block;
+    if (labelBlock === undefined || textOf(labelBlock)) continue;
+    const value = textOf(row.replace(labelBlock, "").replace(/<a\b[\s\S]*?<\/a>/gi, " "));
+    if (value) texts.push(value);
+  }
+  return texts;
+}
+
+/** The closed Given Feedback view's peer panels: "Feedback Recipient: N", never "Your Submission". */
+function closedGivenPanels(html: string): string[] {
+  const bodies: string[] = [];
+  for (const { block } of extractClassBlocksAt(html, "panel-sub")) {
+    const headingBlock = extractClassBlocksAt(block, "panel-heading")[0]?.block ?? "";
+    if (/^feedback recipient/i.test(textOf(headingBlock))) bodies.push(block);
+  }
+  return bodies;
+}
+
 /**
- * #165: the "Given Feedback" overview: one item per peer to review. `completed` is ADAM's
- * "Valid: Yes". Undefined when no item list is recognised.
+ * #165: the student's given reviews. Two ILIAS 10.12 states:
+ * - open window (`editPeerReview`): one item per peer; `completed` is ADAM's "Valid: Yes".
+ * - closed window (`showGivenPeerReview`): one panel per peer with the student's own review
+ *   text; `completed` is true when that text is present, and `textExcerpt` is the text, capped.
+ * Undefined when neither list is recognised.
  */
-export function parseGivenFeedback(html: string): { given: ExercisePeerReviewGiven[]; status?: string } | undefined {
+export function parseGivenFeedback(html: string): { given: ExercisePeerReviewGiven[] } | undefined {
   // Only peer-review items carry ADAM's "Valid" property; overview assignment items do not.
   const items = itemBlocks(html).filter((item) => /\bil-item-title\b/i.test(item) && itemProperties(item).has("Valid"));
-  if (items.length === 0) return undefined;
-  const given = items.map((item, position): ExercisePeerReviewGiven => ({
-    reviewee: peerLabel(position),
-    completed: itemProperties(item).get("Valid")?.toLowerCase() === "yes",
-  }));
-  const message = extractClassBlocksAt(html, "alert")[0]?.block;
-  const status = message ? textOf(message) : "";
-  return status ? { given, status: redactText(status) } : { given };
+  if (items.length > 0) {
+    return { given: items.map((item, position): ExercisePeerReviewGiven => ({
+      reviewee: peerLabel(position),
+      completed: itemProperties(item).get("Valid")?.toLowerCase() === "yes",
+    })) };
+  }
+  const panels = closedGivenPanels(html);
+  if (panels.length === 0) return undefined;
+  return { given: panels.map((panel, position): ExercisePeerReviewGiven => {
+    const text = unlabelledRowText(panel).join("\n");
+    return { reviewee: peerLabel(position), completed: text.length > 0, ...(text ? { textExcerpt: capText(text, PEER_REVIEW_EXCERPT_CAP) } : {}) };
+  }) };
 }
 
 /**
@@ -129,21 +163,16 @@ export function parseReceivedFeedback(html: string): ExercisePeerReviewReceived[
   const received: ExercisePeerReviewReceived[] = [];
   for (const { block } of extractClassBlocksAt(html, "panel-sub")) {
     const headingBlock = extractClassBlocksAt(block, "panel-heading")[0]?.block ?? "";
-    if (!/^feedback (?:recipient|giver)/i.test(textOf(headingBlock))) continue;
-    const texts: string[] = [];
-    for (const { block: row } of extractClassBlocksAt(block, "row")) {
-      const labelBlock = extractClassBlocksAt(row, "control-label")[0]?.block;
-      if (labelBlock === undefined || textOf(labelBlock)) continue;
-      const value = textOf(row.replace(labelBlock, "").replace(/<a\b[\s\S]*?<\/a>/gi, " "));
-      if (value) texts.push(value);
-    }
-    if (texts.length > 0) received.push({ reviewer: peerLabel(received.length), text: capPeerText(texts.join("\n")) });
+    // "Feedback Giver: N" is a review of this user's work; "Feedback Recipient: N" is the closed given view.
+    if (!/^feedback giver/i.test(textOf(headingBlock))) continue;
+    const texts = unlabelledRowText(block);
+    if (texts.length > 0) received.push({ reviewer: peerLabel(received.length), text: capText(texts.join("\n"), PEER_REVIEW_TEXT_CAP) });
   }
   return received.length > 0 ? received : undefined;
 }
 
-/** Redacts, then caps, a peer's review text. */
-export function capPeerText(text: string): string {
+/** Redacts, then caps, a peer's text to `cap` characters (an ellipsis marks the cut). */
+export function capText(text: string, cap: number): string {
   const redacted = redactText(text);
-  return redacted.length > PEER_REVIEW_TEXT_CAP ? `${redacted.slice(0, PEER_REVIEW_TEXT_CAP)}…` : redacted;
+  return redacted.length > cap ? `${redacted.slice(0, cap)}…` : redacted;
 }

@@ -207,9 +207,7 @@ export type ExercisePeerReview = {
   /** Feedback deadline as ADAM printed it, e.g. "23. Nov 2026, 13:58". */
   deadlineText?: string;
   deadline?: string;
-  /** ADAM's information message on the feedback overview, redacted. */
-  status?: string;
-  /** The peers this user must review; `completed` when ADAM shows the review as valid. */
+  /** The peers this user must review. */
   given?: ExercisePeerReviewGiven[];
   /** Reviews of this user's own submission, as written by peers (untrusted text, capped). */
   received?: ExercisePeerReviewReceived[];
@@ -217,7 +215,10 @@ export type ExercisePeerReview = {
 
 export type ExercisePeerReviewGiven = {
   reviewee: string;
+  /** Open window: ADAM shows the review as valid. Closed window: the student's own text is present. */
   completed: boolean;
+  /** Closed window only: the student's own review text, redacted, capped at 300 characters. */
+  textExcerpt?: string;
 };
 
 export type ExercisePeerReviewReceived = {

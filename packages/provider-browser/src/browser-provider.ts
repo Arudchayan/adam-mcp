@@ -807,17 +807,17 @@ export class BrowserAdamProvider implements AdamProvider {
     if (!panel || !assId) return undefined;
     const review: ExercisePeerReview = { evidence: "lab-verified", ...panel };
     const detailRoutes = peerReviewRoutes(detailPage.html ?? "");
-    const givenUrl = detailRoutes.map((href) => exercisePeerReviewUrl(href, refId, assId, "editpeerreview")).find(Boolean);
+    // Open window: "Give Feedback" → editPeerReview. Closed window: "Give Feedback" → showGivenPeerReview.
     let givenHtml = "";
-    if (givenUrl) {
+    for (const view of ["editpeerreview", "showgivenpeerreview"] as const) {
+      const givenUrl = detailRoutes.map((href) => exercisePeerReviewUrl(href, refId, assId, view)).find(Boolean);
+      if (!givenUrl) continue;
       throwIfCancelled(signal);
       const givenPage = await this.openAuthorized(givenUrl, signal, "exc");
-      const given = exercisePeerReviewUrl(givenPage.url, refId, assId, "editpeerreview") ? parseGivenFeedback(givenPage.html ?? "") : undefined;
-      if (given) {
-        review.given = given.given;
-        if (given.status) review.status = given.status;
-      }
+      const given = exercisePeerReviewUrl(givenPage.url, refId, assId, view) ? parseGivenFeedback(givenPage.html ?? "") : undefined;
+      if (given) review.given = given.given;
       givenHtml = givenPage.html ?? "";
+      break;
     }
     // The Received Feedbacks route: a tab on the overview, or advertised on the detail page.
     const receivedUrl = [...peerReviewRoutes(givenHtml), ...detailRoutes].map((href) => exercisePeerReviewUrl(href, refId, assId, "showreceivedpeerreview")).find(Boolean);

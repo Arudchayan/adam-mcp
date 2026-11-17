@@ -183,14 +183,17 @@ await withRole("student", studentIndex("lab.student"), async (page) => {
   console.log(`fixture exercise-peer-review-given-student: ${(await saveLabFixture("exercise-peer-review-given-student", page)).chars} chars`);
 });
 
-// --- 6. feedback window closes, received view granted; fixture ----------------------
+// --- 6. feedback window closes; post-deadline views (student view, GET only) -----------
+// After the window closes the detail page and "Given Feedback" tab point at the read-only
+// showGivenPeerReview view (the reviews this student wrote), and "Received Feedbacks" is a
+// separate tab. Fixtures: the closed detail page, the closed given view and the received view.
 await withRole("system", 0, (page) => setFeedbackDeadline(page, assId, FEEDBACK_CLOSED));
-// After the window closes the "Given Feedback" tab lists the reviews this student wrote, and
-// "Received Feedbacks" is a separate tab. The fixture is the received tab.
 await withRole("student", studentIndex("lab.student"), async (page) => {
   await openStudentDetail(page);
+  console.log(`fixture exercise-peer-review-detail-closed-student: ${(await saveLabFixture("exercise-peer-review-detail-closed-student", page)).chars} chars`);
   await page.locator("#ilTab a", { hasText: "Given Feedback" }).first().click();
   await page.waitForLoadState("domcontentloaded");
+  console.log(`fixture exercise-peer-review-given-closed-student: ${(await saveLabFixture("exercise-peer-review-given-closed-student", page)).chars} chars`);
   await page.locator("#ilTab a", { hasText: "Received Feedbacks" }).first().click();
   await page.waitForLoadState("domcontentloaded");
   console.log(`fixture exercise-peer-review-received-student: ${(await saveLabFixture("exercise-peer-review-received-student", page)).chars} chars`);

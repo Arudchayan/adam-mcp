@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { createBrowserProvider } from "./browser-provider.ts";
-import { exercisePeerReviewUrl, parseGivenFeedback, parsePeerReviewPanel, parseReceivedFeedback, peerReviewRoutes, PEER_REVIEW_TEXT_CAP } from "./exercise-peer-review.ts";
+import { capText, exercisePeerReviewUrl, parseGivenFeedback, parsePeerReviewPanel, parseReceivedFeedback, peerReviewRoutes, PEER_REVIEW_EXCERPT_CAP, PEER_REVIEW_TEXT_CAP } from "./exercise-peer-review.ts";
 import { createMemorySession, snapshotFromHtml } from "./memory-session.ts";
 
 /**
@@ -63,6 +63,30 @@ describe("#165: lab-verified exercise peer review", () => {
     assert.ok(item.text.length <= PEER_REVIEW_TEXT_CAP + 1);
   });
 
+  it("closed window: reads the student's own review text per peer as a capped excerpt", () => {
+    const { html } = rebased("exercise-peer-review-given-closed-student");
+    const given = parseGivenFeedback(html);
+    assert.ok(given);
+    assert.equal(given.given.length, 1);
+    assert.deepEqual(given.given[0], { reviewee: "Peer 1", completed: true, textExcerpt: "Lab review: the file is complete and easy to follow." });
+    // The closed view's peer panels are not received reviews, and its Download link is never kept.
+    assert.equal(parseReceivedFeedback(html), undefined);
+    assert.doesNotMatch(JSON.stringify(given), /download|Submission|ilias\.php/i);
+  });
+
+  it("closed window: caps the excerpt at 300 characters and redacts e-mail addresses in it", () => {
+    const text = `Reach me at student@example.org ${"y".repeat(PEER_REVIEW_EXCERPT_CAP * 2)}`;
+    const excerpt = capText(text, PEER_REVIEW_EXCERPT_CAP);
+    assert.match(excerpt, /\[redacted-email\]/);
+    assert.doesNotMatch(excerpt, /student@example\.org/);
+    assert.ok(excerpt.length <= PEER_REVIEW_EXCERPT_CAP + 1);
+    const html = `<div class="panel panel-sub"><div class="panel-heading"><h3>Feedback Recipient: 1</h3></div><div class="panel-body"><div class="row"><div class="control-label"><p>&nbsp;</p></div><div class="col"><p>${text}</p></div></div></div></div>`;
+    const [item] = parseGivenFeedback(html)?.given ?? [];
+    assert.ok(item?.textExcerpt);
+    assert.ok(item.textExcerpt.length <= PEER_REVIEW_EXCERPT_CAP + 1);
+    assert.doesNotMatch(item.textExcerpt, /student@example\.org/);
+  });
+
   it("keeps peer identities anonymous: no lab user names or logins in any parsed output", () => {
     const detail = parsePeerReviewPanel(rebased("exercise-peer-review-student").html, now);
     const given = parseGivenFeedback(rebased("exercise-peer-review-given-student").html);
@@ -87,6 +111,15 @@ describe("#165: lab-verified exercise peer review", () => {
     const base = `/ilias.php?baseClass=ilexercisehandlergui&cmdNode=cc:mb:4q:c2:bz&cmdClass=ilExPeerReviewGUI&ref_id=${REF}&ass_id=${ASS}`;
     assert.match(exercisePeerReviewUrl(`${base}&cmd=editPeerReview`, REF, ASS, "editpeerreview") ?? "", /editPeerReview/);
     assert.match(exercisePeerReviewUrl(`${base}&amp;cmd=showReceivedPeerReview&amp;mode=past`, REF, ASS, "showreceivedpeerreview") ?? "", /mode=past/);
+    assert.match(exercisePeerReviewUrl(`${base}&amp;cmd=showGivenPeerReview&amp;mode=past`, REF, ASS, "showgivenpeerreview") ?? "", /showGivenPeerReview/);
+    for (const [href, view] of [
+      [`${base}&cmd=showGivenPeerReview&peer_id=316`, "showgivenpeerreview"],
+      [`${base}&cmd=showGivenPeerReview&rtoken=abc`, "showgivenpeerreview"],
+      [`${base}&cmd=showGivenPeerReview`, "editpeerreview"],
+      [`${base}&cmd=editPeerReview`, "showgivenpeerreview"],
+    ] as const) {
+      assert.equal(exercisePeerReviewUrl(href, REF, ASS, view), undefined, `${view} ${String(href)}`);
+    }
     for (const [href, view] of [
       [`${base}&cmd=editPeerReviewItem&peer_id=316`, "editpeerreview"],
       [`${base}&cmd=updatePeerReview`, "editpeerreview"],
@@ -137,6 +170,32 @@ describe("#165: lab-verified exercise peer review", () => {
 
     const plain = await provider.getExercise(REF, { type: "exc" });
     assert.equal(plain.units.some((item) => item.peerReview), false, "default read unchanged");
+  });
+
+  it("closed window: the detail page's Give feedback route is showGivenPeerReview, and its excerpts and received reviews are read", async () => {
+    const overviewUrl = `${origin}/go/exc/${REF}`;
+    const detail = rebased("exercise-peer-review-detail-closed-student");
+    const given = rebased("exercise-peer-review-given-closed-student");
+    const received = rebased("exercise-peer-review-received-student");
+    const overviewHtml = `<main><h1>Exercises</h1><div class="il-item"><h4 class="il-item-title"><a href="${detail.url.replace(origin, "")}">Lab sheet 3 (peer review)</a></h4><div class="il-item-properties"><span class="il-item-property-name">Edit Until</span><span class="il-item-property-value">17. Nov 2026, 13:58</span><span class="il-item-property-name">Status</span><span class="il-item-property-value">Not Attempted</span></div></div></main>`;
+    const opened: string[] = [];
+    const session = createMemorySession({
+      [overviewUrl]: snapshotFromHtml(overviewUrl, "Exercises", overviewHtml, "Exercises Lab sheet 3 (peer review)"),
+      [absolute(detail.url)]: snapshotFromHtml(absolute(detail.url), "Lab sheet 3", detail.html, "Lab sheet 3"),
+      [absolute(peerRoute(detail.html, "showGivenPeerReview"))]: snapshotFromHtml(absolute(peerRoute(detail.html, "showGivenPeerReview")), "Given", given.html, "Given"),
+      [absolute(peerRoute(detail.html, "showReceivedPeerReview"))]: snapshotFromHtml(absolute(peerRoute(detail.html, "showReceivedPeerReview")), "Received", received.html, "Received"),
+    }, { onOpen: (url) => opened.push(url) });
+    const provider = createBrowserProvider({ session, origin });
+
+    const result = await provider.getExercise(REF, { type: "exc", detail: true });
+    const [unit] = result.units;
+    assert.equal(unit?.detailStatus, "read");
+    assert.equal(unit?.peerReview?.evidence, "lab-verified");
+    assert.deepEqual(unit?.peerReview?.given, [{ reviewee: "Peer 1", completed: true, textExcerpt: "Lab review: the file is complete and easy to follow." }]);
+    assert.equal(unit?.peerReview?.received?.[0]?.reviewer, "Peer 1");
+    assert.match(unit?.peerReview?.received?.[0]?.text ?? "", /^Lab review/);
+    for (const name of LAB_NAMES) assert.equal(JSON.stringify(unit?.peerReview).includes(name), false, `peerReview has no ${name}`);
+    assert.equal(opened.some((url) => /ilExSubmissionFileGUI|editPeerReviewItem|updatePeerReview|peer_id/i.test(url)), false, "no submit, edit or update route opened");
   });
 });
 
