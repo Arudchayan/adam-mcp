@@ -17,7 +17,7 @@ A live timing of the student account's full enrolled walk (8 courses, 34 pages) 
 
 - The Content tab is clicked only when it is **visible at that moment** (`isVisible()`, which does not wait). The 3 s click timeout applies only to a tab that exists.
 - The listing-ready probe also returns true once the document has reached `readyState === "complete"`, every same-origin frame is complete, and 750 ms (`LISTING_SETTLE_GRACE_MS`) has passed since the load event. A same-origin frame that is still loading, or still on `about:blank` while naming a `src`, keeps the wait going, so delayed frames (ADR 0007) are still awaited. The 12 s timeout remains the upper bound.
-- `MAX_WALK_MS` drops from 120 s to **45 s**. A walk that reaches the budget returns what it has read, with `partial: true` and `time_budget`, as before. The read-budget error now names the configured budget and suggests `courseRefId`.
+- `MAX_WALK_MS` drops from 120 s to **25 s** (first set to 45 s; see the amendment below). A walk that reaches the budget returns what it has read, with `partial: true` and `time_budget`, as before. The read-budget error now names the configured budget and suggests `courseRefId`.
 
 ## Results (live, student account, counts only)
 
@@ -30,3 +30,12 @@ A live timing of the student account's full enrolled walk (8 courses, 34 pages) 
 - Hosts with a 60 s request limit get complete cross-course answers on accounts of this size. Larger accounts get an honest partial result, not a host timeout.
 - Codex's generated `tool_timeout_sec` (ADR 0025) is unchanged; it exists for interactive login.
 - Pages that render rows late, after load, could be read earlier than before. The same-origin frame checks and the unchanged folder recovery (ADR 0030, ADR 0050) keep classifying a still-blank listing as `unknown`, never as empty.
+
+## Amendment (second walkthrough, 17 November 2026)
+
+The second release-candidate walkthrough used the fixed build. Its client again timed out on the first unscoped calendar and news calls, fired in parallel from a fresh client start, and both succeeded on retry. A fresh server process answered both in about 35 s in a local stdio run. The retry succeeded because the server finished the shared walk after the client had given up. That points to a client request limit nearer 30 s than 60 s.
+
+Calls are serial by design (SECURITY.md: SerialQueue), so the walk cannot be parallelised. The budget is therefore **25 s**:
+
+- A cold fresh-process call, calendar and news in parallel, answers in about 25.6 s. It is `partial` with `time_budget` and has 16 of 17 events, because the Dashboard Tasks and Calendar blocks are read first.
+- A repeat within a minute continues from the per-page cache and completes in about 14 s with 17 of 17 events. Later calls are served from the shared walk at once.
