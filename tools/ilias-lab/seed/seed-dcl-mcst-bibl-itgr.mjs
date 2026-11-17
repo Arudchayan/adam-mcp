@@ -121,8 +121,22 @@ async function seedDcl() {
   }
 }
 
+/**
+ * Mediacast items whose title is not a "Lab" title. ILIAS saves an external URL as an item
+ * with the file name as its title at once, so an editor step that fails leaves such a stray
+ * behind. The seed refuses to continue past one rather than adding more.
+ */
+async function mediacastStrays() {
+  await page.goto(`${LAB}/ilias.php?baseClass=ilmediacasthandlergui&cmdNode=j9:o6&cmdClass=ilObjMediaCastGUI&cmd=listItems&ref_id=${MCST}`);
+  // The Title cell is the first text cell of each item row (after the selection checkbox).
+  const titles = await page.$$eval("tr.c-table-data__row:has(input.c-table-data__row-selector)", (rows) => rows.map((row) => row.querySelector(".c-table-data__cell--text")?.textContent.replace("Title:", "").trim() ?? ""));
+  return titles.filter((title) => title && !/^Lab /.test(title));
+}
+
 async function seedMcst() {
   const mediacast = (query) => `${LAB}/ilias.php?baseClass=ilmediacasthandlergui&${query}`;
+  const strays = await mediacastStrays();
+  if (strays.length) throw new Error(`mcst: remove the untitled items first (${strays.join(", ")}) in Manage, then re-run`);
   await page.goto(mediacast(`cmdNode=j9:o6&cmdClass=ilObjMediaCastGUI&cmd=listItems&ref_id=${MCST}`));
   for (const item of MCST_ITEMS) {
     if ((await page.content()).includes(item.title)) { log(`mcst item exists: ${item.title}`); continue; }
@@ -132,13 +146,14 @@ async function seedMcst() {
     await page.fill('input[name="url"]', item.url);
     await page.locator('input[name="cmd[saveUrl]"]').click();
     await page.waitForLoadState("domcontentloaded");
-    // The item editor follows: title, description and the play time (entered by hand).
+    // The item editor follows: title and description. The play time is determined by ILIAS.
     await page.fill('input[name="title"]', item.title);
     await page.fill("textarea[name=description]", item.description);
     await page.locator('input[name="cmd[updateCastItem]"]').first().click();
     await page.waitForLoadState("domcontentloaded");
-    await page.goto(mediacast(`cmdNode=j9:o6&cmdClass=ilObjMediaCastGUI&cmd=listItems&ref_id=${MCST}`));
-    log((await page.content()).includes(item.title) ? `mcst item created: ${item.title}` : `mcst FAILED: ${item.title} not listed`);
+    const left = await mediacastStrays();
+    if (left.length) throw new Error(`mcst: ${item.title} was saved, but untitled items remain (${left.join(", ")}); remove them in Manage`);
+    log(`mcst item created: ${item.title}`);
   }
 }
 

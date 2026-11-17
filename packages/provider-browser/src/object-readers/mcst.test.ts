@@ -18,11 +18,12 @@ describe("ADR 0062: mediacast reader (lab-verified)", () => {
   it("lists the playlist by title and gives the shown item its description", () => {
     const parsed = parseMediacastItems(lab("mcst-content-student"));
     assert.ok(parsed);
-    assert.equal(parsed.itemCount, 4);
+    assert.equal(parsed.itemCount, 2);
     assert.equal(parsed.truncated, false);
-    const [first, second] = parsed.items;
-    assert.deepEqual(first, { title: "Lab episode 2", description: "Lab synthetic mediacast item 2.", current: true });
-    assert.deepEqual(second, { title: "Lab episode 1" });
+    assert.deepEqual(parsed.items, [
+      { title: "Lab episode 2", description: "Lab synthetic mediacast item 2.", current: true },
+      { title: "Lab episode 1" },
+    ]);
     // Only the item on screen has a description; the others are listed by title alone.
     assert.equal(parsed.items.filter((item) => item.description !== undefined).length, 1);
   });

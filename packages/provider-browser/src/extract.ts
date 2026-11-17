@@ -516,12 +516,6 @@ function isPollActionLabel(text: string): boolean {
   return POLL_ACTION_LABEL.test(cleanTitle(text));
 }
 
-/**
- * ADR 0057: ILIAS list rows are `div.ilContainerListItemOuter#lg_div_{refId}_pref_{parentRef}`
- * with a standard icon `…/standard/icon_{type}.svg`. Only known types count; a custom
- * uploaded icon gives no hint and the row stays `unknown`. A `tst` icon types the row
- * as `tst`, so the deny policy drops it.
- */
 /** ADR 0062 (#165): item group container blocks (`cont_block_id=itgr_<ref>`) and their header titles. */
 export function itemGroupBlocks(html: string): Array<{ refId: RefId; title: string }> {
   const groups: Array<{ refId: RefId; title: string }> = [];
@@ -533,6 +527,12 @@ export function itemGroupBlocks(html: string): Array<{ refId: RefId; title: stri
   return groups;
 }
 
+/**
+ * ADR 0057: ILIAS list rows are `div.ilContainerListItemOuter#lg_div_{refId}_pref_{parentRef}`
+ * with a standard icon `…/standard/icon_{type}.svg`. Only known types count; a custom
+ * uploaded icon gives no hint and the row stays `unknown`. A `tst` icon types the row
+ * as `tst`, so the deny policy drops it.
+ */
 export function rowIconTypes(html: string): Map<RefId, AdamObjectType> {
   const found = new Map<RefId, AdamObjectType>();
   const starts = [...html.matchAll(/<div\b[^>]*\bid="lg_div_(\d+)_pref_\d+"[^>]*>/gi)];
