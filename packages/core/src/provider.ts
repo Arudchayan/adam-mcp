@@ -13,6 +13,8 @@ import type {
   MailMessage,
   MailReadOptions,
   NewsItem,
+  NoteItem,
+  NoteListOptions,
   ObjectOpenOptions,
   PageContent,
   PageReadOptions,
@@ -47,6 +49,8 @@ export type AdamProvider = {
   listMail(options?: MailListOptions): Promise<Paginated<MailHeader>>;
   /** ADR 0054: one message body by its listed folderId + mailId. Opening it marks it read in ADAM, as a browser would. */
   readMail(folderId: string, mailId: string, options?: MailReadOptions): Promise<MailMessage>;
+  /** ADR 0063: the student's Private Notes overview (confirm-gated at the MCP layer). Read-only: never export, sort, edit or delete. */
+  listNotes(options?: NoteListOptions): Promise<Paginated<NoteItem>>;
   /** ADR 0060: a course's Members table (tutor / course admin only). */
   getCourseMembers(refId: RefId, options?: ObjectOpenOptions): Promise<CourseMembers>;
   /** ADR 0060: an exercise's Grades View matrix (tutor / course admin only). */

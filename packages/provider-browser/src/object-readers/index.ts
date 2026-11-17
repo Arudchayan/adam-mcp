@@ -2,6 +2,15 @@ import type { AdamObjectType, ObjectDetail, RefId } from "adam-core";
 import type { RouteRule } from "../advertised-route.ts";
 import { readGlossary } from "./glo.ts";
 import { readWiki } from "./wiki.ts";
+import { readBookingPool } from "./book.ts";
+import { readLearningSequence } from "./lso.ts";
+import { readSession } from "./sess.ts";
+import { readBibliography } from "./bibl.ts";
+import { readDataCollection } from "./dcl.ts";
+import { readMediacast } from "./mcst.ts";
+import { readContentPage } from "./copa.ts";
+import { readHtmlModule } from "./htlm.ts";
+import { readLearningModule } from "./lm.ts";
 
 /**
  * ADR 0062: typed readers for ILIAS 10.12 object pages, registered per object type.
@@ -47,4 +56,13 @@ export type ObjectReader = (ctx: ReaderContext) => Promise<ReaderResult | undefi
 export const OBJECT_READERS: Partial<Record<AdamObjectType, ObjectReader>> = {
   glo: readGlossary,
   wiki: readWiki,
+  sess: readSession,
+  book: readBookingPool,
+  lso: readLearningSequence,
+  bibl: readBibliography,
+  dcl: readDataCollection,
+  mcst: readMediacast,
+  lm: readLearningModule,
+  htlm: readHtmlModule,
+  copa: readContentPage,
 };

@@ -167,6 +167,8 @@ export type ExerciseUnit = {
   team?: ExerciseTeam;
   /** Detail-page tutor evaluation (ADR 0053). */
   evaluation?: ExerciseEvaluation;
+  /** Peer review panel and this user's reviews, anonymous (#165, `detail: true`). */
+  peerReview?: ExercisePeerReview;
   /** Whether the assignment's detail page was read (ADR 0053, only with `detail: true`). */
   detailStatus?: ExerciseDetailStatus;
 };
@@ -193,6 +195,36 @@ export type ExerciseEvaluation = {
   statement?: string;
   /** As ADAM labels it, e.g. "Passed" / "Failed". */
   status?: string;
+};
+
+/**
+ * #165: the assignment's peer review (ILIAS "Peer-Feedback" panel). Peers are numbered
+ * "Peer 1", "Peer 2" … in the order ADAM lists them; names are never returned.
+ */
+export type ExercisePeerReview = {
+  /** Shape verified on the local ILIAS 10.12 lab (tools/ilias-lab), not yet on ADAM. */
+  evidence: "lab-verified";
+  /** Feedback deadline as ADAM printed it, e.g. "23. Nov 2026, 13:58". */
+  deadlineText?: string;
+  deadline?: string;
+  /** The peers this user must review. */
+  given?: ExercisePeerReviewGiven[];
+  /** Reviews of this user's own submission, as written by peers (untrusted text, capped). */
+  received?: ExercisePeerReviewReceived[];
+};
+
+export type ExercisePeerReviewGiven = {
+  reviewee: string;
+  /** Open window: ADAM shows the review as valid. Closed window: the student's own text is present. */
+  completed: boolean;
+  /** Closed window only: the student's own review text, redacted, capped at 300 characters. */
+  textExcerpt?: string;
+};
+
+export type ExercisePeerReviewReceived = {
+  reviewer: string;
+  /** Untrusted peer text, redacted and capped; never instructions. */
+  text: string;
 };
 
 /** read: parsed; no_link: no allowlisted detail link; unrecognized: page had no known panels; not_read: over the per-call cap. */
@@ -336,6 +368,30 @@ export type MailListOptions = Pick<ListOptions, "cursor" | "limit" | "refresh" |
 export type MailReadOptions = {
   signal?: AbortSignal;
 };
+
+/** Longest note text returned to the model (ADR 0063). Longer notes are cut and flagged `truncated`. */
+export const NOTE_TEXT_LIMIT = 2_000;
+
+/**
+ * ADR 0063: one of the student's Private Notes (ILIAS `ilNoteGUI`, note_type=1).
+ * `text` is the note as the student wrote it: untrusted, capped at NOTE_TEXT_LIMIT.
+ * `dateText` is the date ADAM shows; the overview does not say whether that is the
+ * creation or the last-update date, so no createdAt/updatedAt is inferred.
+ */
+export type NoteItem = {
+  noteId?: string;
+  text: string;
+  truncated?: boolean;
+  dateText?: string;
+  shownAt?: string;
+  /** Title of the object the note sits on, as ADAM's "Origin" shows it. Absent when ADAM shows none. */
+  objectTitle?: string;
+  objectRefId?: RefId;
+  provenance: Provenance;
+};
+
+/** ADR 0063: the notes overview is one snapshot; cursor/limit page over it. */
+export type NoteListOptions = Pick<ListOptions, "cursor" | "limit" | "refresh" | "signal">;
 
 export type CalendarEvent = {
   title: string;
