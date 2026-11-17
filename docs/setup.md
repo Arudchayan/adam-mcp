@@ -34,7 +34,7 @@ Session states: `connected` is verified; `disconnected` may have an unverified s
 
 ## Client timeouts
 
-Generated Codex configuration uses an absolute Node executable and entry path, `startup_timeout_sec = 30` and `tool_timeout_sec = 2100`. The latter allows the maximum 30-minute interactive login plus five minutes for queue waiting, browser startup, verification and cleanup; ordinary discovery has a 45-second server budget (ADR 0061). CLI login is the fallback for hosts with shorter timeouts. Do not add undocumented timeout fields to other client configurations. See [the compatibility matrix](client-compatibility.md).
+Generated Codex configuration uses an absolute Node executable and entry path, `startup_timeout_sec = 30` and `tool_timeout_sec = 2100`. The latter allows the maximum 30-minute interactive login plus five minutes for queue waiting, browser startup, verification and cleanup; ordinary discovery has a 25-second server budget (ADR 0061). CLI login is the fallback for hosts with shorter timeouts. Do not add undocumented timeout fields to other client configurations. See [the compatibility matrix](client-compatibility.md).
 
 ## Live ADAM
 
