@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0062](0062-typed-object-readers.md) | Typed object readers (`adam_read_page` detail and subPage) from ILIAS 10.12 lab evidence |
 | [0061](0061-read-budget-fits-host-timeouts.md) | Cross-course reads fit MCP host timeouts (45 s budget, no idle waits) |
 | [0060](0060-read-only-staff-views.md) | Read-only staff views: course members and exercise grades (lab-verified) |
 | [0059](0059-enrolled-courses-membership-overview.md) | Enrolled courses from the membership overview when the Dashboard shows none |

@@ -128,8 +128,10 @@ export class FixtureAdamProvider implements AdamProvider {
     });
   }
 
-  async readPage(refId: RefId, options?: { type?: PageContent["type"]; signal?: AbortSignal }): Promise<PageContent> {
+  async readPage(refId: RefId, options?: { type?: PageContent["type"]; signal?: AbortSignal; subPage?: string }): Promise<PageContent> {
     throwIfCancelled(options?.signal);
+    // ADR 0062: fixture objects carry no sub-pages yet.
+    if (options?.subPage) throw new AdamError("unsupported_type", `ref_id ${refId} has no sub-pages in the fixture catalog. Omit subPage.`, false);
     const record = requireRecord(refId, options?.type);
     if (!record.page) {
       throw new AdamError(

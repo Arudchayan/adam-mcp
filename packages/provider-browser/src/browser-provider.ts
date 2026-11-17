@@ -30,6 +30,7 @@ import {
   type NewsItem,
   type ObjectOpenOptions,
   type PageContent,
+  type PageReadOptions,
   type Paginated,
   type ProgressReporter,
   type RefId,
@@ -70,6 +71,8 @@ import { SnapshotPagination } from "./snapshot-pagination.ts";
 import { FolderListingError } from "./folder-listing.ts";
 import { SharedOperation, throwIfAborted, waitForSignal } from "./request-lifecycle.ts";
 import { webLinkLaunchUrl } from "./weblink.ts";
+import { advertisedRoute, advertisedRoutes } from "./advertised-route.ts";
+import { MAX_READER_PAGES, OBJECT_READERS, type ReaderPage } from "./object-readers/index.ts";
 
 export type BrowserProviderOptions = {
   session?: AdamBrowserSession;
@@ -405,7 +408,7 @@ export class BrowserAdamProvider implements AdamProvider {
     return withListingState(page, classified.state, classified.signals, classified.notice);
   }
 
-  async readPage(refId: RefId, options?: ObjectOpenOptions): Promise<PageContent> {
+  async readPage(refId: RefId, options?: PageReadOptions): Promise<PageContent> {
     throwIfCancelled(options?.signal);
     await this.assertSessionEnabled(options?.signal);
     const generation = this.walkGeneration;
@@ -437,13 +440,61 @@ export class BrowserAdamProvider implements AdamProvider {
         ? "Destination URLs are untrusted ADAM redirect metadata; no external destination was fetched. Query strings, fragments and unrecognized path schemas are omitted; open the ADAM source URL for the exact launch link."
         : "Destination inventory may be incomplete: only up to eight verified ADAM Web Link redirects are resolved, without fetching external targets. Query strings, fragments and unrecognized path schemas are omitted; open ADAM source URLs for exact launch links." };
     }
-    return {
+    const base: PageContent = {
       ...object,
       ...webLinks,
       text: catalog.text,
       inferredDates: catalog.inferredDates,
       truncated: snapshot.text.length > MAX_PAGE_CHARS,
     };
+    return this.withObjectDetail(base, snapshot, options);
+  }
+
+  /**
+   * ADR 0062: run the type's registered reader, if any. Recognised pages gain `detail`;
+   * unrecognised ones keep plain text with `detailStatus: "unrecognised"`. Session,
+   * permission and cancellation errors propagate; parser failures never lose the text.
+   */
+  private async withObjectDetail(base: PageContent, snapshot: PageSnapshot, options?: PageReadOptions): Promise<PageContent> {
+    const reader = OBJECT_READERS[base.type];
+    if (!reader) {
+      if (options?.subPage) throw new AdamError("unsupported_type", `ADAM object type "${base.type}" has no sub-pages to read. Omit subPage.`, false);
+      return base;
+    }
+    let opened = 0;
+    const page: ReaderPage = { url: snapshot.url, html: snapshot.html ?? "", text: snapshot.text ?? "" };
+    try {
+      const result = await reader({
+        refId: base.refId,
+        type: base.type,
+        page,
+        ...(options?.subPage ? { subPage: options.subPage } : {}),
+        open: async (url: string) => {
+          throwIfCancelled(options?.signal);
+          if (++opened > MAX_READER_PAGES) throw new AdamError("provider_unavailable", `Reading ${base.refId} needed more than ${MAX_READER_PAGES} pages.`, false);
+          const next = await this.openAuthorized(url, options?.signal);
+          return { url: next.url, html: next.html ?? "", text: next.text ?? "" };
+        },
+        route: (html, rule) => advertisedRoute(html, base.refId, rule),
+        routes: (html, rule) => advertisedRoutes(html, base.refId, rule),
+      });
+      if (!result) {
+        if (options?.subPage) throw new AdamError("stale_id", `Sub-page ${options.subPage} was not found on ${base.refId}. Read the object again for current sub-page ids.`, false);
+        return { ...base, detailStatus: "unrecognised" };
+      }
+      const text = result.text ?? base.text;
+      return {
+        ...base,
+        detail: result.detail,
+        detailStatus: "read",
+        ...(result.text !== undefined ? { text: text.slice(0, MAX_PAGE_CHARS), truncated: text.length > MAX_PAGE_CHARS, subPage: options?.subPage } : {}),
+      };
+    } catch (error) {
+      if (error instanceof AdamError && ["unauthorized", "forbidden", "stale_id", "cancelled", "unsupported_type"].includes(error.code)) throw error;
+      throwIfCancelled(options?.signal);
+      if (options?.subPage) throw error;
+      return { ...base, detailStatus: "unrecognised" };
+    }
   }
 
   async listFiles(refId: RefId, options?: ListOptions): Promise<Paginated<FileObject>> {
