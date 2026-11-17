@@ -28,13 +28,16 @@ export function waitForSignal<T>(promise: Promise<T>, signal?: AbortSignal): Pro
 /** Shared work owns its signal; cancellation belongs to each subscriber. */
 export class SharedOperation<T> {
   private readonly controller = new AbortController();
+  /** When true, the work continues after its last waiter leaves (ADR 0061 background completion). */
+  private readonly keepAlive: boolean;
   private readonly subscribers = new Set<{ progress?: ProgressReporter; signal?: AbortSignal; busy?: boolean }>();
   private settled = false;
   private pendingProgress = 0;
   private latest?: ProgressUpdate;
   readonly promise: Promise<T>;
 
-  constructor(work: (signal: AbortSignal, report: ProgressReporter) => Promise<T>) {
+  constructor(work: (signal: AbortSignal, report: ProgressReporter) => Promise<T>, options: { keepAlive?: boolean } = {}) {
+    this.keepAlive = options.keepAlive ?? false;
     this.promise = Promise.resolve().then(() => {
       throwIfAborted(this.controller.signal);
       return work(this.controller.signal, (update) => this.report(update));
@@ -58,7 +61,7 @@ export class SharedOperation<T> {
       return await waitForSignal(waitForSignal(this.promise, this.controller.signal), signal);
     } finally {
       this.subscribers.delete(subscriber);
-      if (!this.settled && this.subscribers.size === 0) this.cancel();
+      if (!this.settled && this.subscribers.size === 0 && !this.keepAlive) this.cancel();
     }
   }
 

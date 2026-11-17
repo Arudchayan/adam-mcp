@@ -182,3 +182,47 @@ it("a cancelled caller's stuck progress callback does not hold up another subscr
   release.resolve();
   assert.ok((await second).items.some((item) => item.refId === "100011"));
 });
+
+it("ADR 0061: finishes a budget-limited walk in the background and caches the complete result", async () => {
+  let courseOpens = 0;
+  const release = deferred();
+  const session = createMemorySession({ [origin]: home(), [url]: course() });
+  const provider = createBrowserProvider({ walkTimeoutMs: 30, session: { ...session, async open(target, options) {
+    // The foreground walk's course read outlives its budget; the background one is released by the test.
+    if (target === url && ++courseOpens === 1) await waitForSignal(new Promise<void>(() => {}), options?.signal);
+    if (target === url) await release.promise;
+    return session.open(target);
+  } } });
+  const partial = await provider.search("Notes");
+  assert.equal(partial.partialReason, "time_budget");
+  release.resolve();
+  // The background walk completes and is memoized: the next call is complete without a new course read.
+  const deadline = Date.now() + 2_000;
+  let complete = await provider.search("Notes");
+  while (complete.partial && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    complete = await provider.search("Notes");
+  }
+  assert.equal(complete.partial, undefined);
+  assert.ok(complete.items.some((item) => item.refId === "100011"));
+  assert.equal(courseOpens, 2, "one foreground and one background course read");
+});
+
+it("ADR 0061: a call joining a slow background walk waits at most one budget and gets the partial walk", async () => {
+  let courseOpens = 0;
+  const session = createMemorySession({ [origin]: home(), [url]: course() });
+  const provider = createBrowserProvider({ walkTimeoutMs: 40, backgroundWalkTimeoutMs: 5_000, session: { ...session, async open(target, options) {
+    // Every course read hangs until cancelled: the background walk stays busy.
+    if (target === url) { courseOpens++; await waitForSignal(new Promise<void>(() => {}), options?.signal); }
+    return session.open(target);
+  } } });
+  const first = await provider.search("Notes");
+  assert.equal(first.partialReason, "time_budget");
+  const started = Date.now();
+  const joined = await provider.search("Notes");
+  assert.ok(Date.now() - started < 1_000, "the joining call is bounded by the read budget");
+  assert.equal(joined.partial, true);
+  assert.equal(joined.partialReason, "time_budget");
+  assert.equal(courseOpens, 2, "the joining call does not start a third traversal");
+  await provider.close();
+});
