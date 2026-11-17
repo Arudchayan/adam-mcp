@@ -1,6 +1,7 @@
 import type { AdamObjectType, ObjectDetail, RefId } from "adam-core";
 import type { RouteRule } from "../advertised-route.ts";
 import { readGlossary } from "./glo.ts";
+import { readWiki } from "./wiki.ts";
 
 /**
  * ADR 0062: typed readers for ILIAS 10.12 object pages, registered per object type.
@@ -45,4 +46,5 @@ export type ObjectReader = (ctx: ReaderContext) => Promise<ReaderResult | undefi
  */
 export const OBJECT_READERS: Partial<Record<AdamObjectType, ObjectReader>> = {
   glo: readGlossary,
+  wiki: readWiki,
 };
