@@ -23,7 +23,7 @@ function setup(snapshots: PageSnapshot[], tabs = [tab], failure?: number) {
     async goto(target: string) { opens.push(target); index++; return failure && index > 0 ? { ok: () => false, status: () => failure } : null; },
     async waitForFunction(_script: string, _arg: unknown, options: { timeout: number }) { waits.push(options.timeout); },
     async evaluate() { return tabs; },
-    locator: () => ({ filter: () => ({ first: () => ({ async click() {} }) }) }),
+    locator: () => ({ filter: () => ({ first: () => ({ async isVisible() { return false; }, async click() {} }) }) }),
   };
   Reflect.set(session, "ensurePage", async () => page);
   Reflect.set(session, "rejectIfBlocked", async () => {});

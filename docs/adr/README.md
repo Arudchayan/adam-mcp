@@ -2,6 +2,7 @@
 
 | ADR | Title |
 | --- | --- |
+| [0061](0061-read-budget-fits-host-timeouts.md) | Cross-course reads fit MCP host timeouts (45 s budget, no idle waits) |
 | [0060](0060-read-only-staff-views.md) | Read-only staff views: course members and exercise grades (lab-verified) |
 | [0059](0059-enrolled-courses-membership-overview.md) | Enrolled courses from the membership overview when the Dashboard shows none |
 | [0057](0057-containers-and-content-module-types.md) | ILIAS 10.12 containers, scheduling and content-module types (identity, citations, group walk) |

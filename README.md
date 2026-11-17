@@ -149,8 +149,8 @@ For page, file-text, exercise, forum-post, mail and staff-view reads, request th
 - Course pages and complete cross-course walks refresh after one minute. Restart
   the MCP server for an immediate refresh. Existing pagination retains its
   original snapshot for ten minutes; expired cursors require restarting the list.
-- Cross-course reads have a two-minute elapsed budget and report partial results
-  when reached. The browser queue admits at most 32 waiting operations and limits
+- Cross-course reads have a 45-second elapsed budget, so they answer within
+  common 60-second client limits, and report partial results when reached (ADR 0061). The browser queue admits at most 32 waiting operations and limits
   waiting to 30 seconds. Cancelling a request releases its work when nobody else
   needs it; cached reads reuse navigation and parsing.
 - Version 0.3.0 also shares complete discovery walks within each enrolled course.

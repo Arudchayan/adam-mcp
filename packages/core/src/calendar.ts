@@ -70,6 +70,21 @@ export function preferCalendarEvents(events: CalendarEvent[]): CalendarEvent[] {
     best.set(target, { ...kept, seenIn: [...new Set([...(kept.seenIn ?? [kept.source]), ...(event.seenIn ?? [event.source])])] });
     best.delete(key);
   }
+  // A date read from a container page (a course listing's "Deadline: …" row) at the exact
+  // instant of an exercise or ADAM calendar event is that event seen from its parent.
+  const byInstant = new Map<number, string>();
+  for (const [key, event] of best) {
+    const stamp = event.startsAt ? Date.parse(event.startsAt) : Number.NaN;
+    if (event.source !== "page" && Number.isFinite(stamp) && !byInstant.has(stamp)) byInstant.set(stamp, key);
+  }
+  for (const [key, event] of [...best]) {
+    if (event.source !== "page" || !event.startsAt) continue;
+    const target = byInstant.get(Date.parse(event.startsAt));
+    const kept = target ? best.get(target) : undefined;
+    if (!target || !kept || target === key) continue;
+    best.set(target, { ...kept, seenIn: [...new Set([...(kept.seenIn ?? [kept.source]), ...(event.seenIn ?? [event.source])])] });
+    best.delete(key);
+  }
   return [...best.values()];
 }
 

@@ -82,7 +82,12 @@ export type BrowserProviderOptions = {
 
 /** Dashboard + enrolled courses/folders/exercises. Not Magazin, not robots-disallowed GUIs. */
 const MAX_LIVE_PAGES = 48;
-export const MAX_WALK_MS = 120_000;
+/**
+ * ADR 0061: cross-course walks must answer inside common MCP host request timeouts
+ * (60 s), leaving room for the Tasks page and News paging after the walk. A walk that
+ * reaches the budget returns what it read, marked partial with `time_budget`.
+ */
+export const MAX_WALK_MS = 45_000;
 /** ADR 0059: the main bar's advertised "My Courses and Groups" overview. */
 export const MEMBERSHIP_OVERVIEW_PATH = "/ilias.php?baseClass=ilmembershipoverviewgui";
 /** Cap for getCourse embedded children; truncation is signaled when the listing is larger. */
@@ -1220,7 +1225,7 @@ export class BrowserAdamProvider implements AdamProvider {
     let expired = false;
     const timer = setTimeout(() => {
       expired = true;
-      controller.abort(new AdamError("provider_unavailable", "ADAM's two-minute read budget was reached before a usable listing. Retry or narrow the request.", true));
+      controller.abort(new AdamError("provider_unavailable", `ADAM's ${Math.round(this.walkTimeoutMs / 1000)}-second read budget was reached before a usable listing. Retry, or narrow the request with courseRefId.`, true));
     }, this.walkTimeoutMs);
     try {
       return await this.walkLivePagesWithinBudget(onProgress, controller.signal, generation, () => expired, courseRefId, mode);

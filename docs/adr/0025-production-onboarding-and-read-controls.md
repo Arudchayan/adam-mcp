@@ -12,7 +12,7 @@ course verification run only with `--login`. Use the absolute Node executable
 and built entry point, avoiding shell launchers and PATH dependence. Codex gets
 a 2,100-second tool timeout to cover the maximum 30-minute login plus five minutes
 for queue waiting, browser startup, verification and cleanup;
-long read operations retain their existing two-minute server budget. Other hosts
+long read operations retain their existing two-minute server budget (lowered to 45 s by ADR 0061). Other hosts
 must be documented with verified timeout behavior rather than invented fields.
 
 Status remains passive and backward compatible in its `reason` field. Add a
