@@ -372,6 +372,26 @@ const groupSessionPage: PageContent = {
   ...groupSession,
   text: ["Tutorial 1 (labeled fixture, not live).", "Date: 05.10.2026, 10:15 - 12:00", "Location: Synthetic room 00.001"].join("\n"),
   inferredDates: [],
+  // ADR 0062 parity: the shape the browser session reader returns.
+  detail: {
+    kind: "session",
+    evidence: "lab-verified",
+    dateText: "05. Oct 2026, 10:15 - 12:00",
+    startsAt: "2026-10-05T08:15:00.000Z",
+    endsAt: "2026-10-05T10:00:00.000Z",
+    location: "Synthetic room 00.001",
+    materials: [],
+  },
+  detailStatus: "read",
+};
+
+const groupWikiPage: PageContent = {
+  ...groupWiki,
+  text: "Group notes wiki start page (labeled fixture, not live).",
+  inferredDates: [],
+  // ADR 0062 parity: the shape the browser wiki reader returns (no sub-pages in the fixture).
+  detail: { kind: "wiki", evidence: "lab-verified", startPage: "Start", pages: [{ title: "Start" }], pageCount: 1 },
+  detailStatus: "read",
 };
 
 const course2Page: PageContent = {
@@ -615,7 +635,7 @@ export const fixtureCatalog: Record<RefId, FixtureRecord> = {
   "100130": { object: course2Survey, children: [], page: course2SurveyPage },
   "100140": { object: course2Group, children: ["100141", "100142"] },
   "100141": { object: groupSession, children: [], page: groupSessionPage },
-  "100142": { object: groupWiki, children: [] },
+  "100142": { object: groupWiki, children: [], page: groupWikiPage },
   "100131": { object: course2Poll, children: [], page: course2PollPage },
   "100201": {
     object: catalogOnlyCourse,

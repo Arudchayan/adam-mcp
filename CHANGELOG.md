@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `adam_read_page` returns a typed `detail` for ILIAS 10.12 objects (ADR 0062):
+  session date, time, location and materials; booking pool items and free slots;
+  learning-sequence steps; wiki pages; glossary terms; learning-module chapters;
+  HTML-module start file; content-page headings; data-collection rows; mediacast
+  items; bibliography entries. `subPage` reads one wiki page, module page or
+  bibliography entry. Readers are lab-verified and fall back to page text (#165).
+- `adam_list_notes`: your own Private Notes, confirm-gated and read-only (ADR 0063).
+- `adam_get_exercise` `detail: true` includes anonymous peer review, given and
+  received (ADR 0053 amendment).
+- Item groups appear in `adam_list_children` (#165).
+
 ## [0.4.0 npm publication] - 2026-11-17
 
 ### Added
