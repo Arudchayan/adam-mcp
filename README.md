@@ -8,10 +8,13 @@ It runs on your machine and uses a dedicated Chrome session to access the ADAM c
 
 This is a community project, not a University of Basel service.
 
-**0.4.0 is published.** It adds per-assignment exercise detail, read-only ADAM
-mail, Dashboard news, tasks and calendar, typed sessions, groups, wikis and other
-ILIAS 10.12 objects, read-only tutor views, faster cross-course reads, and session
-and boundary hardening. See the [0.4.0 publication record](docs/audit/2026-11-17-v0.4.0-publication.md) and the
+**0.4.0 is published; 0.5.0 is a release candidate.** 0.5.0 adds typed reads of
+sessions (date, location, materials), wikis and their pages, glossaries, learning
+modules, data collections, booking-pool free slots, learning sequences, mediacasts
+and bibliographies, read-only Private Notes, and anonymous exercise peer review.
+0.4.0 added per-assignment exercise detail, read-only ADAM mail, Dashboard news,
+tasks and calendar, typed ILIAS 10.12 objects, read-only tutor views, faster
+cross-course reads, and session and boundary hardening. See the [0.4.0 publication record](docs/audit/2026-11-17-v0.4.0-publication.md) and the
 [changelog](CHANGELOG.md).
 
 ![Demo](docs/demo/demo.gif)

@@ -96,7 +96,7 @@ export function createAdamMcpServer(options: CreateAdamMcpServerOptions): McpSer
   const server = new McpServer(
     {
       name: options.name ?? "adam-mcp",
-      version: options.version ?? "0.4.0",
+      version: options.version ?? "0.5.0",
     },
     {
       instructions:
